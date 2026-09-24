@@ -88,6 +88,28 @@ const Logs = () => {
     const [loading, setLoading] = useState(false);
     const [isAutoRefresh, setIsAutoRefresh] = useState(true);
     const [selectedLog, setSelectedLog] = useState<SystemLog | null>(null);
+    const [activeTab, setActiveTab] = useState<'audit' | 'emails'>('audit');
+
+    // Email Activity Helpers
+    const getEmailTransport = (log: SystemLog): string => {
+        if (log.new_values && typeof log.new_values === 'object') {
+            const val = (log.new_values as any).transport;
+            if (val) return String(val).toUpperCase();
+        }
+        if (log.description?.toLowerCase().includes('smtp')) return 'SMTP';
+        if (log.description?.toLowerCase().includes('resend')) return 'RESEND';
+        return 'DEFAULT';
+    };
+
+    const getEmailSubject = (log: SystemLog): string => {
+        if (log.new_values && typeof log.new_values === 'object') {
+            const val = (log.new_values as any).subject;
+            if (val) return String(val);
+        }
+        const match = log.description?.match(/Subject:\s*"([^"]+)"/);
+        if (match) return match[1];
+        return 'Notification';
+    };
 
     // Filters State
     const [searchTerm, setSearchTerm] = useState('');
@@ -114,7 +136,7 @@ const Logs = () => {
         'Check-In / Check-Out', 'POS', 'Massage & Spa', 
         'Facility Booking', 'Staff Management', 'Inventory', 
         'Reports', 'Settings', 'User Management', 'Roles & Permissions', 
-        'System', 'Actions'
+        'System', 'Actions', 'Emails'
     ];
 
     const actions = [
@@ -123,7 +145,7 @@ const Logs = () => {
         'Check-In', 'Check-Out', 'Payment Received', 'Refund', 'Print', 'Export',
         'Email Sent', 'SMS Sent', 'Upload', 'Download', 'Password Changed',
         'Profile Updated', 'Permission Changed', 'Settings Updated', 'Backup Created',
-        'Restore Completed', 'API Request', 'System Event'
+        'Restore Completed', 'API Request', 'System Event', 'EMAIL_SENT', 'EMAIL_FAILED'
     ];
 
     // ===============================
@@ -163,6 +185,14 @@ const Logs = () => {
     // ===============================
     const filteredLogs = useMemo(() => {
         return logs.filter(log => {
+            // Tab Filtering: Segment email activity from system audit logs
+            const isEmailLog = log.module === 'Emails' || log.action === 'EMAIL_SENT' || log.action === 'EMAIL_FAILED' || log.action.startsWith('EMAIL_') || log.description?.toLowerCase().includes('email dispatch') || log.description?.toLowerCase().includes('smtp');
+            if (activeTab === 'emails') {
+                if (!isEmailLog) return false;
+            } else {
+                if (isEmailLog) return false;
+            }
+
             // Date Range
             const logDate = parseISO(log.timestamp);
             const inRange = isWithinInterval(logDate, {
@@ -210,7 +240,7 @@ const Logs = () => {
                 return String(valB).localeCompare(String(valA));
             }
         });
-    }, [logs, dateFrom, dateTo, moduleFilter, actionFilter, statusFilter, severityFilter, userFilter, roleFilter, propertyFilter, searchTerm, sortConfig]);
+    }, [logs, dateFrom, dateTo, moduleFilter, actionFilter, statusFilter, severityFilter, userFilter, roleFilter, propertyFilter, searchTerm, sortConfig, activeTab]);
 
     // Pagination
     const totalPages = Math.ceil(filteredLogs.length / logsPerPage);
@@ -353,6 +383,52 @@ const Logs = () => {
                 </div>
             </div>
 
+            {/* Tabs Selector Bar */}
+            <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="flex items-center gap-2 bg-slate-100/60 p-2 rounded-[1.8rem] border border-slate-200/50 w-full sm:w-auto">
+                    <button
+                        onClick={() => {
+                            setActiveTab('audit');
+                            setCurrentPage(1);
+                        }}
+                        className={`flex items-center gap-2.5 px-6 py-3.5 rounded-[1.3rem] text-xs font-black uppercase tracking-widest transition-all duration-300 w-full sm:w-auto justify-center ${
+                            activeTab === 'audit' 
+                                ? 'bg-slate-950 text-white shadow-xl shadow-slate-950/20' 
+                                : 'text-slate-400 hover:text-slate-700 hover:bg-slate-200/50'
+                        }`}
+                    >
+                        <Terminal className="w-4 h-4" />
+                        System Audit Trail
+                    </button>
+                    <button
+                        onClick={() => {
+                            setActiveTab('emails');
+                            setCurrentPage(1);
+                        }}
+                        className={`flex items-center gap-2.5 px-6 py-3.5 rounded-[1.3rem] text-xs font-black uppercase tracking-widest transition-all duration-300 w-full sm:w-auto justify-center ${
+                            activeTab === 'emails' 
+                                ? 'bg-indigo-600 text-white shadow-xl shadow-indigo-600/20' 
+                                : 'text-slate-400 hover:text-slate-700 hover:bg-slate-200/50'
+                        }`}
+                    >
+                        <Mail className="w-4 h-4" />
+                        Email Activity
+                        {logs.filter(log => log.module === 'Emails' || log.action === 'EMAIL_SENT' || log.action === 'EMAIL_FAILED').length > 0 && (
+                            <span className={`text-[9px] px-2 py-0.5 rounded-full font-black leading-none ${activeTab === 'emails' ? 'bg-white text-indigo-600' : 'bg-slate-200 text-slate-500'}`}>
+                                {logs.filter(log => log.module === 'Emails' || log.action === 'EMAIL_SENT' || log.action === 'EMAIL_FAILED').length}
+                            </span>
+                        )}
+                    </button>
+                </div>
+                
+                {activeTab === 'emails' && (
+                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest px-4 py-2 bg-indigo-50 border border-indigo-100/50 rounded-2xl flex items-center gap-2">
+                        <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse"></span>
+                        Observability Engine Online
+                    </div>
+                )}
+            </div>
+
             {/* Advanced Filters Panel */}
             <AnimatePresence>
                 {isFilterExpanded && (
@@ -476,16 +552,29 @@ const Logs = () => {
                                         Timestamp <ArrowUpDown className="w-3 h-3" />
                                     </button>
                                 </th>
-                                <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">User / Identity</th>
-                                <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Module</th>
-                                <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Action Protocol</th>
-                                <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Summary Description</th>
+                                {activeTab === 'emails' ? (
+                                    <>
+                                        <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Recipient Target</th>
+                                        <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Transport Method</th>
+                                        <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Subject / Thread</th>
+                                        <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Trace Description</th>
+                                    </>
+                                ) : (
+                                    <>
+                                        <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">User / Identity</th>
+                                        <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Module</th>
+                                        <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Action Protocol</th>
+                                        <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Summary Description</th>
+                                    </>
+                                )}
                                 <th className="p-6 text-[10px] font-black text-slate-400 uppercase tracking-[0.2em]">Status</th>
                                 <th className="p-6"></th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-slate-100">
-                            {paginatedLogs.map((log) => (
+                            {paginatedLogs.map((log) => {
+                                const isEmail = activeTab === 'emails';
+                                return (
                                 <tr 
                                     key={log.id} 
                                     className="group hover:bg-slate-50/80 transition-all duration-300 cursor-pointer"
@@ -501,34 +590,77 @@ const Logs = () => {
                                             </span>
                                         </div>
                                     </td>
-                                    <td className="p-6">
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-9 h-9 bg-slate-100 rounded-xl flex items-center justify-center text-xs font-black text-slate-600 border border-slate-200/50 shadow-sm group-hover:bg-white transition-colors">
-                                                {(log.user_name || '?').charAt(0).toUpperCase()}
-                                            </div>
-                                            <div className="flex flex-col">
-                                                <span className="text-xs font-black text-slate-900 tracking-tight">{log.user_name || 'System'}</span>
-                                                <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{log.role_name || 'VERIFIED_AGENT'}</span>
-                                            </div>
-                                        </div>
-                                    </td>
-                                    <td className="p-6">
-                                        <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg group-hover:bg-white transition-all">
-                                            <ModuleIcon module={log.module} />
-                                            <span className="text-[9px] font-bold text-slate-600 uppercase tracking-wider">{log.module}</span>
-                                        </div>
-                                    </td>
-                                    <td className="p-6">
-                                        <div className="flex flex-col">
-                                            <span className="text-[10px] font-black text-slate-900 uppercase tracking-widest">{log.action}</span>
-                                            {log.affected_entity && (
-                                                <span className="text-[8px] font-bold text-indigo-500 uppercase tracking-widest mt-1">Affected: {log.affected_entity}</span>
-                                            )}
-                                        </div>
-                                    </td>
-                                    <td className="p-6">
-                                        <p className="text-xs font-medium text-slate-600 line-clamp-1 max-w-xs">{log.description || log.details || log.action}</p>
-                                    </td>
+                                    {isEmail ? (
+                                        <>
+                                            <td className="p-6">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-9 h-9 bg-indigo-50 rounded-xl flex items-center justify-center text-xs font-black text-indigo-600 border border-indigo-100 shadow-sm group-hover:bg-white transition-colors">
+                                                        <Mail className="w-4 h-4" />
+                                                    </div>
+                                                    <div className="flex flex-col">
+                                                        <span className="text-xs font-black text-slate-900 tracking-tight line-clamp-1 max-w-[200px]">{log.affected_entity || 'unknown@recipient.com'}</span>
+                                                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">Recipient</span>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td className="p-6">
+                                                {(() => {
+                                                    const transport = getEmailTransport(log);
+                                                    const isSmtp = transport === 'SMTP';
+                                                    return (
+                                                        <div className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border text-[9px] font-black uppercase tracking-wider ${
+                                                            isSmtp 
+                                                                ? 'bg-purple-50 text-purple-700 border-purple-200 shadow-sm' 
+                                                                : 'bg-indigo-50 text-indigo-700 border-indigo-200 shadow-sm'
+                                                        }`}>
+                                                            {isSmtp ? <Cpu className="w-3.5 h-3.5" /> : <Layers className="w-3.5 h-3.5" />}
+                                                            {transport}
+                                                        </div>
+                                                    );
+                                                })()}
+                                            </td>
+                                            <td className="p-6">
+                                                <div className="flex flex-col">
+                                                    <span className="text-xs font-black text-slate-900 tracking-tight line-clamp-1 max-w-[240px]">{getEmailSubject(log)}</span>
+                                                    <span className="text-[8px] font-bold text-slate-400 uppercase tracking-widest mt-1">Subject</span>
+                                                </div>
+                                            </td>
+                                            <td className="p-6">
+                                                <p className="text-xs font-medium text-slate-600 line-clamp-1 max-w-xs">{log.description}</p>
+                                            </td>
+                                        </>
+                                    ) : (
+                                        <>
+                                            <td className="p-6">
+                                                <div className="flex items-center gap-3">
+                                                    <div className="w-9 h-9 bg-slate-100 rounded-xl flex items-center justify-center text-xs font-black text-slate-600 border border-slate-200/50 shadow-sm group-hover:bg-white transition-colors">
+                                                        {(log.user_name || '?').charAt(0).toUpperCase()}
+                                                    </div>
+                                                    <div className="flex flex-col">
+                                                        <span className="text-xs font-black text-slate-900 tracking-tight">{log.user_name || 'System'}</span>
+                                                        <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mt-0.5">{log.role_name || 'VERIFIED_AGENT'}</span>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td className="p-6">
+                                                <div className="inline-flex items-center gap-2 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg group-hover:bg-white transition-all">
+                                                    <ModuleIcon module={log.module} />
+                                                    <span className="text-[9px] font-bold text-slate-600 uppercase tracking-wider">{log.module}</span>
+                                                </div>
+                                            </td>
+                                            <td className="p-6">
+                                                <div className="flex flex-col">
+                                                    <span className="text-[10px] font-black text-slate-900 uppercase tracking-widest">{log.action}</span>
+                                                    {log.affected_entity && (
+                                                        <span className="text-[8px] font-bold text-indigo-500 uppercase tracking-widest mt-1">Affected: {log.affected_entity}</span>
+                                                    )}
+                                                </div>
+                                            </td>
+                                            <td className="p-6">
+                                                <p className="text-xs font-medium text-slate-600 line-clamp-1 max-w-xs">{log.description || log.details || log.action}</p>
+                                            </td>
+                                        </>
+                                    )}
                                     <td className="p-6">
                                         <SeverityBadge severity={log.severity} status={log.status} />
                                     </td>
@@ -538,7 +670,8 @@ const Logs = () => {
                                         </button>
                                     </td>
                                 </tr>
-                            ))}
+                                );
+                            })}
                         </tbody>
                     </table>
                 </div>
@@ -683,6 +816,54 @@ const Logs = () => {
                                         "{selectedLog.description || selectedLog.details || selectedLog.action || 'System Interaction Protocol Activated'}"
                                     </p>
                                 </div>
+
+                                {/* Email Specific Trace card */}
+                                {(selectedLog.module === 'Emails' || selectedLog.action.includes('EMAIL_')) && (
+                                    <div className="p-8 bg-indigo-50/50 rounded-[2rem] border border-indigo-100 space-y-6">
+                                        <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 bg-indigo-100 rounded-xl flex items-center justify-center text-indigo-600 shadow-sm">
+                                                <Mail className="w-5 h-5" />
+                                            </div>
+                                            <div>
+                                                <h4 className="text-xs font-black text-slate-900 uppercase tracking-wider">Email Delivery Context</h4>
+                                                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">Observable SMTP/Resend routing logs</p>
+                                            </div>
+                                        </div>
+                                        
+                                        <div className="grid grid-cols-2 gap-4 text-xs font-bold">
+                                            <div className="bg-white p-4 rounded-xl border border-slate-100">
+                                                <span className="text-[8px] font-black text-slate-400 uppercase block mb-1">Target Recipient</span>
+                                                <span className="text-slate-900 font-black tracking-tight">{selectedLog.affected_entity || 'N/A'}</span>
+                                            </div>
+                                            <div className="bg-white p-4 rounded-xl border border-slate-100">
+                                                <span className="text-[8px] font-black text-slate-400 uppercase block mb-1">Email Subject</span>
+                                                <span className="text-indigo-600 font-black tracking-tight line-clamp-1">{getEmailSubject(selectedLog)}</span>
+                                            </div>
+                                            <div className="bg-white p-4 rounded-xl border border-slate-100">
+                                                <span className="text-[8px] font-black text-slate-400 uppercase block mb-1">Transport Network</span>
+                                                <div className="flex items-center gap-1.5 mt-1 font-black text-slate-800">
+                                                    {getEmailTransport(selectedLog) === 'SMTP' ? (
+                                                        <>
+                                                            <Cpu className="w-3.5 h-3.5 text-purple-600" />
+                                                            <span className="text-purple-700">CUSTOM PROPERTY SMTP</span>
+                                                        </>
+                                                    ) : (
+                                                        <>
+                                                            <Layers className="w-3.5 h-3.5 text-indigo-600" />
+                                                            <span className="text-indigo-700">DEFAULT RESEND TRANSPORT</span>
+                                                        </>
+                                                    )}
+                                                </div>
+                                            </div>
+                                            <div className="bg-white p-4 rounded-xl border border-slate-100">
+                                                <span className="text-[8px] font-black text-slate-400 uppercase block mb-1">Delivery Status</span>
+                                                <span className={`font-black uppercase tracking-wider ${selectedLog.severity === 'success' ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                                    {selectedLog.status || selectedLog.severity}
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                )}
 
                                 {/* Data Changes */}
                                 {(selectedLog.old_values || selectedLog.new_values) && (

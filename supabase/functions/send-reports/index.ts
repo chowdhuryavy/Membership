@@ -146,7 +146,6 @@ serve(async (req) => {
           subject,
           html,
           text: textContent,
-          headers: deliverabilityHeaders,
           attachments: attachments || []
         });
         emailRes = retryResult.data;

@@ -35,8 +35,8 @@ export type Permission =
   
   // System Configuration & Settings
   | 'settings:view' | 'settings:edit' 
-  | 'settings:view_global' | 'settings:view_properties' | 'settings:view_outlets' | 'settings:view_roles' | 'settings:view_currency' | 'settings:view_shortcuts' | 'settings:view_documents' | 'settings:view_maintenance' | 'settings:view_navigation' | 'settings:view_incentives' | 'settings:manage_visibility' | 'settings:view_staff_portal' | 'settings:view_booking_engine' | 'settings:view_membership_types' | 'settings:view_massage_rooms' | 'settings:view_reports_config' | 'settings:view_custom_reports' | 'settings:view_entrance_fee' | 'settings:view_expiration_reminders'
-  | 'settings:manage_global' | 'settings:manage_properties' | 'settings:manage_outlets' | 'settings:manage_roles' | 'settings:manage_currency' | 'settings:manage_shortcuts' | 'settings:manage_documents' | 'settings:manage_maintenance' | 'settings:manage_navigation' | 'settings:manage_incentives' | 'settings:manage_staff_portal' | 'settings:manage_booking_engine' | 'settings:manage_membership_types' | 'settings:manage_massage_rooms' | 'settings:manage_reports_config' | 'settings:manage_custom_reports' | 'settings:manage_entrance_fee' | 'settings:manage_expiration_reminders'; 
+  | 'settings:view_global' | 'settings:view_properties' | 'settings:view_outlets' | 'settings:view_roles' | 'settings:view_currency' | 'settings:view_shortcuts' | 'settings:view_documents' | 'settings:view_smtp' | 'settings:view_maintenance' | 'settings:view_navigation' | 'settings:view_incentives' | 'settings:manage_visibility' | 'settings:view_staff_portal' | 'settings:view_booking_engine' | 'settings:view_membership_types' | 'settings:view_massage_rooms' | 'settings:view_reports_config' | 'settings:view_custom_reports' | 'settings:view_entrance_fee' | 'settings:view_expiration_reminders'
+  | 'settings:manage_global' | 'settings:manage_properties' | 'settings:manage_outlets' | 'settings:manage_roles' | 'settings:manage_currency' | 'settings:manage_shortcuts' | 'settings:manage_documents' | 'settings:manage_smtp' | 'settings:manage_maintenance' | 'settings:manage_navigation' | 'settings:manage_incentives' | 'settings:manage_staff_portal' | 'settings:manage_booking_engine' | 'settings:manage_membership_types' | 'settings:manage_massage_rooms' | 'settings:manage_reports_config' | 'settings:manage_custom_reports' | 'settings:manage_entrance_fee' | 'settings:manage_expiration_reminders'; 
 
 export interface PermissionGroup {
   id: string;
@@ -277,7 +277,7 @@ export type LogModule =
   | 'Check-In / Check-Out' | 'POS' | 'Massage & Spa' 
   | 'Facility Booking' | 'Staff Management' | 'Inventory' 
   | 'Reports' | 'Settings' | 'User Management' | 'Roles & Permissions' 
-  | 'System' | 'Actions';
+  | 'System' | 'Actions' | 'Emails';
 
 export type LogSeverity = 'info' | 'warning' | 'error' | 'success';
 

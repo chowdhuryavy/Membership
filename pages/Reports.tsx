@@ -601,7 +601,11 @@ const Reports = ({ autoDispatchConfig }: { autoDispatchConfig?: AutoDispatchConf
              activeProperty.name,
              activeOutlet === 'all' ? 'All Facilities' : activeOutlet.name,
              pdfBase64,
-             `Automated dispatch for ${format(autoDispatchConfig.date, 'MMM dd, yyyy')}`
+             `Automated dispatch for ${format(autoDispatchConfig.date, 'MMM dd, yyyy')}`,
+             {
+               propertyId: activeProperty.id,
+               outletId: activeOutlet === 'all' ? undefined : activeOutlet.id
+             }
            );
            
            if (autoDispatchConfig.isManual) {

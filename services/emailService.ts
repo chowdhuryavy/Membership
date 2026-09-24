@@ -738,10 +738,80 @@ export const emailService = {
 
         if (smtpResult.success) {
           console.log(`[Email Service] Delivered via ${smtpResult.method.toUpperCase()} (${smtpResult.messageId})`);
+          
+          await db.logAction(
+            'EMAIL_SENT', 
+            `Email dispatched successfully to ${targetStr} using Property SMTP (Subject: "${subject}")`, 
+            options.outletId,
+            undefined,
+            {
+              module: 'Emails',
+              status: 'success',
+              severity: 'success',
+              record_id: smtpResult.messageId || 'smtp_success',
+              affected_entity: targetStr,
+              new_values: {
+                to: targetStr,
+                subject,
+                transport: 'SMTP',
+                status: 'success',
+                property_id: options.propertyId,
+                outlet_id: options.outletId,
+                message_id: smtpResult.messageId
+              }
+            }
+          );
+          
           return { success: true, messageId: smtpResult.messageId };
+        } else {
+          console.warn('[Email Service] Property SMTP failed or disabled, will try default Resend transport:', smtpResult.error);
+          
+          await db.logAction(
+            'EMAIL_FAILED', 
+            `Property SMTP dispatch attempt to ${targetStr} failed/disabled. Falling back to default transport. Details: ${smtpResult.error || 'Unknown'}`, 
+            options.outletId,
+            undefined,
+            {
+              module: 'Emails',
+              status: 'failed',
+              severity: 'warning',
+              affected_entity: targetStr,
+              new_values: {
+                to: targetStr,
+                subject,
+                transport: 'SMTP',
+                status: 'failure',
+                property_id: options.propertyId,
+                outlet_id: options.outletId,
+                error: smtpResult.error
+              }
+            }
+          );
         }
-      } catch (smtpErr) {
+      } catch (smtpErr: any) {
         console.warn('[Email Service] Property SMTP check threw error, continuing to primary fallback:', smtpErr);
+        
+        await db.logAction(
+          'EMAIL_FAILED', 
+          `SMTP dispatch attempt to ${targetStr} threw exception: ${smtpErr?.message || String(smtpErr)}. Falling back to default transport.`, 
+          options?.outletId,
+          undefined,
+          {
+            module: 'Emails',
+            status: 'failed',
+            severity: 'warning',
+            affected_entity: targetStr,
+            new_values: {
+              to: targetStr,
+              subject,
+              transport: 'SMTP',
+              status: 'failure',
+              property_id: options?.propertyId,
+              outlet_id: options?.outletId,
+              error: smtpErr?.message || String(smtpErr)
+            }
+          }
+        );
       }
     }
 
@@ -764,6 +834,30 @@ export const emailService = {
 
         if (!error && data && data.success !== false) {
           console.log('[Email Service] Email successfully sent via Resend Edge Function:', data?.id);
+          
+          await db.logAction(
+            'EMAIL_SENT', 
+            `Email dispatched successfully to ${targetStr} using default Resend transport (Subject: "${subject}")`, 
+            options?.outletId,
+            undefined,
+            {
+              module: 'Emails',
+              status: 'success',
+              severity: 'success',
+              record_id: data?.id || 'resend_success',
+              affected_entity: targetStr,
+              new_values: {
+                to: targetStr,
+                subject,
+                transport: 'Resend',
+                status: 'success',
+                property_id: options?.propertyId,
+                outlet_id: options?.outletId,
+                message_id: data?.id
+              }
+            }
+          );
+
           return { success: true, messageId: data?.id || Math.random().toString(36).substring(7) };
         } else {
           lastErrorMessage = error?.message || data?.error || 'Edge Function error';
@@ -787,14 +881,84 @@ export const emailService = {
 
       if (res.ok && data.success) {
         console.log('[Email Service] Email successfully sent via Express /api/send-email:', data.id);
+        
+        await db.logAction(
+          'EMAIL_SENT', 
+          `Email dispatched successfully to ${targetStr} using default Resend transport via Express (Subject: "${subject}")`, 
+          options?.outletId,
+          undefined,
+          {
+            module: 'Emails',
+            status: 'success',
+            severity: 'success',
+            record_id: data.id || 'resend_express_success',
+            affected_entity: targetStr,
+            new_values: {
+              to: targetStr,
+              subject,
+              transport: 'Resend',
+              status: 'success',
+              property_id: options?.propertyId,
+              outlet_id: options?.outletId,
+              message_id: data.id
+            }
+          }
+        );
+
         return { success: true, messageId: data.id };
       } else {
         const errorReason = data.error || `Server API failed with status ${res.status}`;
         console.error(`[Email Service] Express API failed with status ${res.status}:`, errorReason);
+        
+        await db.logAction(
+          'EMAIL_FAILED', 
+          `All email dispatch attempts to ${targetStr} failed. Last error: ${errorReason}`, 
+          options?.outletId,
+          undefined,
+          {
+            module: 'Emails',
+            status: 'failed',
+            severity: 'error',
+            affected_entity: targetStr,
+            new_values: {
+              to: targetStr,
+              subject,
+              transport: 'Resend',
+              status: 'failure',
+              property_id: options?.propertyId,
+              outlet_id: options?.outletId,
+              error: errorReason
+            }
+          }
+        );
+
         return { success: false, error: errorReason };
       }
     } catch (apiErr: any) {
       console.warn('[Email Service] Express /api/send-email unreachable or failed:', apiErr);
+      
+      await db.logAction(
+        'EMAIL_FAILED', 
+        `All email dispatch attempts to ${targetStr} failed with exception: ${apiErr?.message || String(apiErr)}`, 
+        options?.outletId,
+        undefined,
+        {
+          module: 'Emails',
+          status: 'failed',
+          severity: 'error',
+          affected_entity: targetStr,
+          new_values: {
+            to: targetStr,
+            subject,
+            transport: 'Resend',
+            status: 'failure',
+            property_id: options?.propertyId,
+            outlet_id: options?.outletId,
+            error: apiErr?.message || String(apiErr)
+          }
+        }
+      );
+
       return { success: false, error: apiErr?.message || lastErrorMessage || 'Failed to dispatch email' };
     }
   },
@@ -805,7 +969,8 @@ export const emailService = {
     propertyName: string,
     outletName: string,
     pdfBase64: string,
-    summaryText?: string
+    summaryText?: string,
+    options?: { propertyId?: string; outletId?: string }
   ) {
     const toList = recipients.split(',').map(e => e.trim()).filter(Boolean);
     if (toList.length === 0) return { success: false, error: 'No recipient email addresses provided' };
@@ -882,7 +1047,7 @@ export const emailService = {
 
     let lastResult: any = { success: false, error: 'No emails sent' };
     for (const recipient of toList) {
-      lastResult = await this.sendEmail(recipient, subject, html, [{ filename, content: pdfBase64 }]);
+      lastResult = await this.sendEmail(recipient, subject, html, [{ filename, content: pdfBase64 }], undefined, options);
     }
     return lastResult;
   },
@@ -918,6 +1083,11 @@ export const emailService = {
       } else {
         const activeRecipients = recipients.filter(r => r.is_active && (!r.property_id || r.property_id === property?.id) && (r.outlet_id === 'all' || r.outlet_id === member.outlet_id));
         targetEmails = activeRecipients.flatMap(r => r.email.split(',').map(e => e.trim()));
+      }
+
+      // Always include the member's own email so they get their signed agreement & confirmation
+      if (member.email && typeof member.email === 'string' && member.email.trim()) {
+        targetEmails.push(member.email.trim());
       }
 
       targetEmails = Array.from(new Set(targetEmails.filter(Boolean)));
@@ -990,7 +1160,10 @@ export const emailService = {
       }] : [];
 
       for (const email of targetEmails) {
-        await this.sendEmail(email, subject, html, attachments);
+        await this.sendEmail(email, subject, html, attachments, undefined, {
+          propertyId: property?.id,
+          outletId: outlet?.id
+        });
       }
       console.log(`[Email Service] Member purchase notification email sent to: ${targetEmails.join(', ')} with ${attachments.length} attachments.`);
     } catch (err) {
@@ -1061,7 +1234,10 @@ export const emailService = {
       const testPrefix = options?.isTest ? '[Test] ' : '';
       const subject = `${testPrefix}Membership Notice (${urgencyPrefix}) - ${propName}`;
 
-      const sendResult = await this.sendEmail(targetEmail, subject, html);
+      const sendResult = await this.sendEmail(targetEmail, subject, html, [], undefined, {
+        propertyId: member.property_id || memberOutlet?.property_id,
+        outletId: member.outlet_id
+      });
 
       // Log dispatch
       await db.logExpirationReminder({
@@ -1288,7 +1464,10 @@ export const emailService = {
         adminName: params.adminName
       });
 
-      const res = await this.sendEmail(params.user.email, subject, html);
+      const res = await this.sendEmail(params.user.email, subject, html, [], undefined, {
+        propertyId: primaryProp?.id,
+        outletId: primaryOutlet?.id
+      });
       console.log('[Email Service] sendUserWelcomeCredentialsEmail result:', res);
       return res;
     } catch (err: any) {

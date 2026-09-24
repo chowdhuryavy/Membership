@@ -1517,6 +1517,7 @@ const SettingsPage = () => {
                                           { key: 'settings:view', label: 'View Settings Page', description: 'Master switch to access the Settings framework.' },
                                           { key: 'settings:view_global', label: 'Global Scope / Enterprise Info', description: 'Company brand name, logo, address, and legal entity.' },
                                           { key: 'settings:view_properties', label: 'Properties Collection', description: 'Manage luxury property assets and locations.' },
+                                          { key: 'settings:view_smtp', label: 'Property SMTP', description: 'Configure dedicated outbound SMTP relay settings per luxury property.' },
                                           { key: 'settings:view_outlets', label: 'Facility Outlets', description: 'Manage specific gym and spa outlet facilities.' },
                                           { key: 'settings:view_roles', label: 'Roles & Permissions', description: 'Role-based permission templates and policies.' },
                                           { key: 'settings:view_currency', label: 'Monetary Standards', description: 'Manage system currency and exchange rates.' },

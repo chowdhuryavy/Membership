@@ -366,6 +366,16 @@ serve(async (req) => {
         throw new Error('RESEND_API_KEY is not configured on the server');
       }
 
+      // Fetch verified sender domain configurations from company_settings and env vars, identical to original working setup
+      const { data: settings } = await supabaseAdmin
+        .from('company_settings')
+        .select('*')
+        .eq('id', 'global')
+        .maybeSingle();
+
+      const appName = settings?.name || settings?.report_title || 'Health Club Management';
+      const fromEmail = Deno.env.get('EMAIL_FROM') || 'noreply@perfection.my';
+
       const resend = new Resend(resendApiKey);
       const toAddresses = Array.isArray(to) ? to : [to];
 
@@ -375,7 +385,8 @@ serve(async (req) => {
       }));
 
       const resendPayload: any = {
-        from: 'The Torch Club <noreply@perfection.my>',
+        from: `${appName} <${fromEmail}>`,
+        reply_to: fromEmail,
         to: toAddresses,
         subject,
         html,
@@ -387,9 +398,9 @@ serve(async (req) => {
       let resendResult = await resend.emails.send(resendPayload);
 
       // Retry with default sender if domain restriction occurs
-      if (resendResult.error && resendPayload.from !== 'onboarding@resend.dev') {
+      if (resendResult.error && resendPayload.from !== `${appName} <onboarding@resend.dev>`) {
         console.warn('[PropertySMTP] Resend primary from failed, retrying with onboarding@resend.dev:', resendResult.error);
-        resendPayload.from = 'The Torch Club <onboarding@resend.dev>';
+        resendPayload.from = `${appName} <onboarding@resend.dev>`;
         resendResult = await resend.emails.send(resendPayload);
       }
 
