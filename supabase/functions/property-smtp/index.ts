@@ -397,13 +397,6 @@ serve(async (req) => {
 
       let resendResult = await resend.emails.send(resendPayload);
 
-      // Retry with default sender if domain restriction occurs
-      if (resendResult.error && resendPayload.from !== `${appName} <onboarding@resend.dev>`) {
-        console.warn('[PropertySMTP] Resend primary from failed, retrying with onboarding@resend.dev:', resendResult.error);
-        resendPayload.from = `${appName} <onboarding@resend.dev>`;
-        resendResult = await resend.emails.send(resendPayload);
-      }
-
       if (resendResult.error) {
         throw new Error(resendResult.error.message || 'Resend delivery failed');
       }

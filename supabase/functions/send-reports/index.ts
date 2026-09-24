@@ -137,21 +137,6 @@ serve(async (req) => {
       emailRes = resendResult.data;
       emailError = resendResult.error;
 
-      if (emailError && fromEmail !== 'onboarding@resend.dev') {
-        console.warn('DEBUG: Direct email error from Resend with primary fromEmail:', emailError, 'Retrying with onboarding@resend.dev...');
-        const retryResult = await resend.emails.send({
-          from: `${appName} <onboarding@resend.dev>`,
-          reply_to: fromEmail, // Keep original support email as reply_to to avoid domain mismatch
-          to: emails,
-          subject,
-          html,
-          text: textContent,
-          attachments: attachments || []
-        });
-        emailRes = retryResult.data;
-        emailError = retryResult.error;
-      }
-
       if (emailError) {
         console.error('DEBUG: Direct email error from Resend:', emailError);
         return new Response(JSON.stringify({ success: false, error: emailError.message || JSON.stringify(emailError) }), {

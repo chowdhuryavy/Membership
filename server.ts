@@ -514,28 +514,6 @@ async function startServer() {
 
           let result: any = await resp.json().catch(() => ({}));
 
-          // Fallback to onboarding@resend.dev if domain unverified
-          if (!resp.ok && fromEmail !== 'onboarding@resend.dev') {
-            console.warn(`[Express /api/send-email] First attempt for ${recipientEmail} with ${fromEmail} failed:`, result, '. Retrying with onboarding@resend.dev...');
-            resp = await fetch('https://api.resend.com/emails', {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${resendApiKey}`,
-                'Content-Type': 'application/json'
-              },
-              body: JSON.stringify({
-                from: `${appName} <onboarding@resend.dev>`,
-                reply_to: fromEmail, // Keep original support email as reply_to to avoid domain mismatch
-                to: [recipientEmail],
-                subject,
-                html,
-                text,
-                attachments: attachments || []
-              })
-            });
-            result = await resp.json().catch(() => ({}));
-          }
-
           if (!resp.ok) {
             const msg = result.message || JSON.stringify(result);
             throw new Error(`[${recipientEmail}] ${msg}`);
