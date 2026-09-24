@@ -15,7 +15,6 @@ import {
   Sparkles, 
   ChevronRight, 
   ExternalLink,
-  MessageSquare,
   Building2,
   Info,
   CheckCircle2,
@@ -183,7 +182,7 @@ export const WhatsAppConversationsTab: React.FC<WhatsAppConversationsTabProps> =
               rel="noreferrer"
               className="inline-flex items-center gap-1.5 mt-2 px-3 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-[11px] font-bold rounded-xl transition-all"
             >
-              <ExternalLink className="w-3.5 h-3.5" />
+              <WhatsAppIcon className="w-3.5 h-3.5 text-emerald-600" />
               Open WhatsApp App
             </a>
           </div>

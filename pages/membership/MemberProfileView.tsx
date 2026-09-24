@@ -21,6 +21,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { MembersAgreement } from '../../components/MembersAgreement';
 import { SignatureModal } from '../../components/SignatureModal';
 import { DigitalMembershipCardModal } from '../../components/DigitalMembershipCardModal';
+import { WhatsAppIcon } from '../../components/WhatsAppIcon';
 
 interface MemberProfileViewProps {
   member: Member;
@@ -768,9 +769,21 @@ const MemberProfileView: React.FC<MemberProfileViewProps> = ({
                       </div>
                       
                        <div className="mt-10 space-y-3">
-                        <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100 text-xs font-black text-slate-700 hover:bg-white hover:shadow-md hover:border-indigo-100 transition-all cursor-default">
+                        <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100 text-xs font-black text-slate-700 hover:bg-white hover:shadow-md hover:border-indigo-100 transition-all">
                            <div className="w-9 h-9 rounded-xl bg-white shadow-sm flex items-center justify-center text-indigo-600"><Phone className="w-4 h-4" /></div>
                            <span className="flex-1 text-left">{canViewContactInfo ? (viewingMember.phone || 'No Phone Number') : '••••••••••••'}</span>
+                           {canViewContactInfo && viewingMember.phone && (
+                             <a
+                               href={`https://wa.me/${viewingMember.phone.replace(/[^0-9]/g, '')}`}
+                               target="_blank"
+                               rel="noreferrer"
+                               className="p-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 transition-all flex items-center gap-1.5 text-[11px] font-bold"
+                               title="Chat via WhatsApp"
+                             >
+                               <WhatsAppIcon className="w-4 h-4 text-emerald-600" />
+                               <span className="hidden sm:inline">WhatsApp</span>
+                             </a>
+                           )}
                         </div>
                         <div className="flex items-center gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-100 text-xs font-black text-slate-700 hover:bg-white hover:shadow-md hover:border-indigo-100 transition-all cursor-default overflow-hidden">
                            <div className="w-9 h-9 rounded-xl bg-white shadow-sm flex items-center justify-center text-indigo-600"><Mail className="w-4 h-4 shrink-0" /></div>

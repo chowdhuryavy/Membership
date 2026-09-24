@@ -3,7 +3,6 @@ import { WhatsAppConversation, WhatsAppMessage, WhatsAppTemplate } from '../../t
 import { WhatsAppChatBox } from './WhatsAppChatBox';
 import { WhatsAppIcon } from '../WhatsAppIcon';
 import { 
-  MessageSquare, 
   Search, 
   Filter, 
   Plus, 
@@ -169,7 +168,7 @@ export const WhatsAppInboxTab: React.FC<WhatsAppInboxTabProps> = ({
             <span className="text-[11px] text-slate-500 font-medium">Unread guest replies</span>
           </div>
           <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-700 flex items-center justify-center font-black">
-            <MessageSquare className="w-6 h-6" />
+            <WhatsAppIcon className="w-6 h-6 text-emerald-700" />
           </div>
         </div>
 
@@ -260,7 +259,7 @@ export const WhatsAppInboxTab: React.FC<WhatsAppInboxTabProps> = ({
             onClick={() => setIsNewChatModalOpen(true)}
             className="flex items-center gap-2 px-4 py-2 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-black uppercase tracking-wider rounded-xl shadow-md shadow-emerald-700/20 active:scale-95 transition-all shrink-0 cursor-pointer"
           >
-            <Plus className="w-4 h-4" />
+            <WhatsAppIcon className="w-4 h-4 text-white" />
             New WhatsApp Chat
           </button>
         </div>
@@ -420,7 +419,7 @@ export const WhatsAppInboxTab: React.FC<WhatsAppInboxTabProps> = ({
             <div className="flex items-center justify-between pb-4 border-b border-slate-100">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-2xl bg-emerald-700/10 text-emerald-700 flex items-center justify-center">
-                  <MessageSquare className="w-5 h-5" />
+                  <WhatsAppIcon className="w-5 h-5 text-emerald-700" />
                 </div>
                 <div>
                   <h3 className="text-sm font-black uppercase tracking-tight text-slate-900">Initiate WhatsApp Conversation</h3>

@@ -14,7 +14,6 @@ import { WhatsAppInboxTab } from '../components/whatsapp/WhatsAppInboxTab';
 import { WhatsAppConversationsTab } from '../components/whatsapp/WhatsAppConversationsTab';
 import { WhatsAppIcon } from '../components/WhatsAppIcon';
 import { 
-  MessageSquare, 
   Inbox, 
   Loader2, 
   Building2,
@@ -337,7 +336,7 @@ export const WhatsAppAutomation: React.FC = () => {
                   : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
               }`}
             >
-              <MessageSquare className="w-4 h-4" />
+              <WhatsAppIcon className="w-4 h-4" />
               Live Chat Console
             </button>
           </div>

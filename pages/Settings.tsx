@@ -11,6 +11,7 @@ import { BookingSettings } from '../components/BookingSettings';
 import { CustomReportBuilder } from '../components/CustomReportBuilder';
 import { CustomReportViewer } from '../components/CustomReportViewer';
 import { ExpirationRemindersSettings } from '../components/ExpirationRemindersSettings';
+import { WhatsAppIcon } from '../components/WhatsAppIcon';
 import { purgeAllDeviceCaches } from '../src/shared/cacheManager';
 import { 
   Trash2, 
@@ -319,7 +320,7 @@ const SettingsPage = () => {
       { id: 'massage_rooms', label: 'Massage Rooms', visible: (isSuper || hasPermission(user?.role_id || '', 'settings:view_massage_rooms')) && !!currentProperty, icon: Store },
       { id: 'reports_config', label: 'Report Distribution', visible: isSuper || hasPermission(user?.role_id || '', 'settings:view_reports_config'), icon: Mail },
       { id: 'expiration_reminders', label: 'Expiration Reminders', visible: isSuper || hasPermission(user?.role_id || '', 'settings:view_expiration_reminders') || hasPermission(user?.role_id || '', 'settings:view_reports_config'), icon: BellRing },
-      { id: 'whatsapp_config', label: 'WhatsApp Automation & API', visible: isSuper || hasPermission(user?.role_id || '', 'whatsapp:settings') || hasPermission(user?.role_id || '', 'whatsapp:rules') || hasPermission(user?.role_id || '', 'whatsapp:templates'), icon: MessageSquare },
+      { id: 'whatsapp_config', label: 'WhatsApp Automation & API', visible: isSuper || hasPermission(user?.role_id || '', 'whatsapp:settings') || hasPermission(user?.role_id || '', 'whatsapp:rules') || hasPermission(user?.role_id || '', 'whatsapp:templates'), icon: WhatsAppIcon },
       { id: 'custom_reports', label: 'Custom Intelligence', visible: isSuper || hasPermission(user?.role_id || '', 'settings:view_custom_reports'), icon: FileText },
     ].filter(t => t.visible);
   }, [user, roles, hasPermission, currentProperty, currentOutlet, isSuperAdmin]);
@@ -1982,7 +1983,7 @@ const SettingsPage = () => {
                               <div>
                                 <div className="flex items-center gap-2.5">
                                   <span className="w-8 h-8 rounded-xl bg-emerald-500/10 text-emerald-600 flex items-center justify-center font-bold">
-                                    <MessageSquare className="w-4 h-4" />
+                                    <WhatsAppIcon className="w-4 h-4 text-emerald-600" />
                                   </span>
                                   <h3 className="text-lg font-black text-slate-900 uppercase tracking-tight">
                                     Property &amp; Outlet Sidebar Visibility Matrix
@@ -2845,7 +2846,7 @@ const SettingsPage = () => {
                             <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100 flex items-center justify-between">
                                 <div className="flex items-center gap-3">
                                     <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold ${propertyForm.whatsapp_enabled !== false ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-500'}`}>
-                                        <MessageSquare className="w-4 h-4" />
+                                        <WhatsAppIcon className="w-4 h-4 text-white" />
                                     </div>
                                     <div>
                                         <h5 className="text-xs font-black text-slate-900 uppercase tracking-tight">WhatsApp Hub in Sidebar</h5>
@@ -3034,7 +3035,7 @@ const SettingsPage = () => {
                             <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100 flex items-center justify-between">
                                 <div className="flex items-center gap-3">
                                     <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold ${outletForm.whatsapp_enabled !== false ? 'bg-emerald-600 text-white' : 'bg-slate-200 text-slate-500'}`}>
-                                        <MessageSquare className="w-4 h-4" />
+                                        <WhatsAppIcon className="w-4 h-4 text-white" />
                                     </div>
                                     <div>
                                         <h5 className="text-xs font-black text-slate-900 uppercase tracking-tight">WhatsApp Hub in Sidebar</h5>
