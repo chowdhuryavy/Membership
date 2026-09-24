@@ -723,16 +723,57 @@ export const emailService = {
       .replace(/\n\s*\n\s*\n/g, '\n\n')
       .trim();
 
+    // Resolve Property ID
+    let propertyId = options?.propertyId;
+    if (!propertyId && options?.outletId) {
+      try {
+        const outletsStr = localStorage.getItem('company_outlets_cache');
+        const outlets = outletsStr ? JSON.parse(outletsStr) : [];
+        const outlet = outlets.find((o: any) => o.id === options.outletId);
+        if (outlet?.property_id) {
+          propertyId = outlet.property_id;
+        } else if (supabase) {
+          const { data: outletData } = await supabase
+            .from('outlets')
+            .select('property_id')
+            .eq('id', options.outletId)
+            .maybeSingle();
+          if (outletData?.property_id) {
+            propertyId = outletData.property_id;
+          }
+        }
+      } catch (e) {
+        console.warn('[Email Service] Failed to lookup propertyId from outletId:', e);
+      }
+    }
+
+    // SMTP Configuration Status Check
+    let useSmtp = false;
+    let smtpSettings: any = null;
+    if (propertyId) {
+      try {
+        smtpSettings = await PropertySmtpService.getSettings(propertyId);
+        if (smtpSettings && smtpSettings.is_enabled && smtpSettings.host && smtpSettings.username && smtpSettings.has_password_configured) {
+          useSmtp = true;
+          console.log(`[Email Service] Custom SMTP is ACTIVE & ENABLED for Property ID ${propertyId}`);
+        } else {
+          console.log(`[Email Service] SMTP not fully configured or disabled for Property ID ${propertyId}. Defaulting directly to Resend.`);
+        }
+      } catch (err) {
+        console.warn('[Email Service] Failed to fetch SMTP settings for pre-check, default to Resend:', err);
+      }
+    }
+
     // Priority 1: Check Property-Specific SMTP
-    if (options?.propertyId || options?.outletId) {
+    if (useSmtp && propertyId) {
       try {
         const smtpResult = await PropertySmtpService.dispatchEmail({
           to,
           subject,
           html,
           text: plainText,
-          propertyId: options.propertyId,
-          outletId: options.outletId,
+          propertyId: propertyId,
+          outletId: options?.outletId,
           attachments
         });
 
@@ -742,7 +783,7 @@ export const emailService = {
           await db.logAction(
             'EMAIL_SENT', 
             `Email dispatched successfully to ${targetStr} using Property SMTP (Subject: "${subject}")`, 
-            options.outletId,
+            options?.outletId,
             undefined,
             {
               module: 'Emails',
@@ -755,8 +796,8 @@ export const emailService = {
                 subject,
                 transport: 'SMTP',
                 status: 'success',
-                property_id: options.propertyId,
-                outlet_id: options.outletId,
+                property_id: propertyId,
+                outlet_id: options?.outletId,
                 message_id: smtpResult.messageId
               }
             }
@@ -769,7 +810,7 @@ export const emailService = {
           await db.logAction(
             'EMAIL_FAILED', 
             `Property SMTP dispatch attempt to ${targetStr} failed/disabled. Falling back to default transport. Details: ${smtpResult.error || 'Unknown'}`, 
-            options.outletId,
+            options?.outletId,
             undefined,
             {
               module: 'Emails',
@@ -781,8 +822,8 @@ export const emailService = {
                 subject,
                 transport: 'SMTP',
                 status: 'failure',
-                property_id: options.propertyId,
-                outlet_id: options.outletId,
+                property_id: propertyId,
+                outlet_id: options?.outletId,
                 error: smtpResult.error
               }
             }
@@ -806,7 +847,7 @@ export const emailService = {
               subject,
               transport: 'SMTP',
               status: 'failure',
-              property_id: options?.propertyId,
+              property_id: propertyId,
               outlet_id: options?.outletId,
               error: smtpErr?.message || String(smtpErr)
             }
