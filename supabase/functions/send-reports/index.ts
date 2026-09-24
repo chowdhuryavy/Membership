@@ -706,22 +706,22 @@ serve(async (req) => {
               </div>
             `;
 
-            console.log(`DEBUG: Attempting to send email to ${emails.join(', ')} from ${fromEmail}`);
+            console.log(`DEBUG: Attempting to send email to ${emails.join(", ")} from ${fromEmail}`);
             
             const reportText = emailHtml
-              .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-              .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-              .replace(/<tr[^>]*>/gi, '\n')
-              .replace(/<td[^>]*>/gi, '  ')
-              .replace(/<p[^>]*>/gi, '\n\n')
-              .replace(/<br\s*\/?>/gi, '\n')
-              .replace(/<[^>]+>/g, '')
-              .replace(/&bull;/g, '•')
-              .replace(/&nbsp;/g, ' ')
-              .replace(/&amp;/g, '&')
-              .replace(/&lt;/g, '<')
-              .replace(/&gt;/g, '>')
-              .replace(/\n\s*\n\s*\n/g, '\n\n')
+              .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
+              .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
+              .replace(/<tr[^>]*>/gi, "\n")
+              .replace(/<td[^>]*>/gi, "  ")
+              .replace(/<p[^>]*>/gi, "\n\n")
+              .replace(/<br\s*\/?>/gi, "\n")
+              .replace(/<[^>]+>/g, "")
+              .replace(/&bull;/g, "•")
+              .replace(/&nbsp;/g, " ")
+              .replace(/&amp;/g, "&")
+              .replace(/&lt;/g, "<")
+              .replace(/&gt;/g, ">")
+              .replace(/\n\s*\n\s*\n/g, "\n\n")
               .trim();
 
             const { data: emailRes, error: emailError } = await resend.emails.send({
@@ -733,7 +733,7 @@ serve(async (req) => {
               text: reportText,
               attachments: [
                 {
-                  filename: `${recipient.report_type}_report_${params.date.toISOString().split('T')[0]}.pdf`,
+                  filename: `${recipient.report_type}_report_${params.date.toISOString().split("T")[0]}.pdf`,
                   content: pdfBase64,
                 },
               ],
