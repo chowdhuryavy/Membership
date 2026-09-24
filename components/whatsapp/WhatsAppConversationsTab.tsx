@@ -207,9 +207,9 @@ export const WhatsAppConversationsTab: React.FC<WhatsAppConversationsTabProps> =
                   </span>
                 </div>
                 <div className="flex items-center gap-2 text-[11px] text-slate-400 font-medium">
-                  <span>{activeConversation.contact_phone}</span>
+                  <span className="font-mono">{activeConversation.contact_phone}</span>
                   <span>•</span>
-                  <span className="text-emerald-700 font-bold">{outletName}</span>
+                  <span className="text-emerald-800 font-bold">{outletName} ({propertyName})</span>
                 </div>
               </div>
             </div>
@@ -272,8 +272,8 @@ export const WhatsAppConversationsTab: React.FC<WhatsAppConversationsTabProps> =
                     }`}
                   >
                     {isOutgoing && (
-                      <span className="text-[10px] font-black uppercase tracking-wider text-emerald-800 block mb-0.5">
-                        {msg.sender_name || 'Staff Agent'} {msg.sender_type === 'bot' && '• Automated'}
+                      <span className="text-[10px] font-black uppercase tracking-wider text-emerald-900 block mb-0.5">
+                        {msg.sender_name || `${outletName} • ${propertyName}`} {msg.sender_type === 'bot' && '• Automated'}
                       </span>
                     )}
 

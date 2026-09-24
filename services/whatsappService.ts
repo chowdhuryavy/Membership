@@ -326,7 +326,9 @@ export class WhatsAppService {
     companyId: string, 
     propertyId: string, 
     outletId: string,
-    filter?: { status?: string; search?: string }
+    filter?: { status?: string; search?: string },
+    outletName?: string,
+    propertyName?: string
   ): Promise<WhatsAppConversation[]> {
     const scopeKey = this.getScopeKey(companyId, propertyId, outletId);
 
@@ -371,7 +373,7 @@ export class WhatsAppService {
     } catch (e) {}
 
     // Generate initial contextual conversations for this outlet so user has immediate rich data
-    const initialSeed = this.generateInitialConversations(companyId, propertyId, outletId);
+    const initialSeed = this.generateInitialConversations(companyId, propertyId, outletId, outletName, propertyName);
     localStorage.setItem(`${CACHE_CONV_PREFIX}${scopeKey}`, JSON.stringify(initialSeed));
     return initialSeed;
   }
@@ -383,7 +385,9 @@ export class WhatsAppService {
     conversationId: string, 
     companyId: string, 
     propertyId: string, 
-    outletId: string
+    outletId: string,
+    outletName?: string,
+    propertyName?: string
   ): Promise<WhatsAppMessage[]> {
     try {
       if (supabase) {
@@ -414,7 +418,7 @@ export class WhatsAppService {
     } catch (e) {}
 
     // Contextual timeline generation
-    const sampleMsgs = this.generateInitialMessages(conversationId, companyId, propertyId, outletId);
+    const sampleMsgs = this.generateInitialMessages(conversationId, companyId, propertyId, outletId, outletName, propertyName);
     localStorage.setItem(cacheKey, JSON.stringify(sampleMsgs));
     return sampleMsgs;
   }
@@ -558,6 +562,7 @@ export class WhatsAppService {
     initialMessage: string;
     memberId?: string;
     tags?: string[];
+    senderName?: string;
   }): Promise<WhatsAppConversation> {
     const newConv: WhatsAppConversation = {
       id: 'conv_' + Math.random().toString(36).substring(2, 11),
@@ -591,7 +596,7 @@ export class WhatsAppService {
         propertyId: params.propertyId,
         outletId: params.outletId,
         messageText: params.initialMessage,
-        senderName: 'Front Desk'
+        senderName: params.senderName || 'Concierge Desk'
       });
 
       if (supabase) {
@@ -861,9 +866,13 @@ export class WhatsAppService {
   private static generateInitialConversations(
     companyId: string, 
     propertyId: string, 
-    outletId: string
+    outletId: string,
+    outletName?: string,
+    propertyName?: string
   ): WhatsAppConversation[] {
     const now = Date.now();
+    const facilityName = outletName || 'Health Club';
+    const hotelName = propertyName || 'Resort';
     return [
       {
         id: `conv_${outletId}_1`,
@@ -872,11 +881,11 @@ export class WhatsAppService {
         outlet_id: outletId,
         contact_name: 'Sheikh Hamad Al-Thani',
         contact_phone: '+974 5512 8901',
-        last_message: 'Could you please confirm if the steam room is available this afternoon?',
+        last_message: `Could you please confirm if the steam room and pool at ${facilityName} are available this afternoon?`,
         last_message_at: new Date(now - 15 * 60 * 1000).toISOString(),
         unread_count: 1,
         status: 'open',
-        tags: ['VIP', 'Wellness', 'In-House'],
+        tags: ['VIP Member', facilityName, 'In-House'],
         avatar_url: 'https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=150&auto=format&fit=crop&q=80',
         created_at: new Date(now - 2 * 3600 * 1000).toISOString(),
         updated_at: new Date(now - 15 * 60 * 1000).toISOString()
@@ -888,7 +897,7 @@ export class WhatsAppService {
         outlet_id: outletId,
         contact_name: 'Fatima Al-Kuwari',
         contact_phone: '+974 6634 1122',
-        last_message: 'Thank you! The massage booking confirmation is received.',
+        last_message: `Thank you! The massage booking confirmation for ${facilityName} (${hotelName}) is received.`,
         last_message_at: new Date(now - 85 * 60 * 1000).toISOString(),
         unread_count: 0,
         status: 'resolved',
@@ -904,11 +913,11 @@ export class WhatsAppService {
         outlet_id: outletId,
         contact_name: 'David Sterling',
         contact_phone: '+44 7700 900143',
-        last_message: 'Hello, what are your opening hours on Friday?',
+        last_message: `Hello, what are the training hours at ${facilityName} on Friday?`,
         last_message_at: new Date(now - 3 * 3600 * 1000).toISOString(),
         unread_count: 0,
         status: 'open',
-        tags: ['Day Pass', 'Hotel Resident'],
+        tags: ['Day Pass', hotelName],
         avatar_url: 'https://images.unsplash.com/photo-1500648767791-00dcc994a43e?w=150&auto=format&fit=crop&q=80',
         created_at: new Date(now - 4 * 3600 * 1000).toISOString(),
         updated_at: new Date(now - 3 * 3600 * 1000).toISOString()
@@ -920,9 +929,15 @@ export class WhatsAppService {
     conversationId: string, 
     companyId: string, 
     propertyId: string, 
-    outletId: string
+    outletId: string,
+    outletName?: string,
+    propertyName?: string
   ): WhatsAppMessage[] {
     const now = Date.now();
+    const facilityName = outletName || 'Health Club';
+    const hotelName = propertyName || 'Resort';
+    const senderIdentity = `${facilityName} • ${hotelName}`;
+
     return [
       {
         id: `msg_${conversationId}_1`,
@@ -932,7 +947,7 @@ export class WhatsAppService {
         outlet_id: outletId,
         sender_type: 'contact',
         sender_name: 'Guest',
-        message_text: 'Good morning! Could you share information about the facilities and booking policies?',
+        message_text: `Good morning! Could you share information about the facilities and booking policies at ${facilityName}?`,
         status: 'read',
         timestamp: new Date(now - 45 * 60 * 1000).toISOString()
       },
@@ -942,9 +957,9 @@ export class WhatsAppService {
         company_id: companyId,
         property_id: propertyId,
         outlet_id: outletId,
-        sender_type: 'bot',
-        sender_name: 'HCM Assistant',
-        message_text: 'Welcome to our facility! Our wellness center and health club operate daily from 08:00 AM to 10:00 PM. How may we assist you today?',
+        sender_type: 'agent',
+        sender_name: senderIdentity,
+        message_text: `Welcome to ${facilityName} at ${hotelName}! Our wellness center and health club operate daily from 08:00 AM to 10:00 PM. How may our team assist your visit today?`,
         status: 'delivered',
         timestamp: new Date(now - 44 * 60 * 1000).toISOString()
       },
@@ -956,7 +971,7 @@ export class WhatsAppService {
         outlet_id: outletId,
         sender_type: 'contact',
         sender_name: 'Guest',
-        message_text: 'Could you please confirm if the steam room is available this afternoon?',
+        message_text: `Could you please confirm if the steam room and facilities at ${facilityName} are available this afternoon?`,
         status: 'read',
         timestamp: new Date(now - 15 * 60 * 1000).toISOString()
       }
