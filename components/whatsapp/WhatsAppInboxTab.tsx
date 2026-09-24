@@ -1,5 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { WhatsAppConversation, WhatsAppMessage, WhatsAppTemplate } from '../../types';
+import { WhatsAppChatBox } from './WhatsAppChatBox';
+import { WhatsAppIcon } from '../WhatsAppIcon';
 import { 
   MessageSquare, 
   Search, 
@@ -394,207 +396,20 @@ export const WhatsAppInboxTab: React.FC<WhatsAppInboxTabProps> = ({
           </div>
         </div>
 
-        {/* Right Column: Smart Inbox Quick Inspector & Immediate Responder */}
+        {/* Right Column: Authentic WhatsApp Chat Box in Split-View */}
         <div className="lg:col-span-7 bg-white rounded-3xl border border-slate-200/80 shadow-xs overflow-hidden flex flex-col h-[700px]">
-          {activeConversation ? (
-            <div className="flex flex-col h-full">
-              {/* Header */}
-              <div className="p-4 bg-white border-b border-slate-100 flex items-center justify-between shrink-0 shadow-xs">
-                <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-2xl bg-emerald-700 text-white flex items-center justify-center font-black text-xs shadow-xs">
-                    {activeConversation.contact_name.charAt(0).toUpperCase()}
-                  </div>
-                  <div className="min-w-0">
-                    <div className="flex items-center gap-2">
-                      <h3 className="text-sm font-black text-slate-900 truncate">
-                        {activeConversation.contact_name}
-                      </h3>
-                      <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${
-                        activeConversation.status === 'open' ? 'bg-blue-50 text-blue-700' : 'bg-slate-100 text-slate-600'
-                      }`}>
-                        {activeConversation.status}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 text-[11px] text-slate-400 font-medium mt-0.5">
-                      <span className="font-mono">{activeConversation.contact_phone}</span>
-                      <span>•</span>
-                      <span className="text-emerald-800 font-bold">{outletName} ({propertyName})</span>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <a
-                    href={`https://wa.me/${activeConversation.contact_phone.replace(/[^0-9]/g, '')}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="p-2 rounded-xl text-slate-500 hover:bg-emerald-50 hover:text-emerald-700 transition-all"
-                    title="Open in WhatsApp Web"
-                  >
-                    <ExternalLink className="w-4 h-4" />
-                  </a>
-
-                  <button
-                    onClick={() => onOpenConversation(activeConversation.id)}
-                    className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold rounded-xl transition-all cursor-pointer"
-                    title="Expand into Live Chat Console"
-                  >
-                    <Maximize2 className="w-3.5 h-3.5" />
-                    <span className="hidden sm:inline">Full Console</span>
-                  </button>
-                </div>
-              </div>
-
-              {/* Sender Identity Banner */}
-              <div className="px-4 py-2 bg-emerald-50/80 border-b border-emerald-100/80 flex items-center justify-between text-xs">
-                <div className="flex items-center gap-2 text-emerald-900 font-medium">
-                  <Building2 className="w-3.5 h-3.5 text-emerald-700" />
-                  <span>Sender Identity:</span>
-                  <span className="font-black text-emerald-950 bg-white/80 px-2 py-0.5 rounded-lg border border-emerald-200/60">
-                    {outletName} • {propertyName}
-                  </span>
-                </div>
-                <div className="text-[10px] text-emerald-800 font-semibold hidden sm:block">
-                  WhatsApp Meta Certified
-                </div>
-              </div>
-
-              {/* Message Timeline */}
-              <div className="flex-1 p-5 overflow-y-auto space-y-3 custom-scrollbar bg-[#f8fafc]/50">
-                <div className="max-w-xs mx-auto my-1 p-2 bg-slate-100 rounded-xl text-[10px] text-slate-500 text-center font-medium">
-                  Guest message log isolated to {outletName}
-                </div>
-
-                {messages.length === 0 ? (
-                  <div className="p-8 text-center text-xs text-slate-400">
-                    Loading conversation messages...
-                  </div>
-                ) : (
-                  messages.map((msg) => {
-                    const isOutgoing = msg.sender_type === 'agent' || msg.sender_type === 'bot';
-                    return (
-                      <div
-                        key={msg.id}
-                        className={`flex ${isOutgoing ? 'justify-end' : 'justify-start'}`}
-                      >
-                        <div
-                          className={`max-w-[85%] rounded-2xl px-4 py-2.5 shadow-xs text-xs ${
-                            isOutgoing
-                              ? 'bg-emerald-700 text-white rounded-tr-xs shadow-emerald-700/10'
-                              : 'bg-white text-slate-900 rounded-tl-xs border border-slate-200/80'
-                          }`}
-                        >
-                          {isOutgoing && (
-                            <span className="text-[10px] font-black uppercase tracking-wider text-emerald-100 block mb-0.5">
-                              {msg.sender_name || `${outletName} • ${propertyName}`}
-                            </span>
-                          )}
-
-                          <p className="whitespace-pre-wrap leading-relaxed">{msg.message_text}</p>
-
-                          <div className={`flex items-center justify-end gap-1 mt-1 text-[10px] ${isOutgoing ? 'text-emerald-200' : 'text-slate-400'}`}>
-                            <span>{format(new Date(msg.timestamp), 'HH:mm')}</span>
-                            {isOutgoing && (
-                              <CheckCheck className="w-3.5 h-3.5 text-emerald-200" />
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-
-              {/* Quick Preset Buttons */}
-              <div className="px-4 py-2 bg-slate-50 border-t border-slate-200/70 flex items-center gap-1.5 overflow-x-auto">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider shrink-0">
-                  Quick Reply:
-                </span>
-                {quickSnippets.map((snip, idx) => (
-                  <button
-                    key={idx}
-                    onClick={() => setQuickReplyText(snip)}
-                    className="px-2.5 py-1 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-[10px] font-bold rounded-lg truncate shrink-0 max-w-[200px] cursor-pointer"
-                  >
-                    {snip}
-                  </button>
-                ))}
-              </div>
-
-              {/* Reply Input Bar */}
-              <div className="p-4 bg-white border-t border-slate-100 relative">
-                {/* Template Dropdown */}
-                {showTemplateDropdown && (
-                  <div className="absolute bottom-20 left-4 right-4 bg-white rounded-2xl shadow-2xl border border-slate-200 p-3 z-20 animate-in fade-in zoom-in-95">
-                    <div className="flex items-center justify-between pb-2 border-b border-slate-100 mb-2">
-                      <span className="text-xs font-black uppercase text-slate-700">Meta Approved Templates</span>
-                      <button
-                        onClick={() => setShowTemplateDropdown(false)}
-                        className="text-xs text-slate-400 hover:text-slate-600"
-                      >
-                        ✕
-                      </button>
-                    </div>
-                    <div className="space-y-1 max-h-48 overflow-y-auto custom-scrollbar">
-                      {templates.map(tmpl => (
-                        <div
-                          key={tmpl.id}
-                          onClick={() => handleApplyTemplate(tmpl)}
-                          className="p-2 rounded-xl hover:bg-emerald-50 cursor-pointer transition-colors border border-transparent hover:border-emerald-200"
-                        >
-                          <div className="flex items-center justify-between">
-                            <span className="text-xs font-bold text-slate-900">{tmpl.name}</span>
-                            <span className="text-[9px] font-black text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded">
-                              {tmpl.category}
-                            </span>
-                          </div>
-                          <p className="text-[11px] text-slate-500 truncate mt-0.5">{tmpl.body_text}</p>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-
-                <form onSubmit={handleSendQuickReply} className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setShowTemplateDropdown(!showTemplateDropdown)}
-                    className="p-2.5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-600 transition-all text-xs font-bold flex items-center gap-1.5 shrink-0 cursor-pointer"
-                    title="Approved Meta Templates"
-                  >
-                    <FileText className="w-4 h-4 text-emerald-700" />
-                    <span className="hidden sm:inline">Templates</span>
-                  </button>
-
-                  <div className="relative flex-1">
-                    <input
-                      type="text"
-                      placeholder={`Reply to ${activeConversation.contact_name} as ${outletName}...`}
-                      value={quickReplyText}
-                      onChange={(e) => setQuickReplyText(e.target.value)}
-                      className="w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-2xl text-xs font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
-                    />
-                  </div>
-
-                  <button
-                    type="submit"
-                    disabled={!quickReplyText.trim() || isSending}
-                    className="w-11 h-11 rounded-2xl bg-emerald-700 hover:bg-emerald-800 disabled:opacity-50 text-white flex items-center justify-center shadow-lg shadow-emerald-700/20 active:scale-95 transition-all shrink-0 cursor-pointer"
-                  >
-                    <Send className="w-4 h-4" />
-                  </button>
-                </form>
-              </div>
-            </div>
-          ) : (
-            <div className="flex-1 flex items-center justify-center p-12 text-center text-slate-400 bg-slate-50/50">
-              <div>
-                <MessageSquare className="w-12 h-12 text-slate-300 mx-auto mb-3" />
-                <h3 className="text-sm font-black uppercase text-slate-700">No Chat Selected</h3>
-                <p className="text-xs text-slate-500 mt-1">Select an inquiry from the list to preview and reply</p>
-              </div>
-            </div>
-          )}
+          <WhatsAppChatBox
+            conversation={activeConversation}
+            messages={messages}
+            templates={templates}
+            outletName={outletName}
+            propertyName={propertyName}
+            onSendMessage={onSendMessage}
+            onUpdateStatus={onUpdateStatus}
+            isSending={isSending}
+            onOpenFullConsole={() => activeConversation && onOpenConversation(activeConversation.id)}
+            isSplitView={true}
+          />
         </div>
       </div>
 
