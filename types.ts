@@ -36,7 +36,10 @@ export type Permission =
   // System Configuration & Settings
   | 'settings:view' | 'settings:edit' 
   | 'settings:view_global' | 'settings:view_properties' | 'settings:view_outlets' | 'settings:view_roles' | 'settings:view_currency' | 'settings:view_shortcuts' | 'settings:view_documents' | 'settings:view_smtp' | 'settings:view_maintenance' | 'settings:view_navigation' | 'settings:view_incentives' | 'settings:manage_visibility' | 'settings:view_staff_portal' | 'settings:view_booking_engine' | 'settings:view_membership_types' | 'settings:view_massage_rooms' | 'settings:view_reports_config' | 'settings:view_custom_reports' | 'settings:view_entrance_fee' | 'settings:view_expiration_reminders'
-  | 'settings:manage_global' | 'settings:manage_properties' | 'settings:manage_outlets' | 'settings:manage_roles' | 'settings:manage_currency' | 'settings:manage_shortcuts' | 'settings:manage_documents' | 'settings:manage_smtp' | 'settings:manage_maintenance' | 'settings:manage_navigation' | 'settings:manage_incentives' | 'settings:manage_staff_portal' | 'settings:manage_booking_engine' | 'settings:manage_membership_types' | 'settings:manage_massage_rooms' | 'settings:manage_reports_config' | 'settings:manage_custom_reports' | 'settings:manage_entrance_fee' | 'settings:manage_expiration_reminders'; 
+  | 'settings:manage_global' | 'settings:manage_properties' | 'settings:manage_outlets' | 'settings:manage_roles' | 'settings:manage_currency' | 'settings:manage_shortcuts' | 'settings:manage_documents' | 'settings:manage_smtp' | 'settings:manage_maintenance' | 'settings:manage_navigation' | 'settings:manage_incentives' | 'settings:manage_staff_portal' | 'settings:manage_booking_engine' | 'settings:manage_membership_types' | 'settings:manage_massage_rooms' | 'settings:manage_reports_config' | 'settings:manage_custom_reports' | 'settings:manage_entrance_fee' | 'settings:manage_expiration_reminders'
+  
+  // WhatsApp Automation
+  | 'whatsapp:view' | 'whatsapp:manage' | 'whatsapp:send' | 'whatsapp:templates' | 'whatsapp:rules' | 'whatsapp:settings'; 
 
 export interface PermissionGroup {
   id: string;
@@ -675,4 +678,138 @@ export interface MemberCheckIn {
   membership_status_at_checkin?: string;
   access_type?: string;
   created_at?: string;
+}
+
+export interface Company {
+  id: string;
+  name: string;
+  code?: string;
+  logo_url?: string;
+  description?: string;
+  created_at?: string;
+}
+
+export interface WhatsAppConfig {
+  id?: string;
+  company_id: string;
+  property_id: string;
+  outlet_id: string;
+  phone_number_id: string;
+  waba_id: string;
+  display_phone_number: string;
+  display_name?: string;
+  app_id?: string;
+  webhook_verify_token: string;
+  is_active: boolean;
+  has_token_configured?: boolean;
+  business_hours_start?: string;
+  business_hours_end?: string;
+  out_of_hours_message?: string;
+  welcome_message_enabled?: boolean;
+  last_tested_at?: string;
+  last_test_status?: 'success' | 'failed';
+  last_test_error?: string;
+  created_at?: string;
+  updated_at?: string;
+}
+
+export interface WhatsAppConversation {
+  id: string;
+  company_id: string;
+  property_id: string;
+  outlet_id: string;
+  contact_name: string;
+  contact_phone: string;
+  last_message: string;
+  last_message_at: string;
+  unread_count: number;
+  status: 'open' | 'resolved' | 'archived';
+  tags: string[];
+  assigned_to?: string;
+  avatar_url?: string;
+  notes?: string;
+  member_id?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WhatsAppMessage {
+  id: string;
+  conversation_id: string;
+  company_id: string;
+  property_id: string;
+  outlet_id: string;
+  sender_type: 'contact' | 'agent' | 'bot';
+  sender_name: string;
+  message_text: string;
+  media_url?: string;
+  media_type?: 'image' | 'document' | 'audio' | 'video';
+  status: 'sent' | 'delivered' | 'read' | 'failed';
+  timestamp: string;
+  created_at?: string;
+}
+
+export type WhatsAppTriggerEvent = 
+  | 'on_member_created'
+  | 'on_booking_confirmed'
+  | 'on_checkin'
+  | 'on_expiring_membership'
+  | 'on_keyword'
+  | 'on_inactivity';
+
+export interface WhatsAppAutomationRule {
+  id: string;
+  company_id: string;
+  property_id: string;
+  outlet_id: string;
+  name: string;
+  description: string;
+  trigger_event: WhatsAppTriggerEvent;
+  conditions: {
+    keyword?: string;
+    days_before_expiry?: number;
+    membership_type?: string;
+    only_vip?: boolean;
+    business_hours_only?: boolean;
+    [key: string]: any;
+  };
+  action_type: 'send_template' | 'send_text' | 'assign_agent' | 'add_tag';
+  template_id?: string;
+  action_payload: {
+    text_message?: string;
+    template_name?: string;
+    template_params?: Record<string, string>;
+    tag_to_add?: string;
+    assignee_id?: string;
+    [key: string]: any;
+  };
+  is_active: boolean;
+  execution_count: number;
+  last_executed_at?: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WhatsAppTemplateButton {
+  type: 'URL' | 'QUICK_REPLY' | 'PHONE_NUMBER';
+  text: string;
+  value?: string;
+}
+
+export interface WhatsAppTemplate {
+  id: string;
+  company_id: string;
+  property_id: string;
+  outlet_id: string;
+  name: string;
+  category: 'MARKETING' | 'UTILITY' | 'AUTHENTICATION';
+  language: string;
+  header_text?: string;
+  body_text: string;
+  footer_text?: string;
+  buttons?: WhatsAppTemplateButton[];
+  status: 'APPROVED' | 'PENDING' | 'REJECTED';
+  meta_template_id?: string;
+  created_at: string;
+  updated_at: string;
 }

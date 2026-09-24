@@ -341,6 +341,18 @@ class DatabaseService {
           { key: 'settings:manage_entrance_fee', label: 'Manage Entrance Fee', description: 'Edit entrance fee consent settings.' },
           { key: 'settings:manage_expiration_reminders', label: 'Manage Expiration Reminders', description: 'Configure automated membership expiration reminder rules and schedules.' },
         ]
+      },
+      {
+        id: 'whatsapp',
+        label: 'WhatsApp Automation & Inbox',
+        permissions: [
+          { key: 'whatsapp:view', label: 'Access WhatsApp Module', description: 'View WhatsApp inbox, conversation list, and metrics.' },
+          { key: 'whatsapp:send', label: 'Reply & Send Messages', description: 'Compose and dispatch direct WhatsApp replies to guests.' },
+          { key: 'whatsapp:manage', label: 'Manage Conversations', description: 'Change status, assign agents, and edit guest tags.' },
+          { key: 'whatsapp:templates', label: 'Manage Templates', description: 'Create and edit WhatsApp approved message templates.' },
+          { key: 'whatsapp:rules', label: 'Automation Rules', description: 'Build and toggle automated triggers and responders.' },
+          { key: 'whatsapp:settings', label: 'WhatsApp API Credentials', description: 'Manage Cloud API credentials, webhook tokens, and keys.' },
+        ]
       }
     ];
   }

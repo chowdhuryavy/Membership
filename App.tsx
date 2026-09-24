@@ -35,6 +35,7 @@ import NotificationsPage from './pages/Notifications';
 import AttendanceCheckIn from './pages/AttendanceCheckIn';
 import MassageScheduling from './massage-scheduling/MassageScheduling'; 
 import Sales from './pages/Sales'; 
+import WhatsAppAutomation from './pages/WhatsAppAutomation';
 import { PublicMemberPass } from './pages/PublicMemberPass'; 
 import { 
   LayoutDashboard, 
@@ -68,7 +69,8 @@ import {
   ShoppingBag,
   Contact2,
   Dumbbell,
-  Ticket
+  Ticket,
+  MessageSquare
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Permission, Property } from './types';
@@ -261,7 +263,8 @@ const ProtectedLayout = () => {
     '/logs', 
     '/settings', 
     '/profile', 
-    '/notifications'
+    '/notifications',
+    '/whatsapp'
   ], []);
 
   const isSplashPage = useMemo(() => {
@@ -399,6 +402,7 @@ const Sidebar = ({ onLogout, isCollapsed, onToggle }: { onLogout: () => void, is
             { id: 'staff', to: '/staff', icon: Contact2, label: 'Staff Roster', permission: 'staff:view' as Permission },
             { id: 'bookings', to: '/bookings', icon: CalendarClock, label: 'Booking', permission: 'bookings:view' as Permission },
             { id: 'sales', to: '/sales', icon: ShoppingBag, label: 'Sales & Retail', permission: 'sales:view' as Permission },
+            { id: 'whatsapp', to: '/whatsapp', icon: MessageSquare, label: 'WhatsApp Hub', permission: 'whatsapp:view' as Permission },
             { id: 'categories', to: '/categories', icon: Tag, label: 'Membership Tiers', permission: 'categories:view' as Permission },
             { id: 'users', to: '/users', icon: Shield, label: 'Users & Roles', permission: 'users:view' as Permission },
             { id: 'reports', to: '/reports', icon: BarChart3, label: 'Financial Reports', permission: 'reports:view' as Permission },
@@ -541,6 +545,7 @@ const MobileHeader = ({ onLogout }: { onLogout: () => void }) => {
             { id: 'staff', to: '/staff', icon: Contact2, label: 'Staff Roster', permission: 'staff:view' as Permission },
             { id: 'bookings', to: '/bookings', icon: CalendarClock, label: 'Booking', permission: 'bookings:view' as Permission },
             { id: 'sales', to: '/sales', icon: ShoppingBag, label: 'Sales & Retail', permission: 'sales:view' as Permission },
+            { id: 'whatsapp', to: '/whatsapp', icon: MessageSquare, label: 'WhatsApp Hub', permission: 'whatsapp:view' as Permission },
             { id: 'categories', to: '/categories', icon: Tag, label: 'Membership Tiers', permission: 'categories:view' as Permission },
             { id: 'users', to: '/users', icon: Shield, label: 'Users & Roles', permission: 'users:view' as Permission },
             { id: 'reports', to: '/reports', icon: BarChart3, label: 'Financial Reports', permission: 'reports:view' as Permission },
@@ -875,6 +880,7 @@ const App = () => {
               <Route path="bookings" element={<MassageScheduling />} />
               <Route path="sales" element={<Sales />} />
               <Route path="sales/stock-report" element={<RetailStockReport />} />
+              <Route path="whatsapp" element={<WhatsAppAutomation />} />
               <Route path="categories" element={<Categories />} />
               <Route path="users" element={<UsersPage />} />
               <Route path="reports" element={<Reports />} />
