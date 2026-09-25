@@ -68,13 +68,14 @@ export const WhatsAppAutomation: React.FC = () => {
     return companies[0] || DEFAULT_COMPANIES[0];
   }, [companies]);
 
-  // WhatsApp active status for selected outlet
+  // WhatsApp active status for selected outlet (considers both outlet & parent property)
   const isWhatsAppActive = useMemo(() => {
     if (!activeOutlet) return false;
     if (activeOutlet.whatsapp_enabled === false) return false;
     if (settings?.whatsapp_disabled_outlets?.includes(activeOutlet.id)) return false;
+    if (activeProperty && (activeProperty.whatsapp_enabled === false || settings?.whatsapp_disabled_properties?.includes(activeProperty.id))) return false;
     return true;
-  }, [activeOutlet, settings]);
+  }, [activeOutlet, activeProperty, settings]);
 
   const handleToggleOutletWhatsApp = async () => {
     if (!activeOutlet) return;
@@ -85,8 +86,20 @@ export const WhatsAppAutomation: React.FC = () => {
         ? currentDisabled.filter(id => id !== activeOutlet.id)
         : [...currentDisabled, activeOutlet.id];
         
+      let updatedProps = settings?.whatsapp_disabled_properties || [];
+      if (newState && activeProperty) {
+        updatedProps = updatedProps.filter(id => id !== activeProperty.id);
+        if (activeProperty.whatsapp_enabled === false) {
+          await db.updateProperty(activeProperty.id, { whatsapp_enabled: true });
+        }
+      }
+
       if (settings) {
-        await db.updateSettings({ ...settings, whatsapp_disabled_outlets: updatedList });
+        await db.updateSettings({
+          ...settings,
+          whatsapp_disabled_outlets: updatedList,
+          whatsapp_disabled_properties: updatedProps
+        });
       }
       await db.updateOutlet(activeOutlet.id, { whatsapp_enabled: newState });
       await refreshSettings();

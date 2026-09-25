@@ -94,13 +94,26 @@ export const WhatsAppConfigModule: React.FC<WhatsAppConfigModuleProps> = ({
         ? currentDisabled.filter(id => id !== targetOutlet.id)
         : Array.from(new Set([...currentDisabled, targetOutlet.id]));
 
+      // 3. If activating outlet, ensure parent property is also active in both places
+      let updatedDisabledProps = settings?.whatsapp_disabled_properties || [];
+      if (newStatus && targetOutlet.property_id) {
+        if (updatedDisabledProps.includes(targetOutlet.property_id)) {
+          updatedDisabledProps = updatedDisabledProps.filter(id => id !== targetOutlet.property_id);
+        }
+        const parentProp = properties.find(p => p.id === targetOutlet.property_id);
+        if (parentProp && parentProp.whatsapp_enabled === false) {
+          await db.updateProperty(targetOutlet.property_id, { whatsapp_enabled: true });
+        }
+      }
+
       const updatedSettings = {
         ...settings!,
-        whatsapp_disabled_outlets: updatedDisabled
+        whatsapp_disabled_outlets: updatedDisabled,
+        whatsapp_disabled_properties: updatedDisabledProps
       };
       await db.updateSettings(updatedSettings);
 
-      // 3. Refresh globally so sidebar updates immediately
+      // 4. Refresh globally so sidebar and all screens update immediately
       await refreshSettings();
 
       const statusText = newStatus ? 'activated (Visible in sidebar)' : 'deactivated (Hidden from sidebar)';
@@ -221,21 +234,29 @@ export const WhatsAppConfigModule: React.FC<WhatsAppConfigModuleProps> = ({
           {/* Grid of Outlets with Instant Activation Toggle */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {targetOutlets.map(outlet => {
-              const isEnabled = outlet.whatsapp_enabled !== false && !settings?.whatsapp_disabled_outlets?.includes(outlet.id);
-              const isSelectedActive = currentOutlet?.id === outlet.id;
               const prop = properties.find(p => p.id === outlet.property_id);
+              const isPropDisabled = !!prop && (prop.whatsapp_enabled === false || settings?.whatsapp_disabled_properties?.includes(prop.id));
+              const isOutletDisabled = outlet.whatsapp_enabled === false || settings?.whatsapp_disabled_outlets?.includes(outlet.id);
+              // Truly visible in navigation only if BOTH outlet and parent property are active
+              const isFullyVisible = !isOutletDisabled && !isPropDisabled;
+              const isEnabled = !isOutletDisabled;
+              const isSelectedActive = currentOutlet?.id === outlet.id;
 
               return (
                 <Card 
                   key={outlet.id} 
                   className={`rounded-[2.5rem] border-2 transition-all overflow-hidden bg-white ${
-                    isEnabled ? 'border-emerald-200 shadow-sm' : 'border-slate-200/80 opacity-80'
+                    isFullyVisible ? 'border-emerald-200 shadow-sm' : isEnabled ? 'border-amber-200 shadow-xs' : 'border-slate-200/80 opacity-80'
                   }`}
                 >
                   <CardHeader className="bg-slate-50/80 border-b border-slate-100 p-6 flex flex-row items-center justify-between">
                     <div className="flex items-center gap-3.5">
                       <div className={`w-11 h-11 rounded-2xl flex items-center justify-center font-black ${
-                        isEnabled ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20' : 'bg-slate-200 text-slate-500'
+                        isFullyVisible 
+                          ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20' 
+                          : isEnabled 
+                            ? 'bg-amber-500 text-white shadow-md shadow-amber-500/20' 
+                            : 'bg-slate-200 text-slate-500'
                       }`}>
                         <Store className="w-5 h-5" />
                       </div>
@@ -249,6 +270,11 @@ export const WhatsAppConfigModule: React.FC<WhatsAppConfigModuleProps> = ({
                               Active Selection
                             </span>
                           )}
+                          {isPropDisabled && (
+                            <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                              Property Inactive
+                            </span>
+                          )}
                         </div>
                         <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-0.5">
                           {prop?.name || 'Property'} • {outlet.address || 'Facility Outlet'}
@@ -259,16 +285,20 @@ export const WhatsAppConfigModule: React.FC<WhatsAppConfigModuleProps> = ({
                     {/* Activation Toggle Switch */}
                     <div className="flex items-center gap-3">
                       <span className={`text-[10px] font-black uppercase tracking-wider ${
-                        isEnabled ? 'text-emerald-700' : 'text-slate-400'
+                        isFullyVisible ? 'text-emerald-700' : isEnabled ? 'text-amber-700' : 'text-slate-400'
                       }`}>
-                        {isEnabled ? 'Active' : 'Inactive'}
+                        {isFullyVisible ? 'Active' : isEnabled ? 'Prop. Inactive' : 'Inactive'}
                       </span>
                       <button
                         type="button"
                         disabled={updatingOutletId === outlet.id}
                         onClick={() => handleToggleOutletWhatsApp(outlet, !isEnabled)}
                         className={`w-14 h-7 rounded-full transition-all relative cursor-pointer disabled:opacity-50 ${
-                          isEnabled ? 'bg-emerald-600 shadow-md shadow-emerald-600/20' : 'bg-slate-300'
+                          isFullyVisible 
+                            ? 'bg-emerald-600 shadow-md shadow-emerald-600/20' 
+                            : isEnabled 
+                              ? 'bg-amber-500' 
+                              : 'bg-slate-300'
                         }`}
                         title={isEnabled ? "Click to deactivate WhatsApp for this outlet" : "Click to activate WhatsApp for this outlet"}
                       >
@@ -287,16 +317,26 @@ export const WhatsAppConfigModule: React.FC<WhatsAppConfigModuleProps> = ({
                     <div className="flex items-center justify-between text-xs p-3.5 bg-slate-50 rounded-2xl border border-slate-100">
                       <span className="text-slate-500 font-medium">Sidebar Visibility:</span>
                       <span className={`font-black uppercase tracking-wider text-[11px] ${
-                        isEnabled ? 'text-emerald-700' : 'text-slate-400'
+                        isFullyVisible 
+                          ? 'text-emerald-700' 
+                          : isPropDisabled && isEnabled 
+                            ? 'text-amber-700' 
+                            : 'text-slate-400'
                       }`}>
-                        {isEnabled ? '✓ Visible in Navigation' : '✕ Hidden from Navigation'}
+                        {isFullyVisible 
+                          ? '✓ Visible in Navigation' 
+                          : isPropDisabled && isEnabled 
+                            ? '✕ Hidden (Property Inactive)' 
+                            : '✕ Hidden from Navigation'}
                       </span>
                     </div>
 
                     <div className="flex items-center justify-between text-xs p-3.5 bg-slate-50 rounded-2xl border border-slate-100">
-                      <span className="text-slate-500 font-medium">Sender Tag:</span>
-                      <span className="font-bold text-slate-900 truncate max-w-[200px]">
-                        {outlet.name} • {prop?.name || 'Property'}
+                      <span className="text-slate-500 font-medium">Parent Property:</span>
+                      <span className={`font-bold text-xs truncate max-w-[200px] ${
+                        isPropDisabled ? 'text-amber-700 font-black' : 'text-slate-900'
+                      }`}>
+                        {prop?.name || 'Property'} {isPropDisabled ? '(Hidden)' : '(Active)'}
                       </span>
                     </div>
                   </CardContent>
