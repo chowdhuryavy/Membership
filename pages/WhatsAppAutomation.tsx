@@ -10,6 +10,7 @@ import {
   Outlet
 } from '../types';
 import { WhatsAppService, DEFAULT_COMPANIES } from '../services/whatsappService';
+import { db } from '../services/mockSupabase';
 import { WhatsAppInboxTab } from '../components/whatsapp/WhatsAppInboxTab';
 import { WhatsAppConversationsTab } from '../components/whatsapp/WhatsAppConversationsTab';
 import { WhatsAppIcon } from '../components/WhatsAppIcon';
@@ -28,7 +29,7 @@ import toast from 'react-hot-toast';
 export const WhatsAppAutomation: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { properties, outlets, userAllowedOutlets, currentProperty, currentOutlet } = useSettings();
+  const { properties, outlets, userAllowedOutlets, currentProperty, currentOutlet, settings, refreshSettings } = useSettings();
 
   // Companies (Tenant Hierarchy Root)
   const [companies, setCompanies] = useState<Company[]>(DEFAULT_COMPANIES);
@@ -66,6 +67,34 @@ export const WhatsAppAutomation: React.FC = () => {
   const activeCompany = useMemo(() => {
     return companies[0] || DEFAULT_COMPANIES[0];
   }, [companies]);
+
+  // WhatsApp active status for selected outlet
+  const isWhatsAppActive = useMemo(() => {
+    if (!activeOutlet) return false;
+    if (activeOutlet.whatsapp_enabled === false) return false;
+    if (settings?.whatsapp_disabled_outlets?.includes(activeOutlet.id)) return false;
+    return true;
+  }, [activeOutlet, settings]);
+
+  const handleToggleOutletWhatsApp = async () => {
+    if (!activeOutlet) return;
+    try {
+      const newState = !isWhatsAppActive;
+      const currentDisabled = settings?.whatsapp_disabled_outlets || [];
+      const updatedList = newState
+        ? currentDisabled.filter(id => id !== activeOutlet.id)
+        : [...currentDisabled, activeOutlet.id];
+        
+      if (settings) {
+        await db.updateSettings({ ...settings, whatsapp_disabled_outlets: updatedList });
+      }
+      await db.updateOutlet(activeOutlet.id, { whatsapp_enabled: newState });
+      await refreshSettings();
+      toast.success(`WhatsApp for ${activeOutlet.name} is now ${newState ? 'Activated (Active)' : 'Deactivated (Inactive)'}`);
+    } catch (err: any) {
+      toast.error('Failed to update WhatsApp status: ' + err.message);
+    }
+  };
 
   // Sender Name is strictly the Outlet Name and Property Name (e.g. "Main Gym • Grand Hotel")
   const senderIdentityName = useMemo(() => {
@@ -265,7 +294,26 @@ export const WhatsAppAutomation: React.FC = () => {
         </div>
 
         {/* Header Action Controls */}
-        <div className="flex items-center gap-2.5">
+        <div className="flex items-center gap-2.5 flex-wrap">
+          {activeOutlet && (
+            <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-2xl bg-slate-50 border border-slate-200/80 text-xs">
+              <span className="text-[10px] uppercase font-bold text-slate-400">WhatsApp:</span>
+              <span className={`text-[10px] font-black uppercase ${isWhatsAppActive ? 'text-emerald-700' : 'text-slate-400'}`}>
+                {isWhatsAppActive ? 'Active' : 'Inactive'}
+              </span>
+              <button
+                type="button"
+                onClick={handleToggleOutletWhatsApp}
+                title={isWhatsAppActive ? 'Deactivate WhatsApp for this outlet' : 'Activate WhatsApp for this outlet'}
+                className={`w-9 h-5 flex items-center rounded-full p-0.5 transition-colors cursor-pointer ${
+                  isWhatsAppActive ? 'bg-emerald-600 justify-end' : 'bg-slate-300 justify-start'
+                }`}
+              >
+                <div className="w-3.5 h-3.5 rounded-full bg-white shadow-xs" />
+              </button>
+            </div>
+          )}
+
           <div className="hidden sm:flex items-center gap-2 px-3.5 py-1.5 rounded-2xl bg-slate-50 border border-slate-200/80 text-xs">
             <span className="text-[10px] uppercase font-bold text-slate-400">Current Scope:</span>
             <span className="font-bold text-slate-900">{activeOutlet?.name || 'All Outlets'}</span>
