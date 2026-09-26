@@ -184,10 +184,11 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         const dailyRate = Number(m.daily_rate || 0);
         
         let deferred = (m.net_amount || 0) - (prevAccrual + periodRev);
-        if (deferred < 0) deferred = 0;
+        if ((m.net_amount || 0) >= 0 && deferred < 0) deferred = 0;
+        if ((m.net_amount || 0) < 0 && deferred > 0) deferred = 0;
 
         // Calculate total active days for the entire membership duration
-        const totalActiveDays = Math.round((m.net_amount || 0) / dailyRate) || 0;
+        const totalActiveDays = Math.round(Math.abs((m.net_amount || 0) / (dailyRate || 1))) || 0;
         
         return {
           id: m.id,
@@ -216,18 +217,21 @@ export const getReportData = async (ctx: ReportContext): Promise<ReportData> => 
         // 1. If they expired BEFORE the start of this month, hide them.
         if (row._mEnd && row._mEnd < start) return false;
 
-        // 2. If they were created AFTER the end of this month, hide them.
-        // This allows members who purchased today but start next month to show in this month's report
-        // with 0 revenue and full amount in Deferred.
-        if (row._mCreated && row._mCreated >= end) return false;
+        // 2. If their membership starts in a future month AND they were also created after this month, hide them.
+        // This allows members who purchased this month for a future month to show in Deferred,
+        // and also ensures backdated/adjustment entries that started in or before this month are shown.
+        if (row._mStart && row._mStart >= end && row._mCreated && row._mCreated >= end) return false;
 
-        // 3. If they have recognized revenue this month (> 0.001), always show.
-        if (row.period_rev > 0.001) return true;
+        // 3. If they have recognized revenue this month (positive or negative), always show.
+        if (Math.abs(row.period_rev) > 0.001) return true;
         
-        // 4. If they have deferred revenue (> 0.001), always show.
-        if (row.deferred > 0.001) return true;
+        // 4. If they have deferred revenue (positive or negative), always show.
+        if (Math.abs(row.deferred) > 0.001) return true;
+
+        // 5. If they have active dates overlapping this month and non-zero fees, show them.
+        if (Math.abs(row.net_fees) > 0.001 && row._mStart && row._mStart < end && (!row._mEnd || row._mEnd >= start)) return true;
         
-        // 5. If they are active but have zero revenue and zero deferred, 
+        // 6. If they are active but have zero revenue and zero deferred, 
         // we hide them to keep the audit report focused on financial activity.
         return false;
       })
