@@ -147,56 +147,56 @@ export const WhatsAppInboxTab: React.FC<WhatsAppInboxTabProps> = ({
   ];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-3.5">
       {/* 1. Top Stat Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs flex items-center justify-between">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="bg-white py-3 px-4 rounded-2xl border border-slate-200/80 shadow-xs flex items-center justify-between">
           <div>
-            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Total Conversations</span>
-            <div className="text-2xl font-black text-slate-900 mt-1">{totalCount}</div>
-            <span className="text-[11px] text-slate-500 font-medium">Scoped for {outletName}</span>
+            <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">Total Conversations</span>
+            <div className="text-xl font-black text-slate-900 mt-0.5">{totalCount}</div>
+            <span className="text-[10px] text-slate-500 font-medium">Scoped for {outletName}</span>
           </div>
-          <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-black">
-            <Inbox className="w-6 h-6" />
+          <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-black shrink-0">
+            <Inbox className="w-4 h-4" />
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs flex items-center justify-between">
+        <div className="bg-white py-3 px-4 rounded-2xl border border-slate-200/80 shadow-xs flex items-center justify-between">
           <div>
-            <span className="text-[10px] font-black uppercase tracking-wider text-emerald-700">Requires Action</span>
-            <div className="text-2xl font-black text-emerald-700 mt-1">{unreadCount}</div>
-            <span className="text-[11px] text-slate-500 font-medium">Unread guest replies</span>
+            <span className="text-[9px] font-black uppercase tracking-wider text-emerald-700">Requires Action</span>
+            <div className="text-xl font-black text-emerald-700 mt-0.5">{unreadCount}</div>
+            <span className="text-[10px] text-slate-500 font-medium">Unread guest replies</span>
           </div>
-          <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-700 flex items-center justify-center font-black">
-            <WhatsAppIcon className="w-6 h-6 text-emerald-700" />
+          <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center font-black shrink-0">
+            <WhatsAppIcon className="w-4 h-4 text-emerald-700" />
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs flex items-center justify-between">
+        <div className="bg-white py-3 px-4 rounded-2xl border border-slate-200/80 shadow-xs flex items-center justify-between">
           <div>
-            <span className="text-[10px] font-black uppercase tracking-wider text-blue-700">Active Inquiries</span>
-            <div className="text-2xl font-black text-blue-700 mt-1">{openCount}</div>
-            <span className="text-[11px] text-slate-500 font-medium">Ongoing concierge chats</span>
+            <span className="text-[9px] font-black uppercase tracking-wider text-blue-700">Active Inquiries</span>
+            <div className="text-xl font-black text-blue-700 mt-0.5">{openCount}</div>
+            <span className="text-[10px] text-slate-500 font-medium">Ongoing concierge chats</span>
           </div>
-          <div className="w-12 h-12 rounded-2xl bg-blue-50 text-blue-700 flex items-center justify-center font-black">
-            <Clock className="w-6 h-6" />
+          <div className="w-9 h-9 rounded-xl bg-blue-50 text-blue-700 flex items-center justify-center font-black shrink-0">
+            <Clock className="w-4 h-4" />
           </div>
         </div>
 
-        <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs flex items-center justify-between">
+        <div className="bg-white py-3 px-4 rounded-2xl border border-slate-200/80 shadow-xs flex items-center justify-between">
           <div>
-            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Resolved Inquiries</span>
-            <div className="text-2xl font-black text-slate-700 mt-1">{resolvedCount}</div>
-            <span className="text-[11px] text-emerald-700 font-bold">100% Delivery rate</span>
+            <span className="text-[9px] font-black uppercase tracking-wider text-slate-400">Resolved Inquiries</span>
+            <div className="text-xl font-black text-slate-700 mt-0.5">{resolvedCount}</div>
+            <span className="text-[10px] text-emerald-700 font-bold">100% Delivery rate</span>
           </div>
-          <div className="w-12 h-12 rounded-2xl bg-emerald-50 text-emerald-700 flex items-center justify-center font-black">
-            <CheckCheck className="w-6 h-6" />
+          <div className="w-9 h-9 rounded-xl bg-emerald-50 text-emerald-700 flex items-center justify-center font-black shrink-0">
+            <CheckCheck className="w-4 h-4" />
           </div>
         </div>
       </div>
 
       {/* 2. Filter, Search & Action Bar */}
-      <div className="bg-white rounded-3xl border border-slate-200/80 p-4 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-white rounded-2xl border border-slate-200/80 p-3 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
         {/* Search Input */}
         <div className="relative flex-1 max-w-md">
           <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" />

@@ -284,51 +284,32 @@ export const WhatsAppAutomation: React.FC = () => {
   }, [conversations]);
 
   return (
-    <div className="space-y-6 max-w-7xl mx-auto pb-14">
+    <div className="space-y-3.5 max-w-7xl mx-auto pb-10">
       {/* Top Header with Context Badges */}
-      <div className="bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div className="flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-2xl bg-emerald-600 text-white flex items-center justify-center font-black shadow-lg shadow-emerald-600/20">
-            <WhatsAppIcon className="w-6 h-6 text-white" />
+      <div className="bg-white px-5 py-3.5 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-emerald-600 text-white flex items-center justify-center font-black shadow-md shadow-emerald-600/20 shrink-0">
+            <WhatsAppIcon className="w-5 h-5 text-white" />
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-xl md:text-2xl font-black text-slate-900 tracking-tight uppercase">
+              <h1 className="text-lg font-black text-slate-900 tracking-tight uppercase">
                 WhatsApp Smart Messenger
               </h1>
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-800 border border-emerald-200/60">
+              <span className="px-2 py-0.5 rounded-full text-[9px] font-black uppercase tracking-wider bg-emerald-50 text-emerald-800 border border-emerald-200/60">
                 Live Concierge
               </span>
             </div>
-            <p className="text-xs text-slate-500 font-medium mt-0.5">
+            <p className="text-[11px] text-slate-500 font-medium">
               Isolated guest messages and automated concierge for <span className="font-bold text-slate-800">{activeOutlet?.name || 'Active Outlet'}</span> ({activeProperty?.name || 'Property'})
             </p>
           </div>
         </div>
 
         {/* Header Action Controls */}
-        <div className="flex items-center gap-2.5 flex-wrap">
-          {activeOutlet && (
-            <div className="flex items-center gap-2 px-3.5 py-1.5 rounded-2xl bg-slate-50 border border-slate-200/80 text-xs">
-              <span className="text-[10px] uppercase font-bold text-slate-400">WhatsApp:</span>
-              <span className={`text-[10px] font-black uppercase ${isWhatsAppActive ? 'text-emerald-700' : 'text-slate-400'}`}>
-                {isWhatsAppActive ? 'Active' : 'Inactive'}
-              </span>
-              <button
-                type="button"
-                onClick={handleToggleOutletWhatsApp}
-                title={isWhatsAppActive ? 'Deactivate WhatsApp for this outlet' : 'Activate WhatsApp for this outlet'}
-                className={`w-9 h-5 flex items-center rounded-full p-0.5 transition-colors cursor-pointer ${
-                  isWhatsAppActive ? 'bg-emerald-600 justify-end' : 'bg-slate-300 justify-start'
-                }`}
-              >
-                <div className="w-3.5 h-3.5 rounded-full bg-white shadow-xs" />
-              </button>
-            </div>
-          )}
-
-          <div className="hidden sm:flex items-center gap-2 px-3.5 py-1.5 rounded-2xl bg-slate-50 border border-slate-200/80 text-xs">
-            <span className="text-[10px] uppercase font-bold text-slate-400">Current Scope:</span>
+        <div className="flex items-center gap-2 flex-wrap">
+          <div className="hidden sm:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-50 border border-slate-200/80 text-[11px]">
+            <span className="text-[9px] uppercase font-bold text-slate-400">Current Scope:</span>
             <span className="font-bold text-slate-900">{activeOutlet?.name || 'All Outlets'}</span>
             <span className="text-slate-400">•</span>
             <span className="text-slate-600 font-medium">{activeProperty?.name || 'Default Property'}</span>
@@ -338,52 +319,52 @@ export const WhatsAppAutomation: React.FC = () => {
             onClick={handleManualRefresh}
             disabled={isRefreshing || isLoadingScopeData}
             title="Sync latest WhatsApp messages"
-            className="p-2.5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all cursor-pointer"
+            className="p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 transition-all cursor-pointer"
           >
-            <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin text-emerald-700' : ''}`} />
+            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-emerald-700' : ''}`} />
           </button>
         </div>
       </div>
 
       {/* If No Active Outlet Available */}
       {!activeOutlet ? (
-        <div className="bg-white rounded-[2.5rem] border border-slate-200/80 p-12 text-center shadow-xs">
-          <div className="w-16 h-16 rounded-3xl bg-amber-50 text-amber-700 flex items-center justify-center mx-auto mb-4 border border-amber-200/60">
-            <Store className="w-8 h-8" />
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-8 text-center shadow-xs">
+          <div className="w-12 h-12 rounded-2xl bg-amber-50 text-amber-700 flex items-center justify-center mx-auto mb-3 border border-amber-200/60">
+            <Store className="w-6 h-6" />
           </div>
-          <h3 className="text-base font-black text-slate-900 uppercase tracking-tight">
+          <h3 className="text-sm font-black text-slate-900 uppercase tracking-tight">
             No Active Outlet Selected
           </h3>
-          <p className="text-xs text-slate-500 mt-1.5 max-w-md mx-auto">
+          <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto">
             Please select a facility outlet at the top navigation bar to load your isolated WhatsApp messages and guest conversations.
           </p>
         </div>
       ) : isLoadingScopeData ? (
-        <div className="bg-white rounded-[2.5rem] border border-slate-200/80 p-16 text-center shadow-xs">
-          <Loader2 className="w-9 h-9 animate-spin text-emerald-700 mx-auto mb-3.5" />
-          <p className="text-sm font-black text-slate-800 uppercase tracking-wider">
+        <div className="bg-white rounded-2xl border border-slate-200/80 p-12 text-center shadow-xs">
+          <Loader2 className="w-8 h-8 animate-spin text-emerald-700 mx-auto mb-3" />
+          <p className="text-xs font-black text-slate-800 uppercase tracking-wider">
             Loading Guest Messenger
           </p>
-          <p className="text-xs text-slate-400 font-medium mt-1">
+          <p className="text-[11px] text-slate-400 font-medium mt-0.5">
             Retrieving isolated guest inbox for {activeOutlet.name}...
           </p>
         </div>
       ) : (
         <>
           {/* Day-to-Day Communication Navigation Tabs */}
-          <div className="bg-slate-100/90 p-1.5 rounded-3xl flex items-center gap-1.5 border border-slate-200/70 shadow-inner w-fit">
+          <div className="bg-slate-100/90 p-1 rounded-2xl flex items-center gap-1 border border-slate-200/70 shadow-inner w-fit">
             <button
               onClick={() => setActiveTab('inbox')}
-              className={`flex items-center gap-2 px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer ${
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer ${
                 activeTab === 'inbox'
-                  ? 'bg-white text-emerald-800 shadow-md scale-[1.01]'
+                  ? 'bg-white text-emerald-800 shadow-sm scale-[1.01]'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
               }`}
             >
-              <Inbox className="w-4 h-4" />
+              <Inbox className="w-3.5 h-3.5" />
               Smart Inbox
               {unreadTotal > 0 && (
-                <span className="w-5 h-5 rounded-full bg-emerald-700 text-white flex items-center justify-center text-[10px] font-black shadow-xs">
+                <span className="w-4 h-4 rounded-full bg-emerald-700 text-white flex items-center justify-center text-[9px] font-black shadow-xs">
                   {unreadTotal}
                 </span>
               )}
@@ -391,19 +372,19 @@ export const WhatsAppAutomation: React.FC = () => {
 
             <button
               onClick={() => setActiveTab('conversations')}
-              className={`flex items-center gap-2 px-6 py-3 rounded-2xl text-xs font-black uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer ${
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-black uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer ${
                 activeTab === 'conversations'
-                  ? 'bg-white text-emerald-800 shadow-md scale-[1.01]'
+                  ? 'bg-white text-emerald-800 shadow-sm scale-[1.01]'
                   : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
               }`}
             >
-              <WhatsAppIcon className="w-4 h-4" />
+              <WhatsAppIcon className="w-3.5 h-3.5" />
               Live Chat Console
             </button>
           </div>
 
           {/* Operational Views */}
-          <div className="pt-2 animate-in fade-in-50 duration-300">
+          <div className="pt-0.5 animate-in fade-in-50 duration-300">
             {activeTab === 'inbox' && (
               <WhatsAppInboxTab
                 conversations={conversations}
