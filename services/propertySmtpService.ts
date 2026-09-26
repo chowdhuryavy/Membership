@@ -267,45 +267,6 @@ export class PropertySmtpService {
   }
 
   /**
-   * Finds any active and configured SMTP setting across the system if property context is missing.
-   */
-  static async findAnyActiveAndConfigured(): Promise<PropertySmtpSettings | null> {
-    try {
-      if (supabase) {
-        const { data, error } = await supabase
-          .from('property_smtp_settings_safe')
-          .select('*')
-          .eq('is_enabled', true)
-          .limit(10);
-
-        if (!error && data && data.length > 0) {
-          const match = data.find((s: any) => s.host?.trim() && s.username?.trim() && s.has_password_configured);
-          if (match) {
-            return {
-              id: match.id,
-              property_id: match.property_id,
-              host: match.host || '',
-              port: match.port || 587,
-              username: match.username || '',
-              secure_connection: (match.secure_connection as any) || 'tls',
-              from_email: match.from_email || '',
-              from_name: match.from_name || '',
-              is_enabled: !!match.is_enabled,
-              has_password_configured: !!match.has_password_configured,
-              last_tested_at: match.last_tested_at,
-              last_test_status: match.last_test_status,
-              last_test_error: match.last_test_error,
-              created_at: match.created_at,
-              updated_at: match.updated_at
-            };
-          }
-        }
-      }
-    } catch (e) {}
-    return null;
-  }
-
-  /**
    * Dispatches an email using the property's configured SMTP server.
    * If SMTP is disabled, unconfigured, or fails, gracefully falls back to Resend.
    */

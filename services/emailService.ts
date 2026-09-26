@@ -779,43 +779,16 @@ export const emailService = {
       } catch (e) {}
     }
 
-    // Fallback: If still unresolved, check if any property has an active custom SMTP configured
-    if (!propertyId && supabase) {
-      try {
-        const { data: activeSmtp } = await supabase
-          .from('property_smtp_settings')
-          .select('property_id')
-          .eq('is_enabled', true)
-          .limit(1)
-          .maybeSingle();
-        if (activeSmtp?.property_id) {
-          propertyId = activeSmtp.property_id;
-        }
-      } catch (e) {}
-    }
-
     // =========================================================================
-    // STEP 1: CHECK IF PROPERTY HAS SMTP ACTIVE AND CONFIGURED FIRST
-    // Both MUST be true: is_enabled (active) === true AND configured (host, username, password)
+    // STRICT PROPERTY ISOLATION:
+    // Check ONLY the target property's SMTP configuration.
+    // If that specific property has SMTP active (is_enabled === true) AND configured (host, user, pass) -> MUST USE SMTP.
+    // If that property does NOT have SMTP active and configured -> MUST USE RESEND.
+    // NEVER borrow or route through another property's SMTP!
     // =========================================================================
-    let smtpCheck = propertyId ? await PropertySmtpService.isConfiguredAndActive(propertyId) : null;
+    const smtpCheck = propertyId ? await PropertySmtpService.isConfiguredAndActive(propertyId) : null;
 
-    // If propertyId was unassigned or had no active/configured SMTP, check if any property has active & configured SMTP
-    if (!smtpCheck?.activeAndConfigured) {
-      const anyActiveSmtp = await PropertySmtpService.findAnyActiveAndConfigured();
-      if (anyActiveSmtp) {
-        propertyId = anyActiveSmtp.property_id;
-        smtpCheck = {
-          activeAndConfigured: true,
-          isActive: true,
-          isConfigured: true,
-          settings: anyActiveSmtp
-        };
-      }
-    }
-
-    // If BOTH active AND configured are YES -> MUST TRIGGER SMTP
-    if (smtpCheck?.activeAndConfigured && propertyId) {
+    if (propertyId && smtpCheck?.activeAndConfigured) {
       try {
         console.log(`[Email Service] Custom SMTP is ACTIVE & CONFIGURED for property ${propertyId} (${smtpCheck.settings?.host}). Triggering dedicated SMTP dispatch...`);
         const smtpResult = await PropertySmtpService.dispatchEmail({
@@ -861,7 +834,7 @@ export const emailService = {
         console.warn('[Email Service] Error during Property SMTP dispatch, engaging Resend fallback:', smtpErr);
       }
     } else {
-      console.log(`[Email Service] Custom SMTP not active or not configured (Active: ${smtpCheck?.isActive ?? false}, Configured: ${smtpCheck?.isConfigured ?? false}). Triggering Resend transport...`);
+      console.log(`[Email Service] Property ${propertyId || 'Unknown'} does NOT have active/configured custom SMTP (Active: ${smtpCheck?.isActive ?? false}, Configured: ${smtpCheck?.isConfigured ?? false}). Triggering Resend transport...`);
     }
 
     // =========================================================================
