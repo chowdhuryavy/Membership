@@ -157,9 +157,6 @@ const Reports = ({ autoDispatchConfig }: { autoDispatchConfig?: AutoDispatchConf
   const [loading, setLoading] = useState(false);
   const [summary, setSummary] = useState<any>(null);
   const supabase = supabaseClient;
-  
-  // Cache for report results
-  const reportCache = useRef<Record<string, any>>({});
 
   const selectedTypeName = useMemo(() => {
     if (selectedMembershipTypeId === 'all') return 'Together All Type';
@@ -307,23 +304,6 @@ const Reports = ({ autoDispatchConfig }: { autoDispatchConfig?: AutoDispatchConf
     if (!activeOutlet || !activeProperty) return;
     
     const start = reportType === 'daily_sales' ? startOfDay(parseISO(dailySalesDate)) : startOfDay(parseISO(reportMonth + '-01'));
-    
-    // Create cache key
-    const cacheKey = `${reportType}_${activeOutlet.id}_${format(start, 'yyyy-MM-dd')}_${incentiveDept}_${selectedMembershipTypeId}_${revenueMode}`;
-    
-    if (reportCache.current[cacheKey]) {
-      const cached = reportCache.current[cacheKey];
-      if (reportType === 'revenue_recognition') {
-        setRevenueRows(cached.rows);
-      } else {
-        setRows(cached.rows);
-      }
-      setSummary(cached.summary);
-      if (reportType === 'incentives') {
-        setActiveStaffList(cached.summary.staffList || []);
-      }
-      return;
-    }
 
     setLoading(true);
     if (isInitialLoad.current) {
@@ -344,9 +324,6 @@ const Reports = ({ autoDispatchConfig }: { autoDispatchConfig?: AutoDispatchConf
       };
 
       const result = await getReportData(ctx);
-
-      // Store in cache
-      reportCache.current[cacheKey] = result;
 
       if (reportType === 'revenue_recognition') {
         setRevenueRows(result.rows);
@@ -1267,7 +1244,10 @@ const Reports = ({ autoDispatchConfig }: { autoDispatchConfig?: AutoDispatchConf
                         <Button onClick={loadData} className="h-8 text-[9px] px-3">Generate</Button>
                     </div>
                 ) : (
-                    <input type="month" value={reportMonth} onChange={e => setReportMonth(e.target.value)} className="text-[11px] font-black uppercase bg-transparent outline-none cursor-pointer" />
+                    <div className="flex items-center gap-2">
+                        <input type="month" value={reportMonth} onChange={e => setReportMonth(e.target.value)} className="text-[11px] font-black uppercase bg-transparent outline-none cursor-pointer" />
+                        <Button onClick={loadData} className="h-8 text-[9px] px-3">Generate</Button>
+                    </div>
                 )}
             </div>
             <Button variant="outline" onClick={() => setShowConfig(!showConfig)} className={`h-12 px-5 rounded-2xl border-slate-200 ${showConfig ? 'bg-indigo-50 border-indigo-200 text-indigo-600 shadow-inner' : ''}`}><Settings2 className="w-4 h-4 mr-2" /> <span className="text-[10px] font-black uppercase tracking-widest">Layout Config</span></Button>
