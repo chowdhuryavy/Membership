@@ -154,7 +154,11 @@ export const backupService = {
             filename: fileName,
             content: base64Content
           }
-        ]
+        ],
+        undefined,
+        {
+          propertyId
+        }
       );
 
       if (result && result.success === false) {

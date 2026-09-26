@@ -754,58 +754,119 @@ export const emailService = {
       } catch (e) {}
     }
 
-    // Step 1: If propertyId is present, check if property has custom SMTP enabled.
-    if (propertyId) {
+    // Fallback: Resolve propertyId from report_recipients table / cache by matching recipient email
+    if (!propertyId && to) {
       try {
-        const smtpSettings = await PropertySmtpService.getSettings(propertyId);
-        if (smtpSettings && smtpSettings.is_enabled) {
-          console.log(`[Email Service] Property ${propertyId} has active custom SMTP. Attempting SMTP dispatch...`);
-          const smtpResult = await PropertySmtpService.dispatchEmail({
-            to,
-            subject,
-            html,
-            text: plainText,
-            propertyId,
-            outletId: options?.outletId,
-            attachments
-          });
-
-          if (smtpResult.success && smtpResult.method === 'smtp') {
-            console.log(`[Email Service] Delivered via Property SMTP (${smtpResult.messageId})`);
-            await db.logAction(
-              'EMAIL_SENT',
-              `Email dispatched successfully to ${targetStr} using Property SMTP (Subject: "${subject}")`,
-              options?.outletId,
-              undefined,
-              {
-                module: 'Emails',
-                status: 'success',
-                severity: 'success',
-                record_id: smtpResult.messageId || 'smtp_success',
-                affected_entity: targetStr,
-                new_values: {
-                  to: targetStr,
-                  subject,
-                  transport: 'SMTP',
-                  status: 'success',
-                  property_id: propertyId,
-                  outlet_id: options?.outletId,
-                  message_id: smtpResult.messageId
-                }
-              }
-            );
-            return { success: true, messageId: smtpResult.messageId, method: 'smtp' };
-          } else {
-            console.warn('[Email Service] Property SMTP dispatch failed, reverting to default Resend transport:', smtpResult.error);
+        const toStr = (Array.isArray(to) ? to[0] : to).toLowerCase().trim();
+        const recipientsStr = localStorage.getItem('membership_report_recipients');
+        if (recipientsStr) {
+          const recs = JSON.parse(recipientsStr);
+          const match = recs.find((r: any) => r.email && r.email.toLowerCase().includes(toStr));
+          if (match?.property_id) {
+            propertyId = match.property_id;
           }
         }
-      } catch (smtpErr) {
-        console.warn('[Email Service] Error querying/dispatching property SMTP, using default Resend transport:', smtpErr);
+        if (!propertyId && supabase) {
+          const { data: recData } = await supabase
+            .from('report_recipients')
+            .select('property_id')
+            .ilike('email', `%${toStr}%`)
+            .maybeSingle();
+          if (recData?.property_id) {
+            propertyId = recData.property_id;
+          }
+        }
+      } catch (e) {}
+    }
+
+    // Fallback: If still unresolved, check if any property has an active custom SMTP configured
+    if (!propertyId && supabase) {
+      try {
+        const { data: activeSmtp } = await supabase
+          .from('property_smtp_settings')
+          .select('property_id')
+          .eq('is_enabled', true)
+          .limit(1)
+          .maybeSingle();
+        if (activeSmtp?.property_id) {
+          propertyId = activeSmtp.property_id;
+        }
+      } catch (e) {}
+    }
+
+    // =========================================================================
+    // STEP 1: CHECK IF PROPERTY HAS SMTP ACTIVE AND CONFIGURED FIRST
+    // Both MUST be true: is_enabled (active) === true AND configured (host, username, password)
+    // =========================================================================
+    let smtpCheck = propertyId ? await PropertySmtpService.isConfiguredAndActive(propertyId) : null;
+
+    // If propertyId was unassigned or had no active/configured SMTP, check if any property has active & configured SMTP
+    if (!smtpCheck?.activeAndConfigured) {
+      const anyActiveSmtp = await PropertySmtpService.findAnyActiveAndConfigured();
+      if (anyActiveSmtp) {
+        propertyId = anyActiveSmtp.property_id;
+        smtpCheck = {
+          activeAndConfigured: true,
+          isActive: true,
+          isConfigured: true,
+          settings: anyActiveSmtp
+        };
       }
     }
 
-    // Step 2: PRIMARY RESEND DISPATCH via original 'send-reports' Edge Function
-    // (This is the original verified pipeline that delivers all emails via Resend)
+    // If BOTH active AND configured are YES -> MUST TRIGGER SMTP
+    if (smtpCheck?.activeAndConfigured && propertyId) {
+      try {
+        console.log(`[Email Service] Custom SMTP is ACTIVE & CONFIGURED for property ${propertyId} (${smtpCheck.settings?.host}). Triggering dedicated SMTP dispatch...`);
+        const smtpResult = await PropertySmtpService.dispatchEmail({
+          to,
+          subject,
+          html,
+          text: plainText,
+          propertyId,
+          outletId: options?.outletId,
+          attachments
+        });
+
+        if (smtpResult.success && smtpResult.method === 'smtp') {
+          console.log(`[Email Service] Delivered via Property SMTP (${smtpResult.messageId})`);
+          await db.logAction(
+            'EMAIL_SENT',
+            `Email dispatched successfully to ${targetStr} using Property SMTP (${smtpCheck.settings?.host}) (Subject: "${subject}")`,
+            options?.outletId,
+            undefined,
+            {
+              module: 'Emails',
+              status: 'success',
+              severity: 'success',
+              record_id: smtpResult.messageId || 'smtp_success',
+              affected_entity: targetStr,
+              new_values: {
+                to: targetStr,
+                subject,
+                transport: 'SMTP',
+                host: smtpCheck.settings?.host,
+                status: 'success',
+                property_id: propertyId,
+                outlet_id: options?.outletId,
+                message_id: smtpResult.messageId
+              }
+            }
+          );
+          return { success: true, messageId: smtpResult.messageId, method: 'smtp' };
+        } else {
+          console.warn('[Email Service] Property SMTP dispatch failed, engaging Resend fallback:', smtpResult.error);
+        }
+      } catch (smtpErr) {
+        console.warn('[Email Service] Error during Property SMTP dispatch, engaging Resend fallback:', smtpErr);
+      }
+    } else {
+      console.log(`[Email Service] Custom SMTP not active or not configured (Active: ${smtpCheck?.isActive ?? false}, Configured: ${smtpCheck?.isConfigured ?? false}). Triggering Resend transport...`);
+    }
+
+    // =========================================================================
+    // STEP 2: RESEND TRANSPORT (USED WHEN SMTP IS NOT ACTIVE/CONFIGURED OR AS FAILSAFE)
+    // =========================================================================
     try {
       if (supabase) {
         const { data, error } = await supabase.functions.invoke('send-reports', {

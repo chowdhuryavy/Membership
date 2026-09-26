@@ -317,12 +317,26 @@ export const reportService = {
             }
 
             if (subject && html) {
-                const result = await emailService.sendEmail(
-                    recipient.email,
-                    subject,
-                    html
-                );
-                results.push({ email: recipient.email, ...result });
+                const targetPropertyId = property?.id || recipient.property_id || data?.property_id;
+                const targetOutletId = (outlet && typeof outlet === 'object' ? outlet.id : undefined) ||
+                                       (recipient.outlet_id !== 'all' ? recipient.outlet_id : undefined) ||
+                                       (data?.outlet_id !== 'all' ? data?.outlet_id : undefined);
+
+                const toEmails = recipient.email.split(',').map(e => e.trim()).filter(Boolean);
+                for (const singleEmail of toEmails) {
+                    const result = await emailService.sendEmail(
+                        singleEmail,
+                        subject,
+                        html,
+                        [],
+                        undefined,
+                        {
+                            propertyId: targetPropertyId,
+                            outletId: targetOutletId
+                        }
+                    );
+                    results.push({ email: singleEmail, ...result });
+                }
             }
         }
         return { success: results.length > 0 ? results.every(r => r.success) : false, results };
