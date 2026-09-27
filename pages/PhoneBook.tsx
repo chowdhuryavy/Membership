@@ -29,7 +29,7 @@ import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 import { db } from '../services/mockSupabase';
 import { PhoneBookContact, Outlet } from '../types';
-import { Button, Card, CardHeader, CardTitle, CardContent, Input } from '../components/ui';
+import { Button, Card, CardHeader, CardTitle, CardContent, Input, ConfirmationModal } from '../components/ui';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 
@@ -88,6 +88,7 @@ export const PhoneBook: React.FC = () => {
   const [showAddModal, setShowAddModal] = useState(false);
   const [viewingContact, setViewingContact] = useState<PhoneBookContact | null>(null);
   const [editingContact, setEditingContact] = useState<PhoneBookContact | null>(null);
+  const [contactToDelete, setContactToDelete] = useState<{ id: string; name: string } | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
   // Form State
@@ -179,12 +180,16 @@ export const PhoneBook: React.FC = () => {
 
   // Open Add Modal
   const handleOpenAddModal = () => {
+    const defaultOutletId = scopeMode === 'property'
+      ? ((selectedOutletFilter && selectedOutletFilter !== 'all') ? selectedOutletFilter : (currentOutlet?.id || allowedOutletsInProperty[0]?.id || ''))
+      : (currentOutlet?.id || allowedOutletsInProperty[0]?.id || '');
+
     setFormData({
       name: '',
       phone: '',
       email: '',
       property_id: currentProperty?.id || '',
-      outlet_id: activeSelectedOutletId,
+      outlet_id: defaultOutletId,
       category: 'General Contact',
       nationality: '',
       dob: '',
@@ -202,7 +207,9 @@ export const PhoneBook: React.FC = () => {
       phone: contact.phone,
       email: contact.email || '',
       property_id: contact.property_id || currentProperty?.id || '',
-      outlet_id: contact.outlet_id || activeSelectedOutletId,
+      outlet_id: scopeMode === 'property'
+        ? (contact.outlet_id || (selectedOutletFilter !== 'all' ? selectedOutletFilter : currentOutlet?.id) || allowedOutletsInProperty[0]?.id || '')
+        : (currentOutlet?.id || contact.outlet_id || ''),
       category: contact.category || 'General Contact',
       nationality: contact.nationality || '',
       dob: contact.dob || '',
@@ -225,7 +232,10 @@ export const PhoneBook: React.FC = () => {
 
     setIsSaving(true);
     try {
-      const targetOutletId = formData.outlet_id || activeSelectedOutletId;
+      const targetOutletId = scopeMode === 'property'
+        ? (formData.outlet_id || (selectedOutletFilter !== 'all' ? selectedOutletFilter : currentOutlet?.id) || allowedOutletsInProperty[0]?.id)
+        : (currentOutlet?.id || activeSelectedOutletId);
+
       const payload: Partial<PhoneBookContact> = {
         ...formData,
         id: editingContact?.id,
@@ -247,15 +257,19 @@ export const PhoneBook: React.FC = () => {
   };
 
   // Delete Contact
-  const handleDelete = async (id: string, name: string) => {
-    if (!window.confirm(`Are you sure you want to remove ${name} from the Phone Book?`)) return;
+  const handleConfirmDelete = async () => {
+    if (!contactToDelete) return;
     try {
-      await db.deletePhoneBookContact(id);
+      await db.deletePhoneBookContact(contactToDelete.id);
       toast.success('Contact removed');
-      if (viewingContact?.id === id) setViewingContact(null);
+      if (viewingContact?.id === contactToDelete.id) {
+        setViewingContact(null);
+      }
       loadContacts();
     } catch (err: any) {
       toast.error('Failed to delete contact');
+    } finally {
+      setContactToDelete(null);
     }
   };
 
@@ -715,7 +729,7 @@ export const PhoneBook: React.FC = () => {
                             {canDelete && canManageContact && (
                               <button
                                 type="button"
-                                onClick={() => handleDelete(contact.id, contact.name)}
+                                onClick={() => setContactToDelete({ id: contact.id, name: contact.name })}
                                 className="h-8 w-8 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-500 hover:text-rose-600 flex items-center justify-center transition-all border border-transparent hover:border-rose-200 cursor-pointer"
                                 title="Delete Contact"
                               >
@@ -807,24 +821,42 @@ export const PhoneBook: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="text-[10px] font-black uppercase text-slate-500 tracking-wider block mb-2">
-                    Facility Outlet *
-                  </label>
-                  {allowedOutletsInProperty.length <= 1 ? (
-                    <div className="w-full h-14 px-4 bg-slate-100 border-2 border-slate-200 rounded-2xl text-xs font-black uppercase text-slate-700 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Store className="w-4 h-4 text-indigo-500" />
-                        <span>{allowedOutletsInProperty[0]?.name || currentOutlet?.name || 'Assigned Facility'}</span>
-                      </div>
-                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-white px-2.5 py-1 rounded-lg border border-slate-200">
-                        Assigned
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-[10px] font-black uppercase text-slate-500 tracking-wider">
+                      Facility Outlet *
+                    </label>
+                    {scopeMode !== 'property' ? (
+                      <span className="text-[8.5px] font-bold text-indigo-600 uppercase tracking-widest bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
+                        Header Selected Outlet
                       </span>
+                    ) : (
+                      <span className="text-[8.5px] font-bold text-slate-400 uppercase tracking-widest">
+                        Property Scope
+                      </span>
+                    )}
+                  </div>
+
+                  {scopeMode !== 'property' ? (
+                    <div className="relative">
+                      <Store className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-indigo-600 pointer-events-none" />
+                      <select
+                        disabled
+                        value={currentOutlet?.id || allowedOutletsInProperty[0]?.id || ''}
+                        className="w-full h-14 pl-11 pr-28 bg-slate-50 border-2 border-slate-200 rounded-2xl text-xs font-black uppercase text-slate-800 outline-none cursor-not-allowed appearance-none"
+                      >
+                        <option value={currentOutlet?.id || allowedOutletsInProperty[0]?.id || ''}>
+                          {currentOutlet?.name || allowedOutletsInProperty[0]?.name || 'Selected Outlet'}
+                        </option>
+                      </select>
+                      <div className="absolute right-3.5 top-1/2 -translate-y-1/2 px-2.5 py-1 rounded-lg bg-indigo-50 border border-indigo-100 text-[9px] font-black uppercase tracking-wider text-indigo-600 pointer-events-none">
+                        Active Outlet
+                      </div>
                     </div>
                   ) : (
                     <div className="relative">
                       <Store className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                       <select
-                        value={formData.outlet_id || activeSelectedOutletId}
+                        value={formData.outlet_id || (selectedOutletFilter !== 'all' ? selectedOutletFilter : currentOutlet?.id) || allowedOutletsInProperty[0]?.id}
                         onChange={e => setFormData({ ...formData, outlet_id: e.target.value })}
                         className="w-full h-14 pl-11 pr-4 bg-white border-2 border-slate-200 rounded-2xl text-xs font-black uppercase text-slate-800 outline-none focus:border-indigo-600 cursor-pointer"
                       >
@@ -1029,7 +1061,7 @@ export const PhoneBook: React.FC = () => {
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => handleDelete(viewingContact.id, viewingContact.name)}
+                  onClick={() => setContactToDelete({ id: viewingContact.id, name: viewingContact.name })}
                   className="h-12 px-4 rounded-2xl border-rose-200 text-rose-600 hover:bg-rose-50 font-black uppercase text-xs flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <Trash2 className="w-4 h-4" /> Delete
@@ -1047,6 +1079,17 @@ export const PhoneBook: React.FC = () => {
           </div>
         </div>
       )}
+
+      {/* 7. APP DEFAULT CONFIRMATION MODAL */}
+      <ConfirmationModal
+        isOpen={!!contactToDelete}
+        onClose={() => setContactToDelete(null)}
+        onConfirm={handleConfirmDelete}
+        title="Remove Contact"
+        description={`Are you sure you want to remove ${contactToDelete?.name || 'this contact'} from the Phone Book?`}
+        confirmText="Remove Contact"
+        isDestructive={true}
+      />
 
     </div>
   );

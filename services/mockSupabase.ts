@@ -4279,30 +4279,33 @@ class DatabaseService {
 
         // 3b. Fetch PT Members (Personal Training guests)
         try {
-          let ptQuery = supabase.from('pt_members').select('id, guest_name, member_name, phone, email, nationality, outlet_id, created_at, package_name');
+          let ptQuery = supabase.from('pt_members').select('id, guest_name, phone, email, outlet_id, created_at, notes, dob, membership_number, property_id');
           if (outletIds && outletIds.length > 0) {
             ptQuery = ptQuery.in('outlet_id', outletIds);
           }
-          const { data: ptList } = await ptQuery;
-          (ptList || []).forEach((p: any) => {
-            const guestName = p.guest_name || p.member_name;
-            if (!guestName && !p.phone) return;
-            mergeContact({
-              id: `pt_${p.id}`,
-              property_id: propertyId,
-              outlet_id: p.outlet_id,
-              name: guestName || 'PT Client',
-              phone: p.phone || '',
-              email: p.email || '',
-              source: 'PT Member',
-              source_id: p.id,
-              category: 'Personal Training',
-              nationality: p.nationality,
-              created_at: p.created_at,
-              notes: p.package_name ? `Package: ${p.package_name}` : undefined,
-              tags: ['PT Client']
+          const { data: ptList, error: ptError } = await ptQuery;
+          if (!ptError && ptList) {
+            ptList.forEach((p: any) => {
+              const guestName = p.guest_name;
+              if (!guestName && !p.phone) return;
+              mergeContact({
+                id: `pt_${p.id}`,
+                property_id: p.property_id || propertyId,
+                outlet_id: p.outlet_id,
+                name: guestName || 'PT Client',
+                phone: p.phone || '',
+                email: p.email || '',
+                source: 'PT Member',
+                source_id: p.id,
+                category: 'Personal Training',
+                dob: p.dob,
+                membership_number: p.membership_number,
+                created_at: p.created_at,
+                notes: p.notes || undefined,
+                tags: ['PT Client']
+              });
             });
-          });
+          }
         } catch (e) {}
 
         // 4. Fetch dedicated phonebook_contacts table (if exists in Supabase)
@@ -4329,12 +4332,12 @@ class DatabaseService {
       const localPtStr = typeof localStorage !== 'undefined' ? localStorage.getItem('pt_members') : null;
       const localPt = localPtStr ? JSON.parse(localPtStr) : [];
       localPt.forEach((p: any) => {
-        const guestName = p.guest_name || p.member_name;
+        const guestName = p.guest_name;
         if (!guestName && !p.phone) return;
         if (!outletIds || outletIds.length === 0 || outletIds.includes(p.outlet_id)) {
           mergeContact({
             id: `pt_${p.id}`,
-            property_id: propertyId,
+            property_id: p.property_id || propertyId,
             outlet_id: p.outlet_id,
             name: guestName || 'PT Client',
             phone: p.phone || '',
@@ -4342,9 +4345,10 @@ class DatabaseService {
             source: 'PT Member',
             source_id: p.id,
             category: 'Personal Training',
-            nationality: p.nationality,
+            dob: p.dob,
+            membership_number: p.membership_number,
             created_at: p.created_at,
-            notes: p.package_name ? `Package: ${p.package_name}` : undefined,
+            notes: p.notes || undefined,
             tags: ['PT Client']
           });
         }
