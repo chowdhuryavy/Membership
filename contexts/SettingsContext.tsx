@@ -232,32 +232,8 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     
     // If the role is found in the database, use its permissions strictly.
     if (role) {
-        if (role.permissions.includes(permission)) return true;
-        // Backward-compatibility: if role has dashboard, sales, or settings access and permission is not restricted, allow whatsapp:view
-        if (permission === 'whatsapp:view' && (role.permissions.includes('dashboard:view') || role.permissions.includes('sales:view') || role.permissions.includes('settings:view') || role.permissions.includes('members:view'))) {
-            return true;
-        }
-        // Backward-compatibility: if role has member or front desk access, allow phonebook permissions
-        if (permission === 'phonebook:view' && (role.permissions.includes('members:view') || role.permissions.includes('pt_members:view') || role.permissions.includes('entrance_fee:view') || role.permissions.includes('dashboard:view'))) {
-            return true;
-        }
-        if (permission === 'phonebook:create' && (role.permissions.includes('members:create') || role.permissions.includes('entrance_fee:create'))) {
-            return true;
-        }
-        if (permission === 'phonebook:edit' && (role.permissions.includes('members:edit') || role.permissions.includes('entrance_fee:edit'))) {
-            return true;
-        }
-        if (permission === 'phonebook:delete' && (role.permissions.includes('members:delete') || role.permissions.includes('entrance_fee:delete'))) {
-            return true;
-        }
-        if (permission === 'phonebook:export' && (role.permissions.includes('phonebook:export') || role.permissions.includes('members:export') || role.permissions.includes('reports:export'))) {
-            return true;
-        }
-        return false;
+        return Boolean(role.permissions && role.permissions.includes(permission));
     }
-
-    // Default fallback if role is not in database
-    if (permission === 'whatsapp:view' || permission === 'dashboard:view' || permission === 'phonebook:view' || permission === 'phonebook:create' || permission === 'phonebook:edit') return true;
 
     return false;
   }, [roles, user, isSuperAdmin, isOwner, settings]);

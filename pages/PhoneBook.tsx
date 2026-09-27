@@ -38,11 +38,11 @@ export const PhoneBook: React.FC = () => {
   const { user, isSuperAdmin, isOwner } = useAuth();
 
   // Permission check
-  const canView = isSuperAdmin || isOwner || hasPermission(user?.role_id || '', 'phonebook:view' as any) || hasPermission(user?.role_id || '', 'members:view' as any);
-  const canCreate = isSuperAdmin || isOwner || hasPermission(user?.role_id || '', 'phonebook:create' as any) || hasPermission(user?.role_id || '', 'members:create' as any);
-  const canEdit = isSuperAdmin || isOwner || hasPermission(user?.role_id || '', 'phonebook:edit' as any) || hasPermission(user?.role_id || '', 'members:edit' as any);
-  const canDelete = isSuperAdmin || isOwner || hasPermission(user?.role_id || '', 'phonebook:delete' as any) || hasPermission(user?.role_id || '', 'members:delete' as any);
-  const canExport = isSuperAdmin || isOwner || hasPermission(user?.role_id || '', 'phonebook:export' as any) || hasPermission(user?.role_id || '', 'reports:export' as any) || hasPermission(user?.role_id || '', 'members:export' as any);
+  const canView = isSuperAdmin || isOwner || hasPermission(user?.role_id || '', 'phonebook:view' as any);
+  const canCreate = isSuperAdmin || isOwner || hasPermission(user?.role_id || '', 'phonebook:create' as any);
+  const canEdit = isSuperAdmin || isOwner || hasPermission(user?.role_id || '', 'phonebook:edit' as any);
+  const canDelete = isSuperAdmin || isOwner || hasPermission(user?.role_id || '', 'phonebook:delete' as any);
+  const canExport = isSuperAdmin || isOwner || hasPermission(user?.role_id || '', 'phonebook:export' as any);
 
   // Property outlets
   const propertyOutlets = useMemo(() => {
