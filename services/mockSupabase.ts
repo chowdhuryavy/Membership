@@ -4309,7 +4309,7 @@ class DatabaseService {
         try {
           let pbQuery = supabase.from('phonebook_contacts').select('*').eq('property_id', propertyId);
           if (outletIds && outletIds.length > 0) {
-            pbQuery = pbQuery.in('outlet_id', outletIds);
+            pbQuery = pbQuery.or(`outlet_id.in.(${outletIds.join(',')}),outlet_id.is.null`);
           }
           const { data: pbContacts } = await pbQuery;
           (pbContacts || []).forEach((c: any) => {
@@ -4359,7 +4359,12 @@ class DatabaseService {
       });
     } catch (e) {}
 
-    const allContacts = Array.from(contactsMap.values());
+    // Deleted / hidden contacts filter
+    const hiddenIds: string[] = typeof localStorage !== 'undefined' 
+      ? JSON.parse(localStorage.getItem('phonebook_hidden_ids') || '[]') 
+      : [];
+
+    const allContacts = Array.from(contactsMap.values()).filter(c => !hiddenIds.includes(c.id));
     return allContacts.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
   }
 
@@ -4382,13 +4387,17 @@ class DatabaseService {
       updated_at: new Date().toISOString()
     };
 
-    // Save to local storage cache
+    // Save to local storage cache & remove from hidden list if present
     try {
       if (typeof localStorage !== 'undefined') {
         const local = JSON.parse(localStorage.getItem('phonebook_manual_contacts') || '[]');
         const filtered = local.filter((c: any) => c.id !== id && c.phone !== newContact.phone);
         filtered.unshift(newContact);
         localStorage.setItem('phonebook_manual_contacts', JSON.stringify(filtered));
+
+        const hiddenIds = JSON.parse(localStorage.getItem('phonebook_hidden_ids') || '[]');
+        const cleanedHidden = hiddenIds.filter((h: string) => h !== id);
+        localStorage.setItem('phonebook_hidden_ids', JSON.stringify(cleanedHidden));
       }
     } catch (e) {}
 
@@ -4410,19 +4419,22 @@ class DatabaseService {
         // Try upserting to phonebook_contacts table if available
         try {
           await supabase.from('phonebook_contacts').upsert([{
-            id: newContact.id.startsWith('pb_') ? newContact.id.replace('pb_', '') : (newContact.id.includes('-') ? newContact.id : crypto.randomUUID()),
-            property_id: newContact.property_id,
-            outlet_id: newContact.outlet_id,
+            id: newContact.id,
+            property_id: newContact.property_id || null,
+            outlet_id: newContact.outlet_id || null,
             name: newContact.name,
             phone: newContact.phone,
-            email: newContact.email,
-            source: newContact.source,
-            category: newContact.category,
-            nationality: newContact.nationality,
-            notes: newContact.notes,
-            tags: newContact.tags
+            email: newContact.email || null,
+            source: newContact.source || 'Manual',
+            category: newContact.category || 'General Contact',
+            nationality: newContact.nationality || null,
+            dob: newContact.dob ? newContact.dob : null,
+            notes: newContact.notes || null,
+            tags: newContact.tags || ['Direct Contact']
           }]);
-        } catch (e) {}
+        } catch (e) {
+          console.warn('Notice saving to phonebook_contacts in Supabase:', e);
+        }
 
         await this.logAction('CREATE_CONTACT', `Guest contact registered in Phone Book: ${newContact.name} (${newContact.phone})`, newContact.outlet_id);
       }, null);
@@ -4437,14 +4449,20 @@ class DatabaseService {
         const local = JSON.parse(localStorage.getItem('phonebook_manual_contacts') || '[]');
         const filtered = local.filter((c: any) => c.id !== id);
         localStorage.setItem('phonebook_manual_contacts', JSON.stringify(filtered));
+
+        // Add to hidden list so aggregated records (or cached records) are also excluded
+        const hiddenIds = JSON.parse(localStorage.getItem('phonebook_hidden_ids') || '[]');
+        if (!hiddenIds.includes(id)) {
+          hiddenIds.push(id);
+          localStorage.setItem('phonebook_hidden_ids', JSON.stringify(hiddenIds));
+        }
       }
     } catch (e) {}
 
     if (this.isSupabase()) {
       await this.safeCall(async () => {
         try {
-          const rawId = id.startsWith('pb_') ? id.replace('pb_', '') : id;
-          await supabase.from('phonebook_contacts').delete().eq('id', rawId);
+          await supabase.from('phonebook_contacts').delete().eq('id', id);
         } catch (e) {}
         await this.logAction('DELETE_CONTACT', `Contact removed from Phone Book: ${id}`);
       }, null);

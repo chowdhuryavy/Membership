@@ -41,23 +41,42 @@ export const PhoneBook: React.FC = () => {
   const canView = isSuperAdmin || isOwner || hasPermission(user?.role_id || '', 'phonebook:view' as any) || hasPermission(user?.role_id || '', 'members:view' as any);
   const canCreate = isSuperAdmin || isOwner || hasPermission(user?.role_id || '', 'phonebook:create' as any) || hasPermission(user?.role_id || '', 'members:create' as any);
   const canEdit = isSuperAdmin || isOwner || hasPermission(user?.role_id || '', 'phonebook:edit' as any) || hasPermission(user?.role_id || '', 'members:edit' as any);
-  const canDelete = isSuperAdmin || isOwner || hasPermission(user?.role_id || '', 'phonebook:delete' as any);
-  const canExport = isSuperAdmin || isOwner || hasPermission(user?.role_id || '', 'phonebook:export' as any) || hasPermission(user?.role_id || '', 'reports:export' as any);
+  const canDelete = isSuperAdmin || isOwner || hasPermission(user?.role_id || '', 'phonebook:delete' as any) || hasPermission(user?.role_id || '', 'members:delete' as any);
+  const canExport = isSuperAdmin || isOwner || hasPermission(user?.role_id || '', 'phonebook:export' as any) || hasPermission(user?.role_id || '', 'reports:export' as any) || hasPermission(user?.role_id || '', 'members:export' as any);
 
-  // Multi-outlet check for same property
-  const propertyAllowedOutlets = useMemo(() => {
+  // Property outlets
+  const propertyOutlets = useMemo(() => {
     if (!currentProperty) return [];
-    const allowed = isSuperAdmin || isOwner
-      ? outlets.filter(o => o.property_id === currentProperty.id)
-      : userAllowedOutlets.filter(o => o.property_id === currentProperty.id);
-    return allowed;
-  }, [currentProperty, userAllowedOutlets, outlets, isSuperAdmin, isOwner]);
+    return outlets.filter(o => o.property_id === currentProperty.id);
+  }, [currentProperty, outlets]);
 
-  const hasMultiOutletAccess = isSuperAdmin || isOwner || propertyAllowedOutlets.length > 1;
+  // Outlets the user is allowed to access in this property
+  const allowedOutletsInProperty = useMemo(() => {
+    if (!currentProperty || !user) return [];
+    if (isSuperAdmin || isOwner || user.role_id?.toLowerCase() === 'admin' || user.role_id?.toLowerCase() === 'system_admin') {
+      return propertyOutlets;
+    }
+    return propertyOutlets.filter(o => user.allowed_outlets?.includes(o.id));
+  }, [currentProperty, user, propertyOutlets, isSuperAdmin, isOwner]);
+
+  // Dynamic scope toggle: If a property has only one outlet, no need for outlet & property toggle.
+  // It appears dynamically if another outlet is created!
+  const canSwitchScope = Boolean(propertyOutlets.length > 1 && allowedOutletsInProperty.length > 1);
 
   // Scope Mode: 'outlet' vs 'property'
   const [scopeMode, setScopeMode] = useState<'outlet' | 'property'>('outlet');
   const [selectedOutletFilter, setSelectedOutletFilter] = useState<string>('all');
+
+  // Currently active selected outlet in the page view
+  const activeSelectedOutletId = useMemo(() => {
+    if (scopeMode === 'outlet' && currentOutlet?.id) {
+      return currentOutlet.id;
+    }
+    if (selectedOutletFilter && selectedOutletFilter !== 'all') {
+      return selectedOutletFilter;
+    }
+    return currentOutlet?.id || allowedOutletsInProperty[0]?.id || '';
+  }, [scopeMode, currentOutlet, selectedOutletFilter, allowedOutletsInProperty]);
 
   // Contacts state
   const [contacts, setContacts] = useState<PhoneBookContact[]>([]);
@@ -90,11 +109,11 @@ export const PhoneBook: React.FC = () => {
     try {
       let targetOutletIds: string[] = [];
 
-      if (scopeMode === 'outlet' && currentOutlet) {
+      if ((!canSwitchScope || scopeMode === 'outlet') && currentOutlet) {
         targetOutletIds = [currentOutlet.id];
       } else {
         // Property mode: all allowed outlets in this property
-        targetOutletIds = propertyAllowedOutlets.map(o => o.id);
+        targetOutletIds = allowedOutletsInProperty.map(o => o.id);
       }
 
       const res = await db.getPhoneBookContacts(currentProperty.id, targetOutletIds);
@@ -105,7 +124,7 @@ export const PhoneBook: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [currentProperty, currentOutlet, scopeMode, propertyAllowedOutlets]);
+  }, [currentProperty, currentOutlet, scopeMode, canSwitchScope, allowedOutletsInProperty]);
 
   useEffect(() => {
     loadContacts();
@@ -165,7 +184,7 @@ export const PhoneBook: React.FC = () => {
       phone: '',
       email: '',
       property_id: currentProperty?.id || '',
-      outlet_id: currentOutlet?.id || (propertyAllowedOutlets[0]?.id || ''),
+      outlet_id: activeSelectedOutletId,
       category: 'General Contact',
       nationality: '',
       dob: '',
@@ -183,7 +202,7 @@ export const PhoneBook: React.FC = () => {
       phone: contact.phone,
       email: contact.email || '',
       property_id: contact.property_id || currentProperty?.id || '',
-      outlet_id: contact.outlet_id || currentOutlet?.id || '',
+      outlet_id: contact.outlet_id || activeSelectedOutletId,
       category: contact.category || 'General Contact',
       nationality: contact.nationality || '',
       dob: contact.dob || '',
@@ -206,11 +225,12 @@ export const PhoneBook: React.FC = () => {
 
     setIsSaving(true);
     try {
+      const targetOutletId = formData.outlet_id || activeSelectedOutletId;
       const payload: Partial<PhoneBookContact> = {
         ...formData,
         id: editingContact?.id,
         property_id: currentProperty?.id,
-        outlet_id: formData.outlet_id || currentOutlet?.id || propertyAllowedOutlets[0]?.id,
+        outlet_id: targetOutletId,
         source: editingContact?.source || 'Manual'
       };
 
@@ -297,7 +317,7 @@ export const PhoneBook: React.FC = () => {
       {/* 1. TOP HEADER & SCOPE BAR */}
       <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 bg-white p-8 rounded-[2.5rem] border border-slate-200/60 shadow-xl">
         <div className="flex items-center gap-6">
-          <div className="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-2xl shadow-indigo-100">
+          <div className="w-14 h-14 bg-indigo-600 rounded-2xl flex items-center justify-center text-white shadow-2xl shadow-indigo-100 shrink-0">
             <BookUser className="w-7 h-7" />
           </div>
           <div>
@@ -307,62 +327,54 @@ export const PhoneBook: React.FC = () => {
                 Directory
               </span>
             </div>
-            <p className="text-[10px] font-black text-slate-400 uppercase tracking-[0.3em] mt-2">
-              Unified Guest Contact Registry &bull; {currentProperty?.name || 'Property'}
-            </p>
+            <div className="flex flex-wrap items-center gap-4 mt-2">
+              <p className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                <Store className="w-3 h-3 text-indigo-400" /> {currentOutlet?.name || currentProperty?.name}
+              </p>
+              {canSwitchScope && (
+                <>
+                  <div className="h-3 w-px bg-slate-200 hidden sm:block"></div>
+                  <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200">
+                    <button
+                      type="button"
+                      onClick={() => setScopeMode('outlet')}
+                      className={`px-3 py-1 rounded-lg text-[8px] font-black uppercase transition-all flex items-center gap-1.5 cursor-pointer ${
+                        scopeMode === 'outlet'
+                          ? 'bg-white text-indigo-600 shadow-sm'
+                          : 'text-slate-400 hover:text-slate-600'
+                      }`}
+                    >
+                      <Store className="w-2.5 h-2.5" /> Outlet
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setScopeMode('property')}
+                      className={`px-3 py-1 rounded-lg text-[8px] font-black uppercase transition-all flex items-center gap-1.5 cursor-pointer ${
+                        scopeMode === 'property'
+                          ? 'bg-white text-indigo-600 shadow-sm'
+                          : 'text-slate-400 hover:text-slate-600'
+                      }`}
+                    >
+                      <Building2 className="w-2.5 h-2.5" /> Property
+                    </button>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
         </div>
 
-        {/* CONTROLS & TOGGLES */}
-        <div className="flex flex-wrap items-center gap-4 w-full xl:w-auto">
-          
-          {/* THE EXACT OUTLET | PROPERTY TOGGLE FROM USER SPECIFICATION */}
-          {hasMultiOutletAccess ? (
-            <div className="flex items-center bg-slate-100/90 p-1.5 rounded-2xl border border-slate-200 shadow-inner">
-              <button
-                type="button"
-                onClick={() => setScopeMode('outlet')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                  scopeMode === 'outlet'
-                    ? 'bg-white text-indigo-600 shadow-md font-black scale-100'
-                    : 'text-slate-500 hover:text-slate-900 font-bold'
-                }`}
-                title="Filter contacts for currently active outlet"
-              >
-                <Store className="w-3.5 h-3.5 text-indigo-500" />
-                <span>Outlet</span>
-              </button>
-
-              <button
-                type="button"
-                onClick={() => setScopeMode('property')}
-                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${
-                  scopeMode === 'property'
-                    ? 'bg-white text-indigo-600 shadow-md font-black scale-100'
-                    : 'text-slate-500 hover:text-slate-900 font-bold'
-                }`}
-                title="View contacts across all facilities in this property"
-              >
-                <Building2 className="w-3.5 h-3.5 text-indigo-500" />
-                <span>Property</span>
-              </button>
-            </div>
-          ) : (
-            <div className="inline-flex items-center gap-2 px-4 py-2 bg-slate-100 rounded-2xl text-[10px] font-black uppercase tracking-widest text-slate-600 border border-slate-200">
-              <Store className="w-3.5 h-3.5 text-indigo-500" />
-              <span>{currentOutlet?.name || 'Single Outlet Scope'}</span>
-            </div>
-          )}
-
-          {/* SPECIFIC OUTLET FILTER DROPDOWN (When in Property Mode) */}
-          {scopeMode === 'property' && propertyAllowedOutlets.length > 1 && (
+        {/* RIGHT CONTROLS & ACTIONS */}
+        <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto">
+          {/* Specific outlet filter dropdown (only shown when Property scope is active with multiple outlets) */}
+          {canSwitchScope && scopeMode === 'property' && allowedOutletsInProperty.length > 1 && (
             <select
               value={selectedOutletFilter}
               onChange={e => setSelectedOutletFilter(e.target.value)}
-              className="h-12 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-[11px] font-black uppercase tracking-wider text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20"
+              className="h-12 px-4 bg-slate-50 border border-slate-200 rounded-2xl text-[11px] font-black uppercase tracking-wider text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"
             >
               <option value="all">All Outlets in Property</option>
-              {propertyAllowedOutlets.map(o => (
+              {allowedOutletsInProperty.map(o => (
                 <option key={o.id} value={o.id}>{o.name}</option>
               ))}
             </select>
@@ -373,7 +385,7 @@ export const PhoneBook: React.FC = () => {
             variant="outline" 
             onClick={loadContacts} 
             disabled={loading}
-            className="h-12 w-12 rounded-2xl p-0 border-slate-200 hover:bg-slate-50"
+            className="h-12 w-12 rounded-2xl p-0 border-slate-200 hover:bg-slate-50 cursor-pointer"
             title="Refresh Directory"
           >
             <RefreshCw className={`w-4 h-4 text-slate-600 ${loading ? 'animate-spin' : ''}`} />
@@ -383,7 +395,7 @@ export const PhoneBook: React.FC = () => {
             <Button 
               variant="outline" 
               onClick={handleExportCSV}
-              className="h-12 px-5 rounded-2xl border-emerald-200 bg-emerald-50/60 hover:bg-emerald-100/80 text-emerald-800 font-black text-[10px] uppercase tracking-widest shadow-sm"
+              className="h-12 px-5 rounded-2xl border-emerald-200 bg-emerald-50/60 hover:bg-emerald-100/80 text-emerald-800 font-black text-[10px] uppercase tracking-widest shadow-sm cursor-pointer"
             >
               <Download className="w-4 h-4 mr-2 text-emerald-600" /> Export CSV
             </Button>
@@ -392,7 +404,7 @@ export const PhoneBook: React.FC = () => {
           {canCreate && (
             <Button 
               onClick={handleOpenAddModal}
-              className="h-12 px-6 rounded-2xl bg-indigo-600 text-white hover:bg-indigo-700 font-black text-[11px] uppercase tracking-[0.15em] shadow-xl shadow-indigo-100"
+              className="h-12 px-6 rounded-2xl bg-indigo-600 text-white hover:bg-indigo-700 font-black text-[11px] uppercase tracking-[0.15em] shadow-xl shadow-indigo-100 cursor-pointer"
             >
               <Plus className="w-4 h-4 mr-2" /> Add Contact
             </Button>
@@ -519,7 +531,7 @@ export const PhoneBook: React.FC = () => {
               </span>
             </div>
             <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mt-1">
-              Scope: {scopeMode === 'property' ? `${currentProperty?.name} (All Accessible Outlets)` : currentOutlet?.name}
+              Scope: {!canSwitchScope || scopeMode === 'outlet' ? (currentOutlet?.name || currentProperty?.name) : `${currentProperty?.name} (All Accessible Outlets)`}
             </p>
           </div>
         </CardHeader>
@@ -560,7 +572,7 @@ export const PhoneBook: React.FC = () => {
                 <tbody className="divide-y divide-slate-100 text-xs">
                   {filteredContacts.map((contact, idx) => {
                     const cleanPhone = getCleanPhone(contact.phone);
-                    const isManual = contact.source === 'Manual' || contact.id.startsWith('pb_');
+                    const canManageContact = isSuperAdmin || isOwner || !contact.outlet_id || allowedOutletsInProperty.some(o => o.id === contact.outlet_id);
 
                     return (
                       <tr key={contact.id} className="hover:bg-indigo-50/20 transition-colors group">
@@ -679,33 +691,35 @@ export const PhoneBook: React.FC = () => {
 
                         {/* ACTIONS */}
                         <td className="px-6 py-5 text-right">
-                          <div className="flex items-center justify-end gap-2">
+                          <div className="flex items-center justify-end gap-1.5">
                             <Button
                               variant="outline"
                               onClick={() => setViewingContact(contact)}
-                              className="h-8 px-2.5 rounded-xl border-slate-200 text-slate-600 hover:text-indigo-600 text-[10px] font-black uppercase"
+                              className="h-8 px-2.5 rounded-xl border-slate-200 text-slate-600 hover:text-indigo-600 text-[10px] font-black uppercase transition-all cursor-pointer"
                               title="View dossier"
                             >
-                              <FileText className="w-3.5 h-3.5 mr-1" /> Dossier
+                              <FileText className="w-3.5 h-3.5 mr-1 text-slate-400 group-hover:text-indigo-600" /> Dossier
                             </Button>
 
-                            {canEdit && isManual && (
+                            {canEdit && canManageContact && (
                               <button
+                                type="button"
                                 onClick={() => handleOpenEdit(contact)}
-                                className="p-2 rounded-xl text-slate-400 hover:text-indigo-600 hover:bg-slate-100 transition-all"
+                                className="h-8 w-8 rounded-xl bg-slate-100 hover:bg-indigo-50 text-slate-500 hover:text-indigo-600 flex items-center justify-center transition-all border border-transparent hover:border-indigo-200 cursor-pointer"
                                 title="Edit Contact"
                               >
-                                <Edit3 className="w-4 h-4" />
+                                <Edit3 className="w-3.5 h-3.5" />
                               </button>
                             )}
 
-                            {canDelete && isManual && (
+                            {canDelete && canManageContact && (
                               <button
+                                type="button"
                                 onClick={() => handleDelete(contact.id, contact.name)}
-                                className="p-2 rounded-xl text-slate-400 hover:text-red-600 hover:bg-red-50 transition-all"
+                                className="h-8 w-8 rounded-xl bg-slate-100 hover:bg-rose-50 text-slate-500 hover:text-rose-600 flex items-center justify-center transition-all border border-transparent hover:border-rose-200 cursor-pointer"
                                 title="Delete Contact"
                               >
-                                <Trash2 className="w-4 h-4" />
+                                <Trash2 className="w-3.5 h-3.5" />
                               </button>
                             )}
                           </div>
@@ -796,15 +810,30 @@ export const PhoneBook: React.FC = () => {
                   <label className="text-[10px] font-black uppercase text-slate-500 tracking-wider block mb-2">
                     Facility Outlet *
                   </label>
-                  <select
-                    value={formData.outlet_id || (currentOutlet?.id || '')}
-                    onChange={e => setFormData({ ...formData, outlet_id: e.target.value })}
-                    className="w-full h-14 px-4 bg-white border-2 border-slate-200 rounded-2xl text-xs font-black uppercase text-slate-800 outline-none focus:border-indigo-600"
-                  >
-                    {propertyAllowedOutlets.map(o => (
-                      <option key={o.id} value={o.id}>{o.name}</option>
-                    ))}
-                  </select>
+                  {allowedOutletsInProperty.length <= 1 ? (
+                    <div className="w-full h-14 px-4 bg-slate-100 border-2 border-slate-200 rounded-2xl text-xs font-black uppercase text-slate-700 flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Store className="w-4 h-4 text-indigo-500" />
+                        <span>{allowedOutletsInProperty[0]?.name || currentOutlet?.name || 'Assigned Facility'}</span>
+                      </div>
+                      <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest bg-white px-2.5 py-1 rounded-lg border border-slate-200">
+                        Assigned
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="relative">
+                      <Store className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
+                      <select
+                        value={formData.outlet_id || activeSelectedOutletId}
+                        onChange={e => setFormData({ ...formData, outlet_id: e.target.value })}
+                        className="w-full h-14 pl-11 pr-4 bg-white border-2 border-slate-200 rounded-2xl text-xs font-black uppercase text-slate-800 outline-none focus:border-indigo-600 cursor-pointer"
+                      >
+                        {allowedOutletsInProperty.map(o => (
+                          <option key={o.id} value={o.id}>{o.name}</option>
+                        ))}
+                      </select>
+                    </div>
+                  )}
                 </div>
               </div>
 
@@ -981,12 +1010,39 @@ export const PhoneBook: React.FC = () => {
               )}
             </div>
 
-            <Button
-              onClick={() => setViewingContact(null)}
-              className="w-full h-14 rounded-2xl bg-slate-900 text-white font-black uppercase text-xs"
-            >
-              Close Dossier
-            </Button>
+            <div className="flex items-center gap-3 pt-2">
+              {canEdit && (isSuperAdmin || isOwner || !viewingContact.outlet_id || allowedOutletsInProperty.some(o => o.id === viewingContact.outlet_id)) && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    const c = viewingContact;
+                    setViewingContact(null);
+                    handleOpenEdit(c);
+                  }}
+                  className="flex-1 h-12 rounded-2xl border-slate-200 text-slate-700 hover:text-indigo-600 hover:border-indigo-300 font-black uppercase text-xs flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Edit3 className="w-4 h-4 text-indigo-600" /> Edit Contact
+                </Button>
+              )}
+              {canDelete && (isSuperAdmin || isOwner || !viewingContact.outlet_id || allowedOutletsInProperty.some(o => o.id === viewingContact.outlet_id)) && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => handleDelete(viewingContact.id, viewingContact.name)}
+                  className="h-12 px-4 rounded-2xl border-rose-200 text-rose-600 hover:bg-rose-50 font-black uppercase text-xs flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Trash2 className="w-4 h-4" /> Delete
+                </Button>
+              )}
+              <Button
+                type="button"
+                onClick={() => setViewingContact(null)}
+                className="flex-1 h-12 rounded-2xl bg-slate-900 text-white font-black uppercase text-xs cursor-pointer"
+              >
+                Close
+              </Button>
+            </div>
 
           </div>
         </div>

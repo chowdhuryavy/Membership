@@ -1,10 +1,13 @@
--- Migration: Phone Book & Unified Guest Directory Table
--- Run this in your Supabase SQL Editor if you wish to persist direct phone book records into a dedicated table.
+-- =========================================================================
+-- MIGRATION: PHONE BOOK & UNIFIED GUEST DIRECTORY TABLE
+-- Compatible with properties(id) TEXT and outlets(id) TEXT schema
+-- =========================================================================
 
-CREATE TABLE IF NOT EXISTS phonebook_contacts (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  property_id UUID REFERENCES properties(id) ON DELETE CASCADE,
-  outlet_id UUID REFERENCES outlets(id) ON DELETE CASCADE,
+-- 1. Create table with TEXT keys matching properties(id) and outlets(id)
+CREATE TABLE IF NOT EXISTS public.phonebook_contacts (
+  id TEXT PRIMARY KEY DEFAULT gen_random_uuid()::text,
+  property_id TEXT NOT NULL REFERENCES public.properties(id) ON DELETE CASCADE,
+  outlet_id TEXT REFERENCES public.outlets(id) ON DELETE SET NULL,
   name TEXT NOT NULL,
   phone TEXT NOT NULL,
   email TEXT,
@@ -18,17 +21,66 @@ CREATE TABLE IF NOT EXISTS phonebook_contacts (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Enable Row Level Security
-ALTER TABLE phonebook_contacts ENABLE ROW LEVEL SECURITY;
+-- 2. If table was previously attempted or created with uuid column types, alter them safely:
+DO $$
+BEGIN
+  -- Fix property_id if uuid
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_schema = 'public' 
+      AND table_name = 'phonebook_contacts' 
+      AND column_name = 'property_id' 
+      AND data_type = 'uuid'
+  ) THEN
+    ALTER TABLE public.phonebook_contacts DROP CONSTRAINT IF EXISTS phonebook_contacts_property_id_fkey;
+    ALTER TABLE public.phonebook_contacts ALTER COLUMN property_id TYPE TEXT;
+    ALTER TABLE public.phonebook_contacts ADD CONSTRAINT phonebook_contacts_property_id_fkey 
+      FOREIGN KEY (property_id) REFERENCES public.properties(id) ON DELETE CASCADE;
+  END IF;
 
--- Create policy allowing all read/write operations for authenticated and anonymous app access
+  -- Fix outlet_id if uuid
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_schema = 'public' 
+      AND table_name = 'phonebook_contacts' 
+      AND column_name = 'outlet_id' 
+      AND data_type = 'uuid'
+  ) THEN
+    ALTER TABLE public.phonebook_contacts DROP CONSTRAINT IF EXISTS phonebook_contacts_outlet_id_fkey;
+    ALTER TABLE public.phonebook_contacts ALTER COLUMN outlet_id TYPE TEXT;
+    ALTER TABLE public.phonebook_contacts ADD CONSTRAINT phonebook_contacts_outlet_id_fkey 
+      FOREIGN KEY (outlet_id) REFERENCES public.outlets(id) ON DELETE SET NULL;
+  END IF;
+
+  -- Fix id if uuid
+  IF EXISTS (
+    SELECT 1 FROM information_schema.columns 
+    WHERE table_schema = 'public' 
+      AND table_name = 'phonebook_contacts' 
+      AND column_name = 'id' 
+      AND data_type = 'uuid'
+  ) THEN
+    ALTER TABLE public.phonebook_contacts ALTER COLUMN id TYPE TEXT;
+  END IF;
+END $$;
+
+-- 3. Enable Row Level Security
+ALTER TABLE public.phonebook_contacts ENABLE ROW LEVEL SECURITY;
+
+-- 4. Create permissive policy for app access
+DROP POLICY IF EXISTS "Allow all operations on phonebook_contacts" ON public.phonebook_contacts;
 CREATE POLICY "Allow all operations on phonebook_contacts"
-ON phonebook_contacts FOR ALL
-USING (true)
-WITH CHECK (true);
+  ON public.phonebook_contacts FOR ALL
+  USING (true)
+  WITH CHECK (true);
 
--- Performance Indexes for search and scope filtering
-CREATE INDEX IF NOT EXISTS idx_phonebook_property ON phonebook_contacts(property_id);
-CREATE INDEX IF NOT EXISTS idx_phonebook_outlet ON phonebook_contacts(outlet_id);
-CREATE INDEX IF NOT EXISTS idx_phonebook_phone ON phonebook_contacts(phone);
-CREATE INDEX IF NOT EXISTS idx_phonebook_name ON phonebook_contacts(name);
+-- 5. Performance Indexes for search and scope filtering
+CREATE INDEX IF NOT EXISTS idx_phonebook_property ON public.phonebook_contacts(property_id);
+CREATE INDEX IF NOT EXISTS idx_phonebook_outlet ON public.phonebook_contacts(outlet_id);
+CREATE INDEX IF NOT EXISTS idx_phonebook_phone ON public.phonebook_contacts(phone);
+CREATE INDEX IF NOT EXISTS idx_phonebook_name ON public.phonebook_contacts(name);
+
+-- 6. Grant Permissions
+GRANT ALL ON public.phonebook_contacts TO authenticated;
+GRANT ALL ON public.phonebook_contacts TO anon;
+GRANT ALL ON public.phonebook_contacts TO service_role;
