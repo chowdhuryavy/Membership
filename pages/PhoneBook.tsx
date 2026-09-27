@@ -8,7 +8,6 @@ import {
   Building2, 
   Phone, 
   Mail, 
-  MessageSquare, 
   Tag, 
   UserCheck, 
   Calendar, 
@@ -30,6 +29,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { db } from '../services/mockSupabase';
 import { PhoneBookContact, Outlet } from '../types';
 import { Button, Card, CardHeader, CardTitle, CardContent, Input, ConfirmationModal } from '../components/ui';
+import { WhatsAppIcon } from '../components/WhatsAppIcon';
 import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 
@@ -645,7 +645,7 @@ export const PhoneBook: React.FC = () => {
                                   className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-600 hover:text-white transition-all shadow-xs"
                                   title="Chat on WhatsApp"
                                 >
-                                  <MessageSquare className="w-3.5 h-3.5" />
+                                  <WhatsAppIcon className="w-3.5 h-3.5" />
                                 </a>
                               )}
                             </div>
@@ -989,7 +989,7 @@ export const PhoneBook: React.FC = () => {
                   rel="noreferrer"
                   className="flex items-center justify-center gap-2 h-12 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-black text-xs uppercase tracking-wider transition-all shadow-lg shadow-emerald-100"
                 >
-                  <MessageSquare className="w-4 h-4" /> WhatsApp Chat
+                  <WhatsAppIcon className="w-4 h-4" /> WhatsApp Chat
                 </a>
               )}
             </div>
