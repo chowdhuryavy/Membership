@@ -280,6 +280,59 @@ export const PhoneBook: React.FC = () => {
     return digits;
   };
 
+  // Source badge color mapper
+  const getSourceBadgeStyle = (source?: string) => {
+    switch (source) {
+      case 'Member':
+        return 'bg-indigo-50 text-indigo-700 border-indigo-200/80';
+      case 'Entrance Fee':
+        return 'bg-sky-50 text-sky-700 border-sky-200/80';
+      case 'PT Member':
+        return 'bg-purple-50 text-purple-700 border-purple-200/80';
+      case 'Spa Booking':
+        return 'bg-amber-50 text-amber-700 border-amber-200/80';
+      case 'Manual':
+      case 'Direct Registry':
+        return 'bg-teal-50 text-teal-700 border-teal-200/80';
+      default:
+        return 'bg-slate-100 text-slate-700 border-slate-200';
+    }
+  };
+
+  // Tag & Status badge color mapper
+  const getTagBadgeStyle = (tag?: string) => {
+    if (!tag) return 'bg-slate-100 text-slate-600 border-slate-200';
+    const lower = tag.toLowerCase().trim();
+    if (lower === 'active' || lower === 'active member') {
+      return 'bg-emerald-50 text-emerald-700 border-emerald-200';
+    }
+    if (lower === 'expired') {
+      return 'bg-rose-50 text-rose-700 border-rose-200';
+    }
+    if (lower === 'frozen' || lower === 'freeze') {
+      return 'bg-cyan-50 text-cyan-700 border-cyan-200';
+    }
+    if (lower.includes('cancel') || lower === 'inactive' || lower === 'suspended') {
+      return 'bg-slate-100 text-slate-600 border-slate-200';
+    }
+    if (lower.includes('day pass') || lower.includes('external')) {
+      return 'bg-blue-50 text-blue-700 border-blue-200';
+    }
+    if (lower.includes('room') || lower.includes('hotel') || lower.includes('resident')) {
+      return 'bg-amber-50 text-amber-700 border-amber-200';
+    }
+    if (lower.includes('spa')) {
+      return 'bg-orange-50 text-orange-700 border-orange-200';
+    }
+    if (lower.includes('pt') || lower.includes('personal training')) {
+      return 'bg-purple-50 text-purple-700 border-purple-200';
+    }
+    if (lower.includes('vip')) {
+      return 'bg-yellow-50 text-yellow-800 border-yellow-300';
+    }
+    return 'bg-slate-100 text-slate-600 border-slate-200';
+  };
+
   // Export to CSV
   const handleExportCSV = () => {
     if (filteredContacts.length === 0) {
@@ -673,23 +726,21 @@ export const PhoneBook: React.FC = () => {
                         {/* SOURCE & TAGS */}
                         <td className="px-6 py-5">
                           <div className="flex flex-wrap items-center gap-1.5 max-w-xs">
-                            <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider ${
-                              contact.source === 'Member'
-                                ? 'bg-indigo-50 text-indigo-700 border border-indigo-100'
-                                : contact.source === 'Spa Booking'
-                                  ? 'bg-amber-50 text-amber-700 border border-amber-100'
-                                  : contact.source === 'Entrance Fee'
-                                    ? 'bg-blue-50 text-blue-700 border border-blue-100'
-                                    : 'bg-emerald-50 text-emerald-700 border border-emerald-100'
-                            }`}>
+                            <span className={`px-2 py-0.5 rounded-md text-[9px] font-black uppercase tracking-wider border shadow-2xs ${getSourceBadgeStyle(contact.source)}`}>
                               {contact.source}
                             </span>
 
-                            {(contact.tags || []).slice(0, 2).map((tag, tIdx) => (
-                              <span key={tIdx} className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 text-[8.5px] font-bold">
-                                {tag}
-                              </span>
-                            ))}
+                            {(contact.tags || [])
+                              .filter(tag => tag && tag.toLowerCase() !== (contact.source || '').toLowerCase())
+                              .slice(0, 2)
+                              .map((tag, tIdx) => (
+                                <span 
+                                  key={tIdx} 
+                                  className={`px-1.5 py-0.5 rounded-md text-[8.5px] font-bold border shadow-2xs ${getTagBadgeStyle(tag)}`}
+                                >
+                                  {tag}
+                                </span>
+                              ))}
                           </div>
                         </td>
 
@@ -952,11 +1003,11 @@ export const PhoneBook: React.FC = () => {
                     {viewingContact.name}
                   </h3>
                   <div className="flex items-center gap-2 mt-1">
-                    <span className="px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 text-[9px] font-black uppercase">
+                    <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase border shadow-2xs ${getSourceBadgeStyle(viewingContact.source)}`}>
                       {viewingContact.category || viewingContact.source}
                     </span>
                     {viewingContact.status && (
-                      <span className="px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 text-[9px] font-black uppercase">
+                      <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase border shadow-2xs ${getTagBadgeStyle(viewingContact.status)}`}>
                         {viewingContact.status}
                       </span>
                     )}
