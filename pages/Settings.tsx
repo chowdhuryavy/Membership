@@ -583,6 +583,7 @@ const SettingsPage = () => {
     { id: 'bookings', label: 'Booking' },
     { id: 'sales', label: 'Sales & Retail' },
     { id: 'whatsapp', label: 'WhatsApp Automation' },
+    { id: 'phonebook', label: 'Phone Book' },
     { id: 'categories', label: 'Membership Tiers' },
     { id: 'users', label: 'Users & Security' },
     { id: 'reports', label: 'Financial Reports' },
@@ -600,7 +601,8 @@ const SettingsPage = () => {
     signatory_config: {},
     navigation_order: [], 
     conditions: '', 
-    keyboard_shortcuts: {} 
+    keyboard_shortcuts: {},
+    session_timeout_minutes: 15
   });
   const [propertyForm, setPropertyForm] = useState<Omit<Property, 'id'>>({ 
     name: '', 
@@ -692,7 +694,12 @@ const SettingsPage = () => {
         signatory_config: settings.signatory_config || {},
         contract_template: settings.contract_template || '',
         conditions: settings.conditions || '',
-        keyboard_shortcuts: settings.keyboard_shortcuts || {}
+        keyboard_shortcuts: settings.keyboard_shortcuts || {},
+        session_timeout_minutes: typeof settings.session_timeout_minutes === 'number'
+          ? settings.session_timeout_minutes
+          : (typeof (settings as any).staff_portal_settings?.session_timeout_minutes === 'number'
+              ? (settings as any).staff_portal_settings.session_timeout_minutes
+              : 15)
       }); 
     }
   }, [settings]);
@@ -1793,6 +1800,7 @@ const SettingsPage = () => {
                                           { key: 'bookings:view', label: 'Booking Calendar', description: 'Service scheduling, therapist timelines, and rooms.' },
                                           { key: 'sales:view', label: 'Sales & Retail POS', description: 'POS transactions, cash drawer, and product stock.' },
                                           { key: 'whatsapp:view', label: 'WhatsApp Automation & Hub', description: 'WhatsApp guest inbox, automated workflows, and templates in sidebar navigation.' },
+                                          { key: 'phonebook:view', label: 'Phone Book & Guest Directory', description: 'Unified guest contacts and phone directory in sidebar navigation.' },
                                           { key: 'categories:view', label: 'Membership Tiers', description: 'Membership category definitions and rate tiers.' },
                                           { key: 'reports:view', label: 'Financial & Operational Reports', description: 'Revenue audits, accruals, and performance reporting.' },
                                           { key: 'settings:view', label: 'System Settings (Main Access)', description: 'Entire Settings module entry in sidebar navigation.' },
@@ -1801,7 +1809,18 @@ const SettingsPage = () => {
                                       ]
                                   },
                                   {
-                                      id: 'whatsapp_module',
+                                      id: 'phonebook_module',
+                                       label: 'Phone Book & Guest Directory',
+                                       permissions: permissionRegistry.find(g => g.id === 'phonebook')?.permissions || [
+                                           { key: 'phonebook:view', label: 'Access Phone Book', description: 'View unified guest directory and contacts.' },
+                                           { key: 'phonebook:create', label: 'Create Contacts', description: 'Add new contacts to the directory.' },
+                                           { key: 'phonebook:edit', label: 'Edit Contacts', description: 'Modify contact details and notes.' },
+                                           { key: 'phonebook:delete', label: 'Delete Contacts', description: 'Remove contacts from the directory.' },
+                                           { key: 'phonebook:export', label: 'Export Directory', description: 'Export contacts to CSV or Excel.' },
+                                       ]
+                                   },
+                                   {
+                                       id: 'whatsapp_module',
                                       label: 'WhatsApp Automation & Guest Engagement',
                                       permissions: permissionRegistry.find(g => g.id === 'whatsapp')?.permissions || [
                                           { key: 'whatsapp:view', label: 'Access WhatsApp Module', description: 'View WhatsApp inbox, conversation list, and metrics.' },

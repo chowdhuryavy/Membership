@@ -28,7 +28,7 @@ interface SettingsContextType {
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
 
 export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user, refreshUser, isSuperAdmin, isOwner } = useAuth();
+  const { user, refreshUser, isSuperAdmin, isOwner, setSessionTimeoutMinutes } = useAuth();
   const [settings, setSettings] = useState<CompanySettings | null>(() => {
     const cached = localStorage.getItem('company_settings_cache');
     if (cached) {
@@ -85,6 +85,11 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         setProperties([...p]);
         
         if (user) await refreshUser();
+
+        // Synchronize inactivity session timeout with AuthContext
+        if (typeof s?.session_timeout_minutes === 'number') {
+            setSessionTimeoutMinutes(s.session_timeout_minutes);
+        }
 
         // Broadcast to other tabs for immediate real-time sync
         if (broadcast && bcRef.current) {
@@ -232,11 +237,15 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         if (permission === 'whatsapp:view' && (role.permissions.includes('dashboard:view') || role.permissions.includes('sales:view') || role.permissions.includes('settings:view') || role.permissions.includes('members:view'))) {
             return true;
         }
+        // Backward-compatibility: if role has member or front desk access, allow phonebook:view
+        if (permission === 'phonebook:view' && (role.permissions.includes('members:view') || role.permissions.includes('pt_members:view') || role.permissions.includes('entrance_fee:view') || role.permissions.includes('dashboard:view'))) {
+            return true;
+        }
         return false;
     }
 
     // Default fallback if role is not in database
-    if (permission === 'whatsapp:view' || permission === 'dashboard:view') return true;
+    if (permission === 'whatsapp:view' || permission === 'dashboard:view' || permission === 'phonebook:view') return true;
 
     return false;
   }, [roles, user, isSuperAdmin, isOwner, settings]);

@@ -39,7 +39,31 @@ export type Permission =
   | 'settings:manage_global' | 'settings:manage_properties' | 'settings:manage_outlets' | 'settings:manage_roles' | 'settings:manage_currency' | 'settings:manage_shortcuts' | 'settings:manage_documents' | 'settings:manage_smtp' | 'settings:manage_maintenance' | 'settings:manage_navigation' | 'settings:manage_incentives' | 'settings:manage_staff_portal' | 'settings:manage_booking_engine' | 'settings:manage_membership_types' | 'settings:manage_massage_rooms' | 'settings:manage_reports_config' | 'settings:manage_custom_reports' | 'settings:manage_entrance_fee' | 'settings:manage_expiration_reminders'
   
   // WhatsApp Automation
-  | 'whatsapp:view' | 'whatsapp:manage' | 'whatsapp:send' | 'whatsapp:templates' | 'whatsapp:rules' | 'whatsapp:settings'; 
+  | 'whatsapp:view' | 'whatsapp:manage' | 'whatsapp:send' | 'whatsapp:templates' | 'whatsapp:rules' | 'whatsapp:settings'
+  
+  // Phone Book & Guest Directory
+  | 'phonebook:view' | 'phonebook:create' | 'phonebook:edit' | 'phonebook:delete' | 'phonebook:export'; 
+
+export interface PhoneBookContact {
+  id: string;
+  property_id: string;
+  outlet_id: string;
+  name: string;
+  phone: string;
+  email?: string;
+  source: 'Member' | 'Spa Booking' | 'Entrance Fee' | 'Manual' | string;
+  source_id?: string;
+  category?: string;
+  nationality?: string;
+  dob?: string;
+  notes?: string;
+  membership_number?: string;
+  status?: string;
+  qid_passport?: string;
+  tags?: string[];
+  created_at?: string;
+  updated_at?: string;
+} 
 
 export interface PermissionGroup {
   id: string;

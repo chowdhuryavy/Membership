@@ -1,4 +1,4 @@
-import { UserProfile, Role, Currency, CompanySettings, Member, MembershipCategory, Freeze, MemberStatus, Outlet, Property, SystemLog, LogModule, LogSeverity, Permission, Guest, Therapist, MassageType, MassageBooking, Sale, SaleCategory, InventoryItem, IncentiveRule, Staff, UserPermissionOverride, PermissionGroup, StaffLeave, InventoryLog, MassageRoom, MembershipType, ReportRecipient, CustomReportConfig, PTMember, PTSession, EntranceFeeConsent, ExpirationReminderConfig, ExpirationReminderOutletConfig, ExpirationReminderLog } from '../types';
+import { UserProfile, Role, Currency, CompanySettings, Member, MembershipCategory, Freeze, MemberStatus, Outlet, Property, SystemLog, LogModule, LogSeverity, Permission, Guest, Therapist, MassageType, MassageBooking, Sale, SaleCategory, InventoryItem, IncentiveRule, Staff, UserPermissionOverride, PermissionGroup, StaffLeave, InventoryLog, MassageRoom, MembershipType, ReportRecipient, CustomReportConfig, PTMember, PTSession, EntranceFeeConsent, ExpirationReminderConfig, ExpirationReminderOutletConfig, ExpirationReminderLog, PhoneBookContact } from '../types';
 import type { Notification } from '../types';
 import { supabase, supabaseUrl, supabaseAnonKey } from './supabase';
 export { supabase, supabaseUrl, supabaseAnonKey };
@@ -352,6 +352,17 @@ class DatabaseService {
           { key: 'whatsapp:templates', label: 'Manage Templates', description: 'Create and edit WhatsApp approved message templates.' },
           { key: 'whatsapp:rules', label: 'Automation Rules', description: 'Build and toggle automated triggers and responders.' },
           { key: 'whatsapp:settings', label: 'WhatsApp API Credentials', description: 'Manage Cloud API credentials, webhook tokens, and keys.' },
+        ]
+      },
+      {
+        id: 'phonebook',
+        label: 'Phone Book & Guest Directory',
+        permissions: [
+          { key: 'phonebook:view', label: 'Access Phone Book', description: 'View unified guest directory and contacts.' },
+          { key: 'phonebook:create', label: 'Create Contacts', description: 'Add new contacts to the directory.' },
+          { key: 'phonebook:edit', label: 'Edit Contacts', description: 'Modify contact details and notes.' },
+          { key: 'phonebook:delete', label: 'Delete Contacts', description: 'Remove contacts from the directory.' },
+          { key: 'phonebook:export', label: 'Export Directory', description: 'Export contacts to CSV or Excel.' },
         ]
       }
     ];
@@ -2419,7 +2430,15 @@ class DatabaseService {
         const { data, error } = await supabase.from('company_settings').select('*').eq('id', 'global').maybeSingle();
         if (error) throw error;
         if (data) {
-          return { session_timeout_minutes: 15, ...data } as CompanySettings;
+          const timeout = typeof data.session_timeout_minutes === 'number'
+            ? data.session_timeout_minutes
+            : (typeof data.staff_portal_settings?.session_timeout_minutes === 'number'
+                ? data.staff_portal_settings.session_timeout_minutes
+                : 15);
+          return {
+            ...data,
+            session_timeout_minutes: timeout
+          } as CompanySettings;
         }
         return {
           name: '',
@@ -2448,22 +2467,53 @@ class DatabaseService {
       session_timeout_minutes: 15
     };
     
-    const local = localStorage.getItem('company_settings_cache');
+    const local = typeof localStorage !== 'undefined' ? localStorage.getItem('company_settings_cache') : null;
     const parsed = local ? JSON.parse(local) : defaultSettings;
-    return { session_timeout_minutes: 15, ...parsed };
+    const timeout = typeof parsed?.session_timeout_minutes === 'number'
+      ? parsed.session_timeout_minutes
+      : (typeof parsed?.staff_portal_settings?.session_timeout_minutes === 'number'
+          ? parsed.staff_portal_settings.session_timeout_minutes
+          : 15);
+    return { ...parsed, session_timeout_minutes: timeout };
   }
 
   async updateSettings(settings: CompanySettings) {
+    const timeout = typeof settings.session_timeout_minutes === 'number'
+      ? settings.session_timeout_minutes
+      : 15;
+
     try {
-      const local = localStorage.getItem('company_settings_cache');
-      const existing = local ? JSON.parse(local) : {};
-      localStorage.setItem('company_settings_cache', JSON.stringify({ ...existing, ...settings }));
+      if (typeof localStorage !== 'undefined') {
+        const local = localStorage.getItem('company_settings_cache');
+        const existing = local ? JSON.parse(local) : {};
+        localStorage.setItem('company_settings_cache', JSON.stringify({
+          ...existing,
+          ...settings,
+          session_timeout_minutes: timeout
+        }));
+      }
     } catch (e) {
-      localStorage.setItem('company_settings_cache', JSON.stringify(settings));
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem('company_settings_cache', JSON.stringify({
+          ...settings,
+          session_timeout_minutes: timeout
+        }));
+      }
     }
 
     if (this.isSupabase()) {
-      let payload: any = { ...settings, id: 'global' };
+      // Ensure staff_portal_settings JSONB preserves session_timeout_minutes even if root column does not exist
+      const staffPortalSettings = {
+        ...(settings.staff_portal_settings || {}),
+        session_timeout_minutes: timeout
+      };
+
+      let payload: any = { 
+        ...settings, 
+        session_timeout_minutes: timeout,
+        staff_portal_settings: staffPortalSettings,
+        id: 'global' 
+      };
       // Strip client-only or dynamic metadata fields not present in Supabase table
       delete payload.expiration_reminder_config;
 
@@ -2498,7 +2548,7 @@ class DatabaseService {
       if (lastError) {
         console.warn('Notice updating company_settings in Supabase (falling back to local cache):', lastError);
       }
-      await this.logAction('UPDATE_SETTINGS', 'Global system configuration mutated.');
+      await this.logAction('UPDATE_SETTINGS', `Global system configuration mutated. Inactivity session timeout: ${timeout}m`);
     }
   }
 
@@ -4103,6 +4153,300 @@ class DatabaseService {
       await this.safeCall(async () => {
         await supabase.from('guests').delete().eq('id', id);
         await this.logAction('DELETE_GUEST', `Guest record purged: ${id}`);
+      }, null);
+    }
+  }
+
+  // --- PHONE BOOK & GUEST DIRECTORY SERVICE ---
+
+  async getPhoneBookContacts(propertyId: string, outletIds?: string[]): Promise<PhoneBookContact[]> {
+    const contactsMap = new Map<string, PhoneBookContact>();
+
+    const normalizePhone = (p?: string | null) => {
+      if (!p) return '';
+      return p.replace(/[\s\-\(\)\.]/g, '').toLowerCase();
+    };
+
+    const mergeContact = (c: PhoneBookContact) => {
+      const normPhone = normalizePhone(c.phone);
+      const normEmail = (c.email || '').trim().toLowerCase();
+      const key = normPhone || (normEmail ? `email_${normEmail}` : `id_${c.id}`);
+
+      if (contactsMap.has(key)) {
+        const existing = contactsMap.get(key)!;
+        const combinedTags = Array.from(new Set([...(existing.tags || []), ...(c.tags || []), c.source].filter(Boolean)));
+        const bestName = (existing.name && existing.name.length > 2) ? existing.name : c.name;
+        const bestEmail = existing.email || c.email || '';
+        const nationality = existing.nationality || c.nationality;
+        const dob = existing.dob || c.dob;
+        const qid_passport = existing.qid_passport || c.qid_passport;
+        const membership_number = existing.membership_number || c.membership_number;
+        const status = existing.status || c.status;
+        const notes = [existing.notes, c.notes].filter(Boolean).join(' | ');
+
+        contactsMap.set(key, {
+          ...existing,
+          name: bestName,
+          email: bestEmail,
+          nationality,
+          dob,
+          qid_passport,
+          membership_number,
+          status,
+          notes: notes || undefined,
+          tags: combinedTags
+        });
+      } else {
+        contactsMap.set(key, {
+          ...c,
+          tags: Array.from(new Set([...(c.tags || []), c.source].filter(Boolean)))
+        });
+      }
+    };
+
+    if (this.isSupabase()) {
+      await this.safeCall(async () => {
+        // 1. Fetch Members
+        let membersQuery = supabase.from('members').select('id, guest_name, phone, email, nationality, dob, status, membership_number, outlet_id, created_at');
+        if (outletIds && outletIds.length > 0) {
+          membersQuery = membersQuery.in('outlet_id', outletIds);
+        }
+        const { data: members } = await membersQuery;
+        (members || []).forEach((m: any) => {
+          if (!m.guest_name && !m.phone) return;
+          mergeContact({
+            id: `member_${m.id}`,
+            property_id: propertyId,
+            outlet_id: m.outlet_id,
+            name: m.guest_name || 'Member Guest',
+            phone: m.phone || '',
+            email: m.email || '',
+            source: 'Member',
+            source_id: m.id,
+            category: 'Member',
+            nationality: m.nationality,
+            dob: m.dob,
+            status: m.status,
+            membership_number: m.membership_number,
+            created_at: m.created_at,
+            tags: [m.status === 'Active' ? 'Active Member' : (m.status || 'Member')]
+          });
+        });
+
+        // 2. Fetch Entrance Fee Consents (Day Pass guests)
+        let consentsQuery = supabase.from('entrance_fee_consents').select('id, guest_name, phone, email, qid_passport, outlet_id, created_at, item_name, room_number');
+        if (outletIds && outletIds.length > 0) {
+          consentsQuery = consentsQuery.in('outlet_id', outletIds);
+        }
+        const { data: consents } = await consentsQuery;
+        (consents || []).forEach((e: any) => {
+          if (!e.guest_name && !e.phone) return;
+          mergeContact({
+            id: `entrance_${e.id}`,
+            property_id: propertyId,
+            outlet_id: e.outlet_id,
+            name: e.guest_name,
+            phone: e.phone || '',
+            email: e.email || '',
+            source: 'Entrance Fee',
+            source_id: e.id,
+            category: 'Day Pass Guest',
+            qid_passport: e.qid_passport,
+            created_at: e.created_at,
+            notes: e.item_name ? `Service: ${e.item_name}` : undefined,
+            tags: ['Day Pass', e.room_number ? `Room ${e.room_number}` : 'External Day Pass']
+          });
+        });
+
+        // 3. Fetch Guests (Spa Guests)
+        const { data: guests } = await supabase.from('guests').select('*').eq('property_id', propertyId);
+        (guests || []).forEach((g: any) => {
+          if (!g.name && !g.phone) return;
+          mergeContact({
+            id: `guest_${g.id}`,
+            property_id: g.property_id || propertyId,
+            outlet_id: outletIds && outletIds.length === 1 ? outletIds[0] : (outletIds?.[0] || ''),
+            name: g.name,
+            phone: g.phone || '',
+            email: g.email || '',
+            source: 'Spa Booking',
+            source_id: g.id,
+            category: 'Spa Guest',
+            created_at: g.created_at,
+            tags: ['Spa Guest']
+          });
+        });
+
+        // 3b. Fetch PT Members (Personal Training guests)
+        try {
+          let ptQuery = supabase.from('pt_members').select('id, guest_name, member_name, phone, email, nationality, outlet_id, created_at, package_name');
+          if (outletIds && outletIds.length > 0) {
+            ptQuery = ptQuery.in('outlet_id', outletIds);
+          }
+          const { data: ptList } = await ptQuery;
+          (ptList || []).forEach((p: any) => {
+            const guestName = p.guest_name || p.member_name;
+            if (!guestName && !p.phone) return;
+            mergeContact({
+              id: `pt_${p.id}`,
+              property_id: propertyId,
+              outlet_id: p.outlet_id,
+              name: guestName || 'PT Client',
+              phone: p.phone || '',
+              email: p.email || '',
+              source: 'PT Member',
+              source_id: p.id,
+              category: 'Personal Training',
+              nationality: p.nationality,
+              created_at: p.created_at,
+              notes: p.package_name ? `Package: ${p.package_name}` : undefined,
+              tags: ['PT Client']
+            });
+          });
+        } catch (e) {}
+
+        // 4. Fetch dedicated phonebook_contacts table (if exists in Supabase)
+        try {
+          let pbQuery = supabase.from('phonebook_contacts').select('*').eq('property_id', propertyId);
+          if (outletIds && outletIds.length > 0) {
+            pbQuery = pbQuery.in('outlet_id', outletIds);
+          }
+          const { data: pbContacts } = await pbQuery;
+          (pbContacts || []).forEach((c: any) => {
+            mergeContact({
+              ...c,
+              tags: c.tags || ['Contact']
+            });
+          });
+        } catch (e) {
+          // Table not yet present; seamless fallback
+        }
+      }, null);
+    }
+
+    // Include local manual contacts and local PT members
+    try {
+      const localPtStr = typeof localStorage !== 'undefined' ? localStorage.getItem('pt_members') : null;
+      const localPt = localPtStr ? JSON.parse(localPtStr) : [];
+      localPt.forEach((p: any) => {
+        const guestName = p.guest_name || p.member_name;
+        if (!guestName && !p.phone) return;
+        if (!outletIds || outletIds.length === 0 || outletIds.includes(p.outlet_id)) {
+          mergeContact({
+            id: `pt_${p.id}`,
+            property_id: propertyId,
+            outlet_id: p.outlet_id,
+            name: guestName || 'PT Client',
+            phone: p.phone || '',
+            email: p.email || '',
+            source: 'PT Member',
+            source_id: p.id,
+            category: 'Personal Training',
+            nationality: p.nationality,
+            created_at: p.created_at,
+            notes: p.package_name ? `Package: ${p.package_name}` : undefined,
+            tags: ['PT Client']
+          });
+        }
+      });
+
+      const localStr = typeof localStorage !== 'undefined' ? localStorage.getItem('phonebook_manual_contacts') : null;
+      const local = localStr ? JSON.parse(localStr) : [];
+      local.forEach((c: PhoneBookContact) => {
+        if (c.property_id === propertyId && (!outletIds || outletIds.length === 0 || outletIds.includes(c.outlet_id))) {
+          mergeContact(c);
+        }
+      });
+    } catch (e) {}
+
+    const allContacts = Array.from(contactsMap.values());
+    return allContacts.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+  }
+
+  async savePhoneBookContact(contact: Partial<PhoneBookContact>): Promise<PhoneBookContact> {
+    const id = contact.id || `pb_${crypto.randomUUID()}`;
+    const newContact: PhoneBookContact = {
+      id,
+      property_id: contact.property_id || '',
+      outlet_id: contact.outlet_id || '',
+      name: contact.name?.trim() || 'Unnamed Guest',
+      phone: contact.phone?.trim() || '',
+      email: contact.email?.trim() || '',
+      source: contact.source || 'Manual',
+      category: contact.category || 'General Contact',
+      nationality: contact.nationality || '',
+      dob: contact.dob || '',
+      notes: contact.notes || '',
+      tags: contact.tags || ['Direct Contact'],
+      created_at: contact.created_at || new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
+
+    // Save to local storage cache
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const local = JSON.parse(localStorage.getItem('phonebook_manual_contacts') || '[]');
+        const filtered = local.filter((c: any) => c.id !== id && c.phone !== newContact.phone);
+        filtered.unshift(newContact);
+        localStorage.setItem('phonebook_manual_contacts', JSON.stringify(filtered));
+      }
+    } catch (e) {}
+
+    // Save to Supabase
+    if (this.isSupabase()) {
+      await this.safeCall(async () => {
+        // Also save to guests table for cross-module accessibility
+        if (newContact.property_id && newContact.phone) {
+          try {
+            await this.saveGuest({
+              name: newContact.name,
+              phone: newContact.phone,
+              email: newContact.email || '',
+              property_id: newContact.property_id
+            });
+          } catch (e) {}
+        }
+
+        // Try upserting to phonebook_contacts table if available
+        try {
+          await supabase.from('phonebook_contacts').upsert([{
+            id: newContact.id.startsWith('pb_') ? newContact.id.replace('pb_', '') : (newContact.id.includes('-') ? newContact.id : crypto.randomUUID()),
+            property_id: newContact.property_id,
+            outlet_id: newContact.outlet_id,
+            name: newContact.name,
+            phone: newContact.phone,
+            email: newContact.email,
+            source: newContact.source,
+            category: newContact.category,
+            nationality: newContact.nationality,
+            notes: newContact.notes,
+            tags: newContact.tags
+          }]);
+        } catch (e) {}
+
+        await this.logAction('CREATE_CONTACT', `Guest contact registered in Phone Book: ${newContact.name} (${newContact.phone})`, newContact.outlet_id);
+      }, null);
+    }
+
+    return newContact;
+  }
+
+  async deletePhoneBookContact(id: string) {
+    try {
+      if (typeof localStorage !== 'undefined') {
+        const local = JSON.parse(localStorage.getItem('phonebook_manual_contacts') || '[]');
+        const filtered = local.filter((c: any) => c.id !== id);
+        localStorage.setItem('phonebook_manual_contacts', JSON.stringify(filtered));
+      }
+    } catch (e) {}
+
+    if (this.isSupabase()) {
+      await this.safeCall(async () => {
+        try {
+          const rawId = id.startsWith('pb_') ? id.replace('pb_', '') : id;
+          await supabase.from('phonebook_contacts').delete().eq('id', rawId);
+        } catch (e) {}
+        await this.logAction('DELETE_CONTACT', `Contact removed from Phone Book: ${id}`);
       }, null);
     }
   }

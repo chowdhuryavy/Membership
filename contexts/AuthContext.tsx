@@ -84,8 +84,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (cached) {
       try {
         const parsed = JSON.parse(cached);
-        if (typeof parsed.session_timeout_minutes === 'number' && parsed.session_timeout_minutes > 0) {
+        if (typeof parsed.session_timeout_minutes === 'number' && parsed.session_timeout_minutes >= 0) {
           return parsed.session_timeout_minutes;
+        }
+        if (typeof parsed.staff_portal_settings?.session_timeout_minutes === 'number' && parsed.staff_portal_settings.session_timeout_minutes >= 0) {
+          return parsed.staff_portal_settings.session_timeout_minutes;
         }
       } catch (e) {}
     }

@@ -38,6 +38,7 @@ import Sales from './pages/Sales';
 import WhatsAppAutomation from './pages/WhatsAppAutomation';
 import { WhatsAppIcon } from './components/WhatsAppIcon';
 import { PublicMemberPass } from './pages/PublicMemberPass'; 
+import { PhoneBook } from './pages/PhoneBook';
 import { 
   LayoutDashboard, 
   Users, 
@@ -71,7 +72,8 @@ import {
   Contact2,
   Dumbbell,
   Ticket,
-  MessageSquare
+  MessageSquare,
+  BookUser
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Permission, Property } from './types';
@@ -404,6 +406,7 @@ const Sidebar = ({ onLogout, isCollapsed, onToggle }: { onLogout: () => void, is
             { id: 'bookings', to: '/bookings', icon: CalendarClock, label: 'Booking', permission: 'bookings:view' as Permission },
             { id: 'sales', to: '/sales', icon: ShoppingBag, label: 'Sales & Retail', permission: 'sales:view' as Permission },
             { id: 'whatsapp', to: '/whatsapp', icon: WhatsAppIcon, label: 'WhatsApp Hub', permission: 'whatsapp:view' as Permission },
+            { id: 'phonebook', to: '/phonebook', icon: BookUser, label: 'Phone Book', permission: 'phonebook:view' as Permission },
             { id: 'categories', to: '/categories', icon: Tag, label: 'Membership Tiers', permission: 'categories:view' as Permission },
             { id: 'users', to: '/users', icon: Shield, label: 'Users & Roles', permission: 'users:view' as Permission },
             { id: 'reports', to: '/reports', icon: BarChart3, label: 'Financial Reports', permission: 'reports:view' as Permission },
@@ -443,6 +446,12 @@ const Sidebar = ({ onLogout, isCollapsed, onToggle }: { onLogout: () => void, is
             const bookingIndex = order.indexOf('bookings');
             const insertPos = salesIndex !== -1 ? salesIndex + 1 : (bookingIndex !== -1 ? bookingIndex + 1 : order.length);
             order.splice(insertPos, 0, 'whatsapp');
+        }
+        if (order.length > 0 && !order.includes('phonebook')) {
+            const waIndex = order.indexOf('whatsapp');
+            const salesIndex = order.indexOf('sales');
+            const insertPos = waIndex !== -1 ? waIndex + 1 : (salesIndex !== -1 ? salesIndex + 1 : order.length);
+            order.splice(insertPos, 0, 'phonebook');
         }
         const sortedItems = order
             .map(id => ALL_NAV_ITEMS.find(item => item.id === id))
@@ -566,6 +575,7 @@ const MobileHeader = ({ onLogout }: { onLogout: () => void }) => {
             { id: 'bookings', to: '/bookings', icon: CalendarClock, label: 'Booking', permission: 'bookings:view' as Permission },
             { id: 'sales', to: '/sales', icon: ShoppingBag, label: 'Sales & Retail', permission: 'sales:view' as Permission },
             { id: 'whatsapp', to: '/whatsapp', icon: WhatsAppIcon, label: 'WhatsApp Hub', permission: 'whatsapp:view' as Permission },
+            { id: 'phonebook', to: '/phonebook', icon: BookUser, label: 'Phone Book', permission: 'phonebook:view' as Permission },
             { id: 'categories', to: '/categories', icon: Tag, label: 'Membership Tiers', permission: 'categories:view' as Permission },
             { id: 'users', to: '/users', icon: Shield, label: 'Users & Roles', permission: 'users:view' as Permission },
             { id: 'reports', to: '/reports', icon: BarChart3, label: 'Financial Reports', permission: 'reports:view' as Permission },
@@ -605,6 +615,12 @@ const MobileHeader = ({ onLogout }: { onLogout: () => void }) => {
             const bookingIndex = order.indexOf('bookings');
             const insertPos = salesIndex !== -1 ? salesIndex + 1 : (bookingIndex !== -1 ? bookingIndex + 1 : order.length);
             order.splice(insertPos, 0, 'whatsapp');
+        }
+        if (order.length > 0 && !order.includes('phonebook')) {
+            const waIndex = order.indexOf('whatsapp');
+            const salesIndex = order.indexOf('sales');
+            const insertPos = waIndex !== -1 ? waIndex + 1 : (salesIndex !== -1 ? salesIndex + 1 : order.length);
+            order.splice(insertPos, 0, 'phonebook');
         }
         const sortedItems = order
             .map(id => ALL_NAV_ITEMS.find(item => item.id === id))
@@ -920,6 +936,7 @@ const App = () => {
               <Route path="sales" element={<Sales />} />
               <Route path="sales/stock-report" element={<RetailStockReport />} />
               <Route path="whatsapp" element={<WhatsAppAutomation />} />
+              <Route path="phonebook" element={<PhoneBook />} />
               <Route path="categories" element={<Categories />} />
               <Route path="users" element={<UsersPage />} />
               <Route path="reports" element={<Reports />} />
