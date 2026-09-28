@@ -15,6 +15,7 @@ import toast from 'react-hot-toast';
 import { format } from 'date-fns';
 import SignatureCanvas from 'react-signature-canvas';
 import { PTAgreementModal } from '../components/PTAgreementModal';
+import { EditPTMemberModal } from '../components/EditPTMemberModal';
 
 const SessionSignaturePad: React.FC<{ title: string; onSave: (sig: string) => void; onClear: () => void }> = ({ title, onSave, onClear }) => {
     const sigRef = useRef<any>(null);
@@ -135,6 +136,25 @@ export default function PTMembers() {
     const [showAgreementForPackage, setShowAgreementForPackage] = useState<PTMember | null>(null);
     const [deletingSession, setDeletingSession] = useState<PTSession | null>(null);
     const [deletingMember, setDeletingMember] = useState<PTMember | null>(null);
+    const [editingMember, setEditingMember] = useState<PTMember | null>(null);
+
+    const handleMemberUpdated = async (updated: PTMember) => {
+        toast.success(`PT Member profile for "${updated.guest_name}" updated successfully!`);
+        if (selectedMember && (selectedMember.id === updated.id || selectedMember.guest_name === updated.guest_name)) {
+            setSelectedMember(prev => prev ? { ...prev, ...updated } : updated);
+        }
+        if (selectedPackage && selectedPackage.id === updated.id) {
+            setSelectedPackage(prev => prev ? { ...prev, ...updated } : updated);
+        }
+        if (currentOutlet && currentProperty) {
+            const isProp = viewScope === 'property';
+            const allowedIds = allowedOutletsInProperty.map(o => o.id);
+            const updatedMembers = isProp 
+                ? await db.getPTMembers(currentProperty.id, true, undefined, undefined, allowedIds) 
+                : await db.getPTMembers(currentOutlet.id, false);
+            setPtMembers(updatedMembers);
+        }
+    };
 
     const executeDeleteMember = async () => {
         if (!deletingMember) return;
@@ -1030,10 +1050,40 @@ export default function PTMembers() {
                                         </div>
                                     </div>
 
-                                    {/* Action Footer Button */}
-                                    <div className="p-4 bg-slate-50 border-t border-slate-100 flex items-center justify-between text-indigo-900 font-black text-xs uppercase tracking-widest group-hover:bg-indigo-900 group-hover:text-white transition-colors">
-                                        <span>View Profile & Sessions</span>
-                                        <ChevronRight className="w-4 h-4" />
+                                    {/* Action Footer Button with Quick Edit & Delete */}
+                                    <div className="p-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-2">
+                                        <div className="flex items-center gap-1.5">
+                                            <button 
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setEditingMember(member);
+                                                }}
+                                                className="h-8 px-3 rounded-xl bg-white border border-slate-200 hover:bg-indigo-50 hover:border-indigo-300 text-slate-700 hover:text-indigo-700 font-black text-[10px] uppercase tracking-wider transition-all flex items-center gap-1 shadow-2xs"
+                                                title="Edit PT Profile"
+                                            >
+                                                <Edit3 className="w-3.5 h-3.5 text-indigo-600" />
+                                                <span>Edit</span>
+                                            </button>
+
+                                            <button 
+                                                type="button"
+                                                onClick={(e) => {
+                                                    e.stopPropagation();
+                                                    setDeletingMember(member);
+                                                }}
+                                                className="h-8 px-3 rounded-xl bg-white border border-slate-200 hover:bg-rose-50 hover:border-rose-300 text-slate-700 hover:text-rose-700 font-black text-[10px] uppercase tracking-wider transition-all flex items-center gap-1 shadow-2xs"
+                                                title="Delete PT Profile"
+                                            >
+                                                <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                                                <span>Delete</span>
+                                            </button>
+                                        </div>
+
+                                        <div className="flex items-center text-indigo-900 font-black text-[11px] uppercase tracking-wider group-hover:text-indigo-600 transition-colors">
+                                            <span>Sessions</span>
+                                            <ChevronRight className="w-4 h-4 ml-0.5" />
+                                        </div>
                                     </div>
                                 </Card>
                             );
@@ -1087,14 +1137,36 @@ export default function PTMembers() {
                                         </div>
                                     </div>
 
-                                    {/* Log Session Action Button */}
-                                    <Button 
-                                        onClick={() => setShowLogSession(true)}
-                                        disabled={currentUsed >= currentTotal}
-                                        className="h-12 px-6 rounded-2xl font-black text-xs uppercase tracking-widest bg-emerald-500 hover:bg-emerald-600 text-white shadow-xl shadow-emerald-950/40 border border-emerald-400/30 shrink-0"
-                                    >
-                                        <Plus className="w-4 h-4 mr-2" /> Log Session
-                                    </Button>
+                                    {/* Action Buttons Group */}
+                                    <div className="flex flex-wrap items-center gap-2.5 shrink-0">
+                                        <Button 
+                                            onClick={() => setEditingMember(selectedPackage || selectedMember)}
+                                            variant="secondary"
+                                            className="h-12 px-5 rounded-2xl font-black text-xs uppercase tracking-widest bg-white/10 hover:bg-white/20 text-white border border-white/20 backdrop-blur-md transition-all flex items-center gap-2"
+                                            title="Edit Profile Details"
+                                        >
+                                            <Edit3 className="w-4 h-4 text-indigo-300" />
+                                            <span>Edit Profile</span>
+                                        </Button>
+
+                                        <Button 
+                                            onClick={() => setDeletingMember(selectedPackage || selectedMember)}
+                                            variant="secondary"
+                                            className="h-12 px-5 rounded-2xl font-black text-xs uppercase tracking-widest bg-rose-500/20 hover:bg-rose-600 text-rose-200 hover:text-white border border-rose-400/30 backdrop-blur-md transition-all flex items-center gap-2"
+                                            title="Delete Profile & Sessions"
+                                        >
+                                            <Trash2 className="w-4 h-4 text-rose-400" />
+                                            <span>Delete Profile</span>
+                                        </Button>
+
+                                        <Button 
+                                            onClick={() => setShowLogSession(true)}
+                                            disabled={currentUsed >= currentTotal}
+                                            className="h-12 px-6 rounded-2xl font-black text-xs uppercase tracking-widest bg-emerald-500 hover:bg-emerald-600 text-white shadow-xl shadow-emerald-950/40 border border-emerald-400/30 flex items-center gap-2"
+                                        >
+                                            <Plus className="w-4 h-4" /> Log Session
+                                        </Button>
+                                    </div>
                                 </div>
 
                                 {/* 4 KPI METRICS CARDS GRID */}
@@ -1299,6 +1371,24 @@ export default function PTMembers() {
                                                                                     </div>
 
                                                                                     <div className="flex flex-wrap items-center gap-2">
+                                                                                        <Button
+                                                                                            onClick={() => setEditingMember(pkg)}
+                                                                                            variant="secondary"
+                                                                                            className="h-9 px-3 rounded-xl text-xs font-black uppercase tracking-wider bg-white/10 text-indigo-200 hover:bg-white/20 border border-white/20 flex items-center gap-1"
+                                                                                            title="Edit Package Details"
+                                                                                        >
+                                                                                            <Edit3 className="w-3.5 h-3.5" /> Edit
+                                                                                        </Button>
+
+                                                                                        <Button
+                                                                                            onClick={() => setDeletingMember(pkg)}
+                                                                                            variant="secondary"
+                                                                                            className="h-9 px-3 rounded-xl text-xs font-black uppercase tracking-wider bg-rose-500/20 text-rose-300 hover:bg-rose-600 hover:text-white border border-rose-400/30 flex items-center gap-1"
+                                                                                            title="Delete Package"
+                                                                                        >
+                                                                                            <Trash2 className="w-3.5 h-3.5" /> Delete
+                                                                                        </Button>
+
                                                                                         <Button
                                                                                             onClick={() => setShowAgreementForPackage(pkg)}
                                                                                             variant="secondary"
@@ -1857,7 +1947,7 @@ export default function PTMembers() {
 
             {/* DELETE SESSION CONFIRMATION MODAL */}
             {deletingSession && selectedMember && (
-                <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+                <div className="fixed inset-0 z-[9999] bg-slate-950/70 backdrop-blur-md flex items-center justify-center p-4">
                     <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border border-slate-200 animate-in zoom-in-95 space-y-4">
                         <div className="flex items-center gap-3 text-rose-600 font-black text-base uppercase tracking-wide">
                             <AlertTriangle className="w-6 h-6" />
@@ -1880,11 +1970,11 @@ export default function PTMembers() {
 
             {/* DELETE PT MEMBER CONFIRMATION MODAL */}
             {deletingMember && (
-                <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
+                <div className="fixed inset-0 z-[9999] bg-slate-950/70 backdrop-blur-md flex items-center justify-center p-4">
                     <div className="bg-white rounded-3xl p-6 max-w-md w-full shadow-2xl border border-slate-200 animate-in zoom-in-95 space-y-4">
                         <div className="flex items-center gap-3 text-rose-600 font-black text-base uppercase tracking-wide">
                             <AlertTriangle className="w-6 h-6" />
-                            Delete PT Member?
+                            Delete PT Member Profile?
                         </div>
                         <p className="text-xs font-semibold text-slate-600 leading-relaxed">
                             Are you sure you want to delete <strong className="text-slate-900">{deletingMember.guest_name}</strong>? This will permanently remove this PT profile and all logged training sessions.
@@ -1899,6 +1989,17 @@ export default function PTMembers() {
                         </div>
                     </div>
                 </div>
+            )}
+
+            {/* EDIT PT MEMBER MODAL */}
+            {editingMember && (
+                <EditPTMemberModal 
+                    isOpen={!!editingMember}
+                    member={editingMember}
+                    onClose={() => setEditingMember(null)}
+                    onSuccess={handleMemberUpdated}
+                    staff={staff}
+                />
             )}
 
             {/* PRINTABLE FULL PACKAGE ATTENDANCE SHEET MODAL */}

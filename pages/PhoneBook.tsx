@@ -992,8 +992,8 @@ export const PhoneBook: React.FC = () => {
 
       {/* 6. VIEW DOSSIER MODAL */}
       {viewingContact && createPortal(
-        <div className="fixed inset-0 z-[200] flex items-center justify-center p-3 sm:p-6 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200 overflow-y-auto">
-          <div className="bg-white rounded-3xl sm:rounded-[2.5rem] max-w-lg w-full p-5 sm:p-8 shadow-2xl border border-slate-100 max-h-[calc(100dvh-2rem)] sm:max-h-[90vh] overflow-y-auto custom-scrollbar space-y-5 sm:space-y-6 my-auto">
+        <div className="fixed inset-0 z-[9999] flex flex-col sm:flex-row items-center justify-start sm:justify-center p-3 sm:p-6 bg-slate-950/75 backdrop-blur-md animate-in fade-in duration-200 overflow-y-auto">
+          <div className="bg-white rounded-3xl sm:rounded-[2.5rem] max-w-lg w-full p-5 sm:p-8 shadow-2xl border border-slate-100 max-h-[92dvh] sm:max-h-[90vh] overflow-y-auto custom-scrollbar space-y-5 sm:space-y-6 my-auto shrink-0">
             
             <div className="flex items-center justify-between pb-4 sm:pb-6 border-b border-slate-100">
               <div className="flex items-center gap-3 sm:gap-4 min-w-0">
