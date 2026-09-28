@@ -14,6 +14,7 @@ import {
 } from '../types';
 import { useSettings } from '../contexts/SettingsContext';
 import { GuestLoadingScreen } from '../components/GuestLoadingScreen';
+import { DigitalMembershipCardModal } from '../components/DigitalMembershipCardModal';
 import {
   PasswordComplexityChecker,
   validatePasswordComplexity
@@ -84,6 +85,7 @@ export default function GuestPortal() {
 
   // Modals
   const [showQrModal, setShowQrModal] = useState(false);
+  const [showDigitalCardModal, setShowDigitalCardModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showBookingRequestModal, setShowBookingRequestModal] = useState(false);
 
@@ -133,6 +135,22 @@ export default function GuestPortal() {
 
   const matchedOutlet = outletsList.find(o => o.id === (member?.outlet_id || account?.outlet_id)) || outletsList[0];
   const matchedProperty = propertiesList.find(p => p.id === matchedOutlet?.property_id) || propertiesList[0];
+
+  const effectiveMember: Member = useMemo(() => {
+    if (member) return member;
+    return ({
+      id: account?.member_id || account?.id || 'guest-1',
+      guest_name: account?.name || 'Valued Guest',
+      membership_number: memberNumber,
+      status: 'Active',
+      access_type: 'Pool, Gym & Spa',
+      package_type: 'VIP Member',
+      outlet_id: account?.outlet_id || currentOutlet?.id || matchedOutlet?.id,
+      email: account?.email,
+      phone: account?.phone,
+      current_end_date: new Date(Date.now() + 365 * 86400000).toISOString().split('T')[0]
+    } as unknown) as Member;
+  }, [member, account, memberNumber, currentOutlet, matchedOutlet]);
 
   // Validation for changing password
   const passValidation = validatePasswordComplexity(newPassword, confirmPassword);
@@ -473,7 +491,7 @@ export default function GuestPortal() {
                   <div className="my-4 flex flex-col items-center justify-center">
                     <div className="p-3 bg-white rounded-2xl border-2 border-indigo-500/30 shadow-2xl flex items-center justify-center cursor-pointer transition-transform hover:scale-[1.02] active:scale-95" onClick={() => setShowQrModal(true)}>
                       <QRCodeSVG
-                        value={memberNumber}
+                        value={mobilePassUrl}
                         size={190}
                         level="H"
                         includeMargin={true}
@@ -547,12 +565,18 @@ export default function GuestPortal() {
             </div>
 
             {/* QUICK ACTIONS BAR */}
-            <div className="flex items-center justify-center gap-2 pt-1">
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-2 pt-1">
+              <button
+                onClick={() => setShowDigitalCardModal(true)}
+                className="w-full sm:w-auto px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-md active:scale-95"
+              >
+                <Smartphone className="w-3.5 h-3.5" /> Launch Digital Card Modal
+              </button>
               <button
                 onClick={handleCopyLink}
-                className="w-full max-w-[280px] py-2.5 bg-slate-900 hover:bg-slate-800 text-slate-200 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all border border-white/10 shadow-md active:scale-95"
+                className="w-full sm:w-auto px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-slate-200 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all border border-white/10 shadow-md active:scale-95"
               >
-                <Copy className="w-3.5 h-3.5 text-amber-400" /> Copy Mobile Pass Link
+                <Copy className="w-3.5 h-3.5 text-amber-400" /> Copy Pass Link
               </button>
             </div>
 
@@ -986,7 +1010,7 @@ export default function GuestPortal() {
 
             <div className="p-3 bg-white rounded-2xl border border-slate-200 flex items-center justify-center">
               <QRCodeSVG
-                value={memberNumber}
+                value={mobilePassUrl}
                 size={220}
                 level="H"
                 includeMargin={true}
@@ -1159,6 +1183,15 @@ export default function GuestPortal() {
             </form>
           </div>
         </div>
+      )}
+
+      {/* OFFICIAL DIGITAL MEMBERSHIP CARD MODAL (SAME AS ADMIN PORTAL) */}
+      {showDigitalCardModal && (
+        <DigitalMembershipCardModal
+          member={effectiveMember}
+          outletName={matchedOutlet?.name}
+          onClose={() => setShowDigitalCardModal(false)}
+        />
       )}
     </div>
   );
