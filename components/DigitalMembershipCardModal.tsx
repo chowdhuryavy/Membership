@@ -531,7 +531,7 @@ export const DigitalMembershipCardModal: React.FC<DigitalMembershipCardModalProp
                     <div className="my-3 flex flex-col items-center justify-center">
                       <div className="p-3 bg-white rounded-2xl border-2 border-indigo-500/30 shadow-2xl flex items-center justify-center">
                         <QRCodeSVG
-                          value={mobilePassUrl}
+                          value={member.membership_number || member.id}
                           size={200}
                           level="H"
                           includeMargin={true}
