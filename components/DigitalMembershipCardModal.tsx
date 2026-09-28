@@ -298,6 +298,40 @@ export const DigitalMembershipCardModal: React.FC<DigitalMembershipCardModalProp
           {activeTab === 'scan_qr' ? (
             /* PHONE CAMERA SCAN ACCESS VIEW */
             <div className="space-y-5 animate-in fade-in duration-200">
+              {/* Security Countdown Banner */}
+              <div className={`p-4 rounded-2xl border flex items-center justify-between shadow-sm ${
+                remainingSeconds > 60 
+                  ? 'bg-indigo-950/40 border-indigo-500/30 text-indigo-200' 
+                  : remainingSeconds > 0
+                  ? 'bg-amber-950/40 border-amber-500/30 text-amber-200'
+                  : 'bg-rose-950/40 border-rose-500/30 text-rose-200'
+              }`}>
+                <div className="flex items-center gap-3">
+                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
+                    remainingSeconds > 0 ? 'bg-amber-500/20 text-amber-300' : 'bg-rose-500/20 text-rose-300'
+                  }`}>
+                    <Clock className="w-4 h-4 animate-pulse" />
+                  </div>
+                  <div>
+                    <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block">
+                      SECURITY TIMED QR CODE
+                    </span>
+                    <span className="text-xs font-bold text-white">
+                      {remainingSeconds > 0 ? 'Camera link valid for 5 minutes' : 'Link Expired! Please reset timer.'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="text-right">
+                  <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block">
+                    REMAINING
+                  </span>
+                  <span className="text-sm font-mono font-black text-amber-300">
+                    {formatTime(remainingSeconds)}
+                  </span>
+                </div>
+              </div>
+
               {/* REAL SCANNABLE QR CODE CONTAINER */}
               <div className="p-6 bg-slate-900 rounded-3xl border border-slate-800 shadow-2xl flex flex-col items-center justify-center relative overflow-hidden text-white text-center">
                 <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-amber-400 via-indigo-500 to-emerald-400"></div>
@@ -329,22 +363,38 @@ export const DigitalMembershipCardModal: React.FC<DigitalMembershipCardModalProp
                 </div>
 
                 <p className="text-[11px] text-slate-300 font-medium max-w-xs leading-relaxed mb-4">
-                  Scan this QR code at front desk turnstiles or mobile web reader for instant check-in.
+                  Scan this QR code with your iPhone or Android camera to open your digital wallet pass on web!
                 </p>
 
-                <div className="p-4 bg-white rounded-3xl border-4 border-indigo-500/40 shadow-2xl flex items-center justify-center">
-                  <QRCodeSVG
-                    value={mobilePassUrl}
-                    size={220}
-                    level="H"
-                    includeMargin={true}
-                    fgColor="#000000"
-                    bgColor="#FFFFFF"
-                    imageSettings={PERFECTION_QR_IMAGE_SETTINGS}
-                  />
-                </div>
+                {remainingSeconds > 0 ? (
+                  <div className="p-4 bg-white rounded-3xl border-4 border-indigo-500/40 shadow-2xl flex items-center justify-center">
+                    <QRCodeSVG
+                      value={mobilePassUrl}
+                      size={220}
+                      level="H"
+                      includeMargin={true}
+                      fgColor="#000000"
+                      bgColor="#FFFFFF"
+                      imageSettings={PERFECTION_QR_IMAGE_SETTINGS}
+                    />
+                  </div>
+                ) : (
+                  <div className="w-[220px] h-[220px] bg-slate-800 rounded-3xl border border-rose-500/40 flex flex-col items-center justify-center p-4 text-center space-y-3">
+                    <AlertTriangle className="w-10 h-10 text-rose-400" />
+                    <span className="text-xs font-black uppercase tracking-wider text-rose-300">
+                      5-Min Security Token Expired
+                    </span>
+                  </div>
+                )}
 
                 <div className="flex flex-wrap items-center justify-center gap-2 mt-5 pt-4 border-t border-slate-800 w-full">
+                  <button
+                    onClick={generateNewToken}
+                    className="px-3.5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 transition-all shadow-md active:scale-95"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" /> Reset 5-Min Timer
+                  </button>
+
                   <button
                     onClick={handleCopyLink}
                     className="px-3.5 py-2.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 transition-all border border-slate-700 active:scale-95"
@@ -354,7 +404,7 @@ export const DigitalMembershipCardModal: React.FC<DigitalMembershipCardModalProp
 
                   <button
                     onClick={handleOpenDirectly}
-                    className="px-3.5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white border border-indigo-500/30 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 transition-all active:scale-95 shadow-md"
+                    className="px-3.5 py-2.5 bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 transition-all active:scale-95"
                   >
                     <ExternalLink className="w-3.5 h-3.5" /> Open Web Pass
                   </button>

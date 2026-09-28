@@ -229,8 +229,14 @@ export default function GuestLogin() {
     }
   };
 
-  if (initialLoading) {
-    return <GuestLoadingScreen propertyName={dynamicPropertyName} logoUrl={dynamicLogoUrl} message="Connecting to Guest Portal..." />;
+  if (initialLoading || loading) {
+    return (
+      <GuestLoadingScreen
+        propertyName={dynamicPropertyName}
+        logoUrl={dynamicLogoUrl}
+        message={loading ? "Authenticating & Loading Your Privileges..." : "Connecting to Guest Portal..."}
+      />
+    );
   }
 
   return (

@@ -389,40 +389,6 @@ export default function GuestPortal() {
         {/* TAB 1: MEMBERSHIP CARD & QR */}
         {activeTab === 'card' && (
           <div className="space-y-4 animate-in fade-in duration-300">
-            {/* Security Countdown Banner */}
-            <div className={`p-4 rounded-2xl border flex items-center justify-between shadow-sm ${
-              remainingSeconds > 60 
-                ? 'bg-indigo-950/40 border-indigo-500/30 text-indigo-200' 
-                : remainingSeconds > 0
-                ? 'bg-amber-950/40 border-amber-500/30 text-amber-200'
-                : 'bg-rose-950/40 border-rose-500/30 text-rose-200'
-            }`}>
-              <div className="flex items-center gap-3">
-                <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
-                  remainingSeconds > 0 ? 'bg-amber-500/20 text-amber-300' : 'bg-rose-500/20 text-rose-300'
-                }`}>
-                  <Clock className="w-4 h-4 animate-pulse" />
-                </div>
-                <div>
-                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block">
-                    SECURITY TIMED QR CODE
-                  </span>
-                  <span className="text-xs font-bold text-white">
-                    {remainingSeconds > 0 ? 'Camera link valid for 5 minutes' : 'Link Expired! Please reset timer.'}
-                  </span>
-                </div>
-              </div>
-
-              <div className="text-right">
-                <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block">
-                  REMAINING
-                </span>
-                <span className="text-sm font-mono font-black text-amber-300">
-                  {formatTime(remainingSeconds)}
-                </span>
-              </div>
-            </div>
-
             {/* Card Toggle Front / Back */}
             <div className="flex justify-center">
               <div className="inline-flex p-1 bg-slate-900/80 rounded-2xl border border-white/10">
@@ -449,7 +415,7 @@ export default function GuestPortal() {
               </div>
             </div>
 
-            {/* CARD CONTAINER (Apple/Google Wallet Style matching Member Profile) */}
+            {/* CARD CONTAINER (Apple/Google Wallet Style) */}
             <div className="relative mx-auto w-full max-w-[360px] min-h-[480px] rounded-[2.2rem] bg-gradient-to-br from-slate-900 via-slate-850 to-slate-950 text-white p-6 shadow-2xl border border-amber-500/30 flex flex-col justify-between overflow-hidden group">
               <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-amber-400/20 via-indigo-500/10 to-transparent pointer-events-none"></div>
 
@@ -519,32 +485,56 @@ export default function GuestPortal() {
                     </div>
                   </div>
 
-                  {/* QR CODE */}
-                  <div className="my-3 flex flex-col items-center justify-center">
-                    {remainingSeconds > 0 ? (
-                      <div className="p-3 bg-white rounded-2xl border-2 border-indigo-500/30 shadow-2xl flex items-center justify-center">
-                        <QRCodeSVG
-                          value={mobilePassUrl}
-                          size={190}
-                          level="H"
-                          includeMargin={true}
-                          fgColor="#000000"
-                          bgColor="#FFFFFF"
-                          imageSettings={PERFECTION_QR_IMAGE_SETTINGS}
-                        />
+                  {/* SECURITY TIMER BANNER */}
+                  <div className={`my-2 p-3 rounded-2xl border flex items-center justify-between shadow-inner transition-all ${
+                    remainingSeconds > 60
+                      ? 'bg-indigo-950/60 border-indigo-500/30 text-indigo-200'
+                      : remainingSeconds > 0
+                      ? 'bg-amber-950/60 border-amber-500/30 text-amber-200'
+                      : 'bg-rose-950/60 border-rose-500/30 text-rose-200'
+                  }`}>
+                    <div className="flex items-center gap-2.5">
+                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
+                        remainingSeconds > 0 ? 'bg-amber-500/20 text-amber-300' : 'bg-rose-500/20 text-rose-300'
+                      }`}>
+                        <Clock className="w-4 h-4 animate-pulse" />
                       </div>
-                    ) : (
-                      <div className="w-[190px] h-[190px] bg-slate-800 rounded-3xl border border-rose-500/40 flex flex-col items-center justify-center p-4 text-center space-y-2">
-                        <AlertTriangle className="w-8 h-8 text-rose-400" />
-                        <span className="text-xs font-black uppercase tracking-wider text-rose-300">
-                          Token Expired
+                      <div>
+                        <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 block">
+                          SECURITY PASS TOKEN
+                        </span>
+                        <span className="text-[10px] font-bold text-white block leading-none mt-0.5">
+                          {remainingSeconds > 0 ? 'Pass Token Active' : 'Token Expired — Reset Below'}
                         </span>
                       </div>
-                    )}
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 block">
+                        EXPIRES IN
+                      </span>
+                      <span className="text-xs font-mono font-black text-amber-300">
+                        {formatTime(remainingSeconds)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* QR CODE */}
+                  <div className="my-2 flex flex-col items-center justify-center">
+                    <div className="p-3 bg-white rounded-2xl border-2 border-indigo-500/30 shadow-2xl flex items-center justify-center cursor-pointer transition-transform hover:scale-[1.02] active:scale-95" onClick={() => setShowQrModal(true)}>
+                      <QRCodeSVG
+                        value={memberNumber}
+                        size={180}
+                        level="H"
+                        includeMargin={true}
+                        fgColor="#000000"
+                        bgColor="#FFFFFF"
+                        imageSettings={PERFECTION_QR_IMAGE_SETTINGS}
+                      />
+                    </div>
                     <div className="flex items-center gap-1.5 mt-2">
                       <Sparkles className="w-3 h-3 text-amber-400 animate-pulse" />
                       <span className="text-[9px] font-mono text-slate-300 uppercase tracking-widest">
-                        Scan for Entrance Turnstile
+                        Tap QR to Enlarge for Turnstile
                       </span>
                     </div>
                   </div>
@@ -1049,6 +1039,30 @@ export default function GuestPortal() {
               </button>
             </div>
 
+            <div className={`p-3 rounded-2xl border flex items-center justify-between text-xs ${
+              remainingSeconds > 60
+                ? 'bg-slate-900 border-indigo-500/30 text-indigo-300'
+                : remainingSeconds > 0
+                ? 'bg-slate-900 border-amber-500/30 text-amber-300'
+                : 'bg-rose-950 border-rose-500/30 text-rose-300'
+            }`}>
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4 text-amber-400 animate-pulse shrink-0" />
+                <div className="text-left">
+                  <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 block">
+                    PASS SECURITY TIMED TOKEN
+                  </span>
+                  <span className="text-[10px] font-bold text-white block">
+                    {remainingSeconds > 0 ? 'Turnstile Scanner Ready' : 'Token Expired'}
+                  </span>
+                </div>
+              </div>
+              <div className="text-right">
+                <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 block">EXPIRES</span>
+                <span className="text-xs font-mono font-black text-amber-300">{formatTime(remainingSeconds)}</span>
+              </div>
+            </div>
+
             <div className="p-3 bg-white rounded-2xl border border-slate-200 flex items-center justify-center">
               <QRCodeSVG
                 value={memberNumber}
@@ -1061,11 +1075,19 @@ export default function GuestPortal() {
               />
             </div>
 
-            <div className="space-y-0.5">
-              <p className="font-mono font-black text-xl text-slate-900 tracking-wider">
-                {memberNumber}
-              </p>
-              <p className="text-xs font-bold text-slate-500 uppercase">{account?.name}</p>
+            <div className="flex items-center justify-between pt-1">
+              <div className="text-left space-y-0.5">
+                <p className="font-mono font-black text-lg text-slate-900 tracking-wider leading-none">
+                  {memberNumber}
+                </p>
+                <p className="text-[10px] font-bold text-slate-500 uppercase">{account?.name}</p>
+              </div>
+              <button
+                onClick={generateNewToken}
+                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1 transition-all"
+              >
+                <RefreshCw className="w-3 h-3" /> Reset
+              </button>
             </div>
           </div>
         </div>
