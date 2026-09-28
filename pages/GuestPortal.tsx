@@ -18,6 +18,9 @@ import {
   PasswordComplexityChecker,
   validatePasswordComplexity
 } from '../components/PasswordComplexityChecker';
+import { QRCodeSVG } from 'qrcode.react';
+import { PERFECTION_QR_IMAGE_SETTINGS } from '../lib/perfectionLogo';
+import toast from 'react-hot-toast';
 import {
   QrCode,
   Dumbbell,
@@ -87,8 +90,11 @@ export default function GuestPortal() {
   const [bookingSubmitting, setBookingSubmitting] = useState(false);
 
   // Branding
-  const propertyName = currentProperty?.name || settings?.name || 'Luxury Health Club & Spa';
-  const logoUrl = currentProperty?.logo_url || settings?.logo_url || null;
+  const [dynamicPropertyName, setDynamicPropertyName] = useState(currentProperty?.name || settings?.name || 'Luxury Health Club & Spa');
+  const [dynamicLogoUrl, setDynamicLogoUrl] = useState(currentProperty?.logo_url || settings?.logo_url || null);
+
+  const propertyName = dynamicPropertyName;
+  const logoUrl = dynamicLogoUrl;
 
   // Validation for changing password
   const passValidation = validatePasswordComplexity(newPassword, confirmPassword);
@@ -103,9 +109,10 @@ export default function GuestPortal() {
     setAccount(session);
 
     try {
-      const [ps, allMembers, allPtMembers, allPtSessions, allBookings, allConsents, allSales] =
+      const [ps, props, allMembers, allPtMembers, allPtSessions, allBookings, allConsents, allSales] =
         await Promise.all([
           guestAuth.getPortalSettings(),
+          db.getProperties().catch(() => []),
           db.getMembers(session.outlet_id || 'all').catch(() => []),
           db.getPTMembers(session.outlet_id || 'all').catch(() => []),
           db.getPTSessions(session.outlet_id || 'all').catch(() => []),
@@ -115,6 +122,17 @@ export default function GuestPortal() {
         ]);
 
       setPortalSettings(ps);
+
+      if (session.property_id) {
+        const matchedProp = props.find((p: any) => p.id === session.property_id);
+        if (matchedProp) {
+          if (matchedProp.name) setDynamicPropertyName(matchedProp.name);
+          if (matchedProp.logo_url) setDynamicLogoUrl(matchedProp.logo_url);
+        }
+      } else if (props[0]) {
+        if (props[0].name) setDynamicPropertyName(props[0].name);
+        if (props[0].logo_url) setDynamicLogoUrl(props[0].logo_url);
+      }
 
       const emailLower = session.email.toLowerCase();
       const phoneClean = (session.phone || '').replace(/\D/g, '');
@@ -144,6 +162,7 @@ export default function GuestPortal() {
 
       // Match Spa bookings
       const matchedBookings = allBookings.filter((b: any) => {
+        if (b.guest_email && b.guest_email.toLowerCase() === emailLower) return true;
         if (b.guest_name && b.guest_name.toLowerCase() === session.name.toLowerCase()) return true;
         return false;
       });
@@ -211,11 +230,34 @@ export default function GuestPortal() {
 
   const handleBookingRequestSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!account) return;
     setBookingSubmitting(true);
     try {
-      toast.success('Appointment request received! Front desk will confirm your slot shortly.');
+      await db.addMassageBooking({
+        outlet_id: account.outlet_id || member?.outlet_id || 'default',
+        guest_name: account.name || member?.guest_name || 'Guest',
+        guest_email: account.email || member?.email || '',
+        phone: account.phone || member?.phone || '',
+        type_name: requestService,
+        booking_date: requestDate,
+        time: requestTime,
+        status: 'Pending',
+        notes: requestNotes
+      });
+      toast.success('Spa appointment request submitted successfully!');
       setShowBookingRequestModal(false);
       setRequestNotes('');
+
+      // Reload bookings
+      const allBookings = await db.getMassageBookings(account.outlet_id || '').catch(() => []);
+      const matchedBookings = allBookings.filter((b: any) => {
+        if (b.guest_email && b.guest_email.toLowerCase() === account.email.toLowerCase()) return true;
+        if (b.guest_name && b.guest_name.toLowerCase() === account.name.toLowerCase()) return true;
+        return false;
+      });
+      setBookings(matchedBookings);
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to submit spa appointment request.');
     } finally {
       setBookingSubmitting(false);
     }
@@ -350,12 +392,14 @@ export default function GuestPortal() {
                   onClick={() => setShowQrModal(true)}
                   className="p-4 bg-white rounded-3xl shadow-2xl cursor-pointer hover:scale-105 transition-transform duration-300 relative group"
                 >
-                  <img
-                    src={`https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=${encodeURIComponent(
-                      memberNumber
-                    )}&margin=4`}
-                    alt="Member QR"
-                    className="w-40 h-40 object-contain"
+                  <QRCodeSVG
+                    value={memberNumber}
+                    size={160}
+                    level="H"
+                    includeMargin={true}
+                    fgColor="#000000"
+                    bgColor="#FFFFFF"
+                    imageSettings={PERFECTION_QR_IMAGE_SETTINGS}
                   />
                   <div className="absolute inset-0 bg-slate-950/20 rounded-3xl opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
                     <span className="bg-slate-900/90 text-white text-[10px] font-black px-3 py-1.5 rounded-full uppercase tracking-wider">
@@ -798,13 +842,15 @@ export default function GuestPortal() {
               </button>
             </div>
 
-            <div className="p-2 bg-slate-50 rounded-2xl border border-slate-200">
-              <img
-                src={`https://api.qrserver.com/v1/create-qr-code/?size=260x260&data=${encodeURIComponent(
-                  memberNumber
-                )}&margin=4`}
-                alt="Member QR Full"
-                className="w-full h-auto aspect-square object-contain"
+            <div className="p-3 bg-white rounded-2xl border border-slate-200 flex items-center justify-center">
+              <QRCodeSVG
+                value={memberNumber}
+                size={220}
+                level="H"
+                includeMargin={true}
+                fgColor="#000000"
+                bgColor="#FFFFFF"
+                imageSettings={PERFECTION_QR_IMAGE_SETTINGS}
               />
             </div>
 
