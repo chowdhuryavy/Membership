@@ -79,7 +79,6 @@ export default function GuestPortal() {
   // Pass & Wallet State
   const [activeSide, setActiveSide] = useState<'front' | 'back'>('front');
   const [token, setToken] = useState<string>('');
-  const [remainingSeconds, setRemainingSeconds] = useState<number>(300);
   const [propertiesList, setPropertiesList] = useState<any[]>([]);
   const [outletsList, setOutletsList] = useState<any[]>([]);
 
@@ -119,28 +118,13 @@ export default function GuestPortal() {
     const gName = account?.name || member?.guest_name || 'Guest';
     const newToken = generatePassToken(mId, mNum, gName);
     setToken(newToken);
-    setRemainingSeconds(300);
   };
 
   useEffect(() => {
     generateNewToken();
   }, [member?.id, account?.member_id]);
 
-  useEffect(() => {
-    if (remainingSeconds <= 0) return;
-    const interval = setInterval(() => {
-      setRemainingSeconds(prev => (prev <= 1 ? 0 : prev - 1));
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [remainingSeconds]);
-
   const mobilePassUrl = getPublicPassUrl(token);
-
-  const formatTime = (secs: number) => {
-    const mins = Math.floor(secs / 60);
-    const rSecs = secs % 60;
-    return `${mins.toString().padStart(2, '0')}:${rSecs.toString().padStart(2, '0')}`;
-  };
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(mobilePassUrl);
@@ -485,45 +469,12 @@ export default function GuestPortal() {
                     </div>
                   </div>
 
-                  {/* SECURITY TIMER BANNER */}
-                  <div className={`my-2 p-3 rounded-2xl border flex items-center justify-between shadow-inner transition-all ${
-                    remainingSeconds > 60
-                      ? 'bg-indigo-950/60 border-indigo-500/30 text-indigo-200'
-                      : remainingSeconds > 0
-                      ? 'bg-amber-950/60 border-amber-500/30 text-amber-200'
-                      : 'bg-rose-950/60 border-rose-500/30 text-rose-200'
-                  }`}>
-                    <div className="flex items-center gap-2.5">
-                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
-                        remainingSeconds > 0 ? 'bg-amber-500/20 text-amber-300' : 'bg-rose-500/20 text-rose-300'
-                      }`}>
-                        <Clock className="w-4 h-4 animate-pulse" />
-                      </div>
-                      <div>
-                        <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 block">
-                          SECURITY PASS TOKEN
-                        </span>
-                        <span className="text-[10px] font-bold text-white block leading-none mt-0.5">
-                          {remainingSeconds > 0 ? 'Pass Token Active' : 'Token Expired — Reset Below'}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="text-right">
-                      <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 block">
-                        EXPIRES IN
-                      </span>
-                      <span className="text-xs font-mono font-black text-amber-300">
-                        {formatTime(remainingSeconds)}
-                      </span>
-                    </div>
-                  </div>
-
                   {/* QR CODE */}
-                  <div className="my-2 flex flex-col items-center justify-center">
+                  <div className="my-4 flex flex-col items-center justify-center">
                     <div className="p-3 bg-white rounded-2xl border-2 border-indigo-500/30 shadow-2xl flex items-center justify-center cursor-pointer transition-transform hover:scale-[1.02] active:scale-95" onClick={() => setShowQrModal(true)}>
                       <QRCodeSVG
                         value={memberNumber}
-                        size={180}
+                        size={190}
                         level="H"
                         includeMargin={true}
                         fgColor="#000000"
@@ -531,9 +482,9 @@ export default function GuestPortal() {
                         imageSettings={PERFECTION_QR_IMAGE_SETTINGS}
                       />
                     </div>
-                    <div className="flex items-center gap-1.5 mt-2">
-                      <Sparkles className="w-3 h-3 text-amber-400 animate-pulse" />
-                      <span className="text-[9px] font-mono text-slate-300 uppercase tracking-widest">
+                    <div className="flex items-center gap-1.5 mt-2.5">
+                      <Sparkles className="w-3.5 h-3.5 text-amber-400 animate-pulse" />
+                      <span className="text-[9px] font-mono text-slate-300 uppercase tracking-widest font-bold">
                         Tap QR to Enlarge for Turnstile
                       </span>
                     </div>
@@ -596,18 +547,12 @@ export default function GuestPortal() {
             </div>
 
             {/* QUICK ACTIONS BAR */}
-            <div className="flex items-center justify-center gap-2 pt-2">
-              <button
-                onClick={generateNewToken}
-                className="px-3.5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 transition-all shadow-md active:scale-95"
-              >
-                <RefreshCw className="w-3.5 h-3.5" /> Reset Timer
-              </button>
+            <div className="flex items-center justify-center gap-2 pt-1">
               <button
                 onClick={handleCopyLink}
-                className="px-3.5 py-2.5 bg-slate-900 hover:bg-slate-800 text-slate-200 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 transition-all border border-white/10 active:scale-95"
+                className="w-full max-w-[280px] py-2.5 bg-slate-900 hover:bg-slate-800 text-slate-200 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all border border-white/10 shadow-md active:scale-95"
               >
-                <Copy className="w-3.5 h-3.5" /> Copy Link
+                <Copy className="w-3.5 h-3.5 text-amber-400" /> Copy Mobile Pass Link
               </button>
             </div>
 
@@ -1039,30 +984,6 @@ export default function GuestPortal() {
               </button>
             </div>
 
-            <div className={`p-3 rounded-2xl border flex items-center justify-between text-xs ${
-              remainingSeconds > 60
-                ? 'bg-slate-900 border-indigo-500/30 text-indigo-300'
-                : remainingSeconds > 0
-                ? 'bg-slate-900 border-amber-500/30 text-amber-300'
-                : 'bg-rose-950 border-rose-500/30 text-rose-300'
-            }`}>
-              <div className="flex items-center gap-2">
-                <Clock className="w-4 h-4 text-amber-400 animate-pulse shrink-0" />
-                <div className="text-left">
-                  <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 block">
-                    PASS SECURITY TIMED TOKEN
-                  </span>
-                  <span className="text-[10px] font-bold text-white block">
-                    {remainingSeconds > 0 ? 'Turnstile Scanner Ready' : 'Token Expired'}
-                  </span>
-                </div>
-              </div>
-              <div className="text-right">
-                <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 block">EXPIRES</span>
-                <span className="text-xs font-mono font-black text-amber-300">{formatTime(remainingSeconds)}</span>
-              </div>
-            </div>
-
             <div className="p-3 bg-white rounded-2xl border border-slate-200 flex items-center justify-center">
               <QRCodeSVG
                 value={memberNumber}
@@ -1075,19 +996,14 @@ export default function GuestPortal() {
               />
             </div>
 
-            <div className="flex items-center justify-between pt-1">
-              <div className="text-left space-y-0.5">
-                <p className="font-mono font-black text-lg text-slate-900 tracking-wider leading-none">
-                  {memberNumber}
-                </p>
-                <p className="text-[10px] font-bold text-slate-500 uppercase">{account?.name}</p>
-              </div>
-              <button
-                onClick={generateNewToken}
-                className="px-3 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-[10px] font-black uppercase tracking-wider flex items-center gap-1 transition-all"
-              >
-                <RefreshCw className="w-3 h-3" /> Reset
-              </button>
+            <div className="text-center space-y-1 pt-1">
+              <p className="font-mono font-black text-xl text-slate-900 tracking-wider leading-none">
+                {memberNumber}
+              </p>
+              <p className="text-xs font-bold text-slate-500 uppercase">{account?.name}</p>
+              <span className="inline-block px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest bg-emerald-100 text-emerald-800 border border-emerald-200 mt-1">
+                Verified Digital Pass
+              </span>
             </div>
           </div>
         </div>
