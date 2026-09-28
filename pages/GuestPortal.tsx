@@ -20,6 +20,7 @@ import {
 } from '../components/PasswordComplexityChecker';
 import { QRCodeSVG } from 'qrcode.react';
 import { PERFECTION_QR_IMAGE_SETTINGS } from '../lib/perfectionLogo';
+import { generatePassToken, getPublicPassUrl } from '../utils/passToken';
 import toast from 'react-hot-toast';
 import {
   QrCode,
@@ -45,7 +46,12 @@ import {
   Phone,
   Mail,
   RefreshCw,
-  FileText
+  FileText,
+  Smartphone,
+  Shield,
+  Award,
+  AlertTriangle,
+  Copy
 } from 'lucide-react';
 import { Button } from '../components/ui';
 import { format, parseISO } from 'date-fns';
@@ -69,6 +75,13 @@ export default function GuestPortal() {
   const [bookings, setBookings] = useState<MassageBooking[]>([]);
   const [consents, setConsents] = useState<EntranceFeeConsent[]>([]);
   const [sales, setSales] = useState<Sale[]>([]);
+
+  // Pass & Wallet State
+  const [activeSide, setActiveSide] = useState<'front' | 'back'>('front');
+  const [token, setToken] = useState<string>('');
+  const [remainingSeconds, setRemainingSeconds] = useState<number>(300);
+  const [propertiesList, setPropertiesList] = useState<any[]>([]);
+  const [outletsList, setOutletsList] = useState<any[]>([]);
 
   // Modals
   const [showQrModal, setShowQrModal] = useState(false);
@@ -96,6 +109,47 @@ export default function GuestPortal() {
   const propertyName = dynamicPropertyName;
   const logoUrl = dynamicLogoUrl;
 
+  const memberNumber = member?.membership_number || account?.member_id || `G-${account?.id?.slice(-6).toUpperCase() || '000000'}`;
+  const memberStatus = member?.status || 'Active';
+  const expiryDate = member?.current_end_date ? format(parseISO(member.current_end_date), 'dd MMM yyyy') : 'No Expiry';
+
+  const generateNewToken = () => {
+    const mId = member?.id || account?.member_id || 'guest';
+    const mNum = member?.membership_number || memberNumber;
+    const gName = account?.name || member?.guest_name || 'Guest';
+    const newToken = generatePassToken(mId, mNum, gName);
+    setToken(newToken);
+    setRemainingSeconds(300);
+  };
+
+  useEffect(() => {
+    generateNewToken();
+  }, [member?.id, account?.member_id]);
+
+  useEffect(() => {
+    if (remainingSeconds <= 0) return;
+    const interval = setInterval(() => {
+      setRemainingSeconds(prev => (prev <= 1 ? 0 : prev - 1));
+    }, 1000);
+    return () => clearInterval(interval);
+  }, [remainingSeconds]);
+
+  const mobilePassUrl = getPublicPassUrl(token);
+
+  const formatTime = (secs: number) => {
+    const mins = Math.floor(secs / 60);
+    const rSecs = secs % 60;
+    return `${mins.toString().padStart(2, '0')}:${rSecs.toString().padStart(2, '0')}`;
+  };
+
+  const handleCopyLink = () => {
+    navigator.clipboard.writeText(mobilePassUrl);
+    toast.success('Pass link copied to clipboard!');
+  };
+
+  const matchedOutlet = outletsList.find(o => o.id === (member?.outlet_id || account?.outlet_id)) || outletsList[0];
+  const matchedProperty = propertiesList.find(p => p.id === matchedOutlet?.property_id) || propertiesList[0];
+
   // Validation for changing password
   const passValidation = validatePasswordComplexity(newPassword, confirmPassword);
 
@@ -109,10 +163,11 @@ export default function GuestPortal() {
     setAccount(session);
 
     try {
-      const [ps, props, allMembers, allPtMembers, allPtSessions, allBookings, allConsents, allSales] =
+      const [ps, props, outlets, allMembers, allPtMembers, allPtSessions, allBookings, allConsents, allSales] =
         await Promise.all([
           guestAuth.getPortalSettings(),
           db.getProperties().catch(() => []),
+          db.getOutlets().catch(() => []),
           db.getMembers(session.outlet_id || 'all').catch(() => []),
           db.getPTMembers(session.outlet_id || 'all').catch(() => []),
           db.getPTSessions(session.outlet_id || 'all').catch(() => []),
@@ -122,6 +177,8 @@ export default function GuestPortal() {
         ]);
 
       setPortalSettings(ps);
+      setPropertiesList(props);
+      setOutletsList(outlets);
 
       if (session.property_id) {
         const matchedProp = props.find((p: any) => p.id === session.property_id);
@@ -233,8 +290,12 @@ export default function GuestPortal() {
     if (!account) return;
     setBookingSubmitting(true);
     try {
+      const mOutlet = outletsList.find(o => o.id === (account.outlet_id || member?.outlet_id)) || outletsList[0];
+      const mProp = propertiesList.find(p => p.id === mOutlet?.property_id) || propertiesList[0];
+
       await db.addMassageBooking({
-        outlet_id: account.outlet_id || member?.outlet_id || 'default',
+        outlet_id: mOutlet?.id || account.outlet_id || 'default',
+        property_id: mProp?.id || account.property_id || '',
         guest_name: account.name || member?.guest_name || 'Guest',
         guest_email: account.email || member?.email || '',
         phone: account.phone || member?.phone || '',
@@ -266,11 +327,6 @@ export default function GuestPortal() {
   if (loading) {
     return <GuestLoadingScreen propertyName={propertyName} logoUrl={logoUrl} message="Retrieving your private privileges..." />;
   }
-
-  // Active privileges summary
-  const memberNumber = member?.membership_number || account?.member_id || `G-${account?.id.slice(-6).toUpperCase()}`;
-  const memberStatus = member?.status || 'Active';
-  const expiryDate = member?.current_end_date ? format(parseISO(member.current_end_date), 'dd MMM yyyy') : 'No Expiry';
 
   // Total PT sessions remaining
   const totalPtPurchased = ptMembers.reduce((acc, p) => acc + (p.total_sessions || 0), 0);
@@ -329,90 +385,238 @@ export default function GuestPortal() {
       <main className="flex-1 p-4 space-y-5">
         {/* TAB 1: MEMBERSHIP CARD & QR */}
         {activeTab === 'card' && (
-          <div className="space-y-5 animate-in fade-in duration-300">
-            {/* VIP CARD */}
-            <div className="relative rounded-[2rem] p-6 bg-gradient-to-br from-indigo-900 via-slate-900 to-slate-950 border border-white/15 shadow-2xl overflow-hidden group">
-              {/* Card Holographic Orbs */}
-              <div className="absolute -right-10 -top-10 w-44 h-44 bg-amber-400/20 rounded-full blur-3xl pointer-events-none" />
-              <div className="absolute -left-10 -bottom-10 w-44 h-44 bg-indigo-500/20 rounded-full blur-3xl pointer-events-none" />
-
-              <div className="relative z-10 flex flex-col justify-between h-48">
-                {/* Card Top Row */}
-                <div className="flex justify-between items-start">
-                  <div>
-                    <span className="text-[9px] font-black uppercase tracking-[0.3em] text-amber-400">
-                      {propertyName}
-                    </span>
-                    <h3 className="text-xl font-black text-white tracking-tight uppercase mt-0.5">
-                      {account?.name}
-                    </h3>
-                  </div>
-                  <span className="px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-[10px] font-black uppercase tracking-widest flex items-center gap-1.5">
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                    {memberStatus}
+          <div className="space-y-4 animate-in fade-in duration-300">
+            {/* Security Countdown Banner */}
+            <div className={`p-4 rounded-2xl border flex items-center justify-between shadow-sm ${
+              remainingSeconds > 60 
+                ? 'bg-indigo-950/40 border-indigo-500/30 text-indigo-200' 
+                : remainingSeconds > 0
+                ? 'bg-amber-950/40 border-amber-500/30 text-amber-200'
+                : 'bg-rose-950/40 border-rose-500/30 text-rose-200'
+            }`}>
+              <div className="flex items-center gap-3">
+                <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
+                  remainingSeconds > 0 ? 'bg-amber-500/20 text-amber-300' : 'bg-rose-500/20 text-rose-300'
+                }`}>
+                  <Clock className="w-4 h-4 animate-pulse" />
+                </div>
+                <div>
+                  <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block">
+                    SECURITY TIMED QR CODE
+                  </span>
+                  <span className="text-xs font-bold text-white">
+                    {remainingSeconds > 0 ? 'Camera link valid for 5 minutes' : 'Link Expired! Please reset timer.'}
                   </span>
                 </div>
+              </div>
 
-                {/* Card Bottom Row */}
-                <div className="flex justify-between items-end pt-4 border-t border-white/10">
-                  <div>
-                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
-                      Member ID
-                    </p>
-                    <p className="text-base font-mono font-black text-white tracking-wider">
-                      {memberNumber}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-[9px] font-bold text-slate-400 uppercase tracking-widest">
-                      Valid Thru
-                    </p>
-                    <p className="text-xs font-mono font-black text-amber-300">
-                      {expiryDate}
-                    </p>
-                  </div>
-                </div>
+              <div className="text-right">
+                <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block">
+                  REMAINING
+                </span>
+                <span className="text-sm font-mono font-black text-amber-300">
+                  {formatTime(remainingSeconds)}
+                </span>
               </div>
             </div>
 
-            {/* TOUCHLESS QR CHECK-IN CARD */}
-            {portalSettings?.allow_digital_card && (
-              <div className="bg-slate-900/90 rounded-3xl border border-white/10 p-6 flex flex-col items-center text-center space-y-4 shadow-xl">
-                <div className="space-y-1">
-                  <span className="text-[10px] font-black text-indigo-400 uppercase tracking-widest">
-                    Touchless Facility Access
-                  </span>
-                  <h4 className="text-base font-black text-white uppercase">
-                    Scan At Turnstile / Front Desk
-                  </h4>
-                </div>
-
-                {/* QR Display */}
-                <div
-                  onClick={() => setShowQrModal(true)}
-                  className="p-4 bg-white rounded-3xl shadow-2xl cursor-pointer hover:scale-105 transition-transform duration-300 relative group"
+            {/* Card Toggle Front / Back */}
+            <div className="flex justify-center">
+              <div className="inline-flex p-1 bg-slate-900/80 rounded-2xl border border-white/10">
+                <button
+                  onClick={() => setActiveSide('front')}
+                  className={`px-4 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 ${
+                    activeSide === 'front'
+                      ? 'bg-indigo-600 text-white shadow-md'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
                 >
-                  <QRCodeSVG
-                    value={memberNumber}
-                    size={160}
-                    level="H"
-                    includeMargin={true}
-                    fgColor="#000000"
-                    bgColor="#FFFFFF"
-                    imageSettings={PERFECTION_QR_IMAGE_SETTINGS}
-                  />
-                  <div className="absolute inset-0 bg-slate-950/20 rounded-3xl opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
-                    <span className="bg-slate-900/90 text-white text-[10px] font-black px-3 py-1.5 rounded-full uppercase tracking-wider">
-                      Enlarge QR
-                    </span>
+                  <Smartphone className="w-3.5 h-3.5" /> Front Pass
+                </button>
+                <button
+                  onClick={() => setActiveSide('back')}
+                  className={`px-4 py-1.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1.5 ${
+                    activeSide === 'back'
+                      ? 'bg-indigo-600 text-white shadow-md'
+                      : 'text-slate-400 hover:text-white'
+                  }`}
+                >
+                  <Shield className="w-3.5 h-3.5" /> Terms & Info
+                </button>
+              </div>
+            </div>
+
+            {/* CARD CONTAINER (Apple/Google Wallet Style matching Member Profile) */}
+            <div className="relative mx-auto w-full max-w-[360px] min-h-[480px] rounded-[2.2rem] bg-gradient-to-br from-slate-900 via-slate-850 to-slate-950 text-white p-6 shadow-2xl border border-amber-500/30 flex flex-col justify-between overflow-hidden group">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-amber-400/20 via-indigo-500/10 to-transparent pointer-events-none"></div>
+
+              {activeSide === 'front' ? (
+                <>
+                  <div>
+                    <div className="flex items-center justify-between border-b border-white/10 pb-3.5">
+                      <div className="flex items-center gap-2.5">
+                        {logoUrl ? (
+                          <div className="w-9 h-9 rounded-xl bg-white p-1 flex items-center justify-center overflow-hidden border border-white/25 shadow-sm shrink-0">
+                            <img src={logoUrl} alt="Logo" className="w-full h-full object-contain" />
+                          </div>
+                        ) : (
+                          <div className="w-9 h-9 rounded-xl bg-gradient-to-tr from-amber-500 to-indigo-600 flex items-center justify-center text-white font-black text-xs uppercase shadow-md shrink-0">
+                            <Award className="w-5 h-5 text-amber-200" />
+                          </div>
+                        )}
+                        <div className="text-left">
+                          <h4 className="text-xs font-black uppercase tracking-wider text-white leading-tight">
+                            {propertyName}
+                          </h4>
+                          <span className="text-[9px] font-bold uppercase tracking-widest text-indigo-300 block">
+                            {matchedOutlet?.name || 'HEALTH CLUB'}
+                          </span>
+                        </div>
+                      </div>
+
+                      <span className="px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest border bg-emerald-500/20 text-emerald-300 border-emerald-400/30">
+                        {memberStatus}
+                      </span>
+                    </div>
+
+                    <div className="mt-4 flex items-center gap-3">
+                      <div className="w-12 h-12 rounded-2xl bg-gradient-to-tr from-indigo-600 to-purple-600 flex items-center justify-center text-white font-black text-lg shadow-md border border-white/20 shrink-0">
+                        {account?.name ? account.name.slice(0, 2).toUpperCase() : 'GE'}
+                      </div>
+                      <div>
+                        <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 block">
+                          GUEST MEMBER NAME
+                        </span>
+                        <h2 className="text-lg font-black uppercase tracking-tight text-white leading-none">
+                          {account?.name}
+                        </h2>
+                        <span className="text-[10px] font-mono font-bold text-amber-300 block mt-1">
+                          #{memberNumber}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4 mt-3 pt-3 border-t border-white/10">
+                      <div>
+                        <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 block">
+                          ACCESS PERMIT
+                        </span>
+                        <span className="text-xs font-black text-white truncate block">
+                          {member?.access_type || 'Pool, Gym & Spa'}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 block">
+                          PACKAGE TIER
+                        </span>
+                        <span className="text-[11px] font-black text-amber-300 leading-snug block break-words">
+                          {member?.package_type || 'VIP Member'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* QR CODE */}
+                  <div className="my-3 flex flex-col items-center justify-center">
+                    {remainingSeconds > 0 ? (
+                      <div className="p-3 bg-white rounded-2xl border-2 border-indigo-500/30 shadow-2xl flex items-center justify-center">
+                        <QRCodeSVG
+                          value={mobilePassUrl}
+                          size={190}
+                          level="H"
+                          includeMargin={true}
+                          fgColor="#000000"
+                          bgColor="#FFFFFF"
+                          imageSettings={PERFECTION_QR_IMAGE_SETTINGS}
+                        />
+                      </div>
+                    ) : (
+                      <div className="w-[190px] h-[190px] bg-slate-800 rounded-3xl border border-rose-500/40 flex flex-col items-center justify-center p-4 text-center space-y-2">
+                        <AlertTriangle className="w-8 h-8 text-rose-400" />
+                        <span className="text-xs font-black uppercase tracking-wider text-rose-300">
+                          Token Expired
+                        </span>
+                      </div>
+                    )}
+                    <div className="flex items-center gap-1.5 mt-2">
+                      <Sparkles className="w-3 h-3 text-amber-400 animate-pulse" />
+                      <span className="text-[9px] font-mono text-slate-300 uppercase tracking-widest">
+                        Scan for Entrance Turnstile
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="pt-3 border-t border-white/10 flex items-center justify-between">
+                    <div>
+                      <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 block">
+                        VALID UNTIL
+                      </span>
+                      <span className="text-xs font-black text-slate-200">
+                        {expiryDate}
+                      </span>
+                    </div>
+                    <div className="text-right">
+                      <span className="text-[8px] font-black uppercase tracking-widest text-slate-400 block">
+                        AUTHENTICITY
+                      </span>
+                      <span className="text-xs font-mono font-bold text-emerald-400">
+                        VERIFIED ✓
+                      </span>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                /* BACK OF PASS */
+                <div className="flex flex-col justify-between h-full space-y-6">
+                  <div>
+                    <div className="flex items-center gap-2 mb-3 pb-2 border-b border-white/10">
+                      {logoUrl && <img src={logoUrl} alt="Logo" className="w-6 h-6 object-contain" />}
+                      <h4 className="text-xs font-black uppercase tracking-wider text-indigo-300">
+                        {propertyName} Rules & Info
+                      </h4>
+                    </div>
+                    <ul className="text-[11px] text-slate-300 space-y-2 list-disc pl-4 font-medium">
+                      <li>This digital membership card is personal and non-transferable.</li>
+                      <li>Must be scanned at facility self-kiosk or turnstiles upon every entry.</li>
+                      <li>Grants access to authorized facility zones according to membership package.</li>
+                      <li>Report lost or damaged accounts to reception immediately.</li>
+                    </ul>
+                  </div>
+
+                  <div className="space-y-2 border-t border-white/10 pt-4">
+                    <h5 className="text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                      <MapPin className="w-3 h-3 text-amber-400" /> LOCATION & CONTACT
+                    </h5>
+                    <p className="text-[11px] text-slate-300 font-medium">
+                      {matchedOutlet?.address || matchedProperty?.address || settings?.address || 'Main Club Headquarters'}
+                      <br />
+                      Tel: {matchedOutlet?.phone || matchedProperty?.phone || settings?.phone || '+60 3-0000 0000'}
+                    </p>
+                  </div>
+
+                  <div className="p-3 bg-white/5 rounded-xl border border-white/10 text-center">
+                    <p className="text-[10px] text-slate-400 font-bold uppercase">Authorized Guest Account</p>
+                    <p className="text-xs font-mono font-black text-amber-300">{memberNumber}</p>
                   </div>
                 </div>
+              )}
+            </div>
 
-                <p className="text-xs text-slate-400 font-medium max-w-xs">
-                  Tap barcode to expand for high-brightness turnstile reading.
-                </p>
-              </div>
-            )}
+            {/* QUICK ACTIONS BAR */}
+            <div className="flex items-center justify-center gap-2 pt-2">
+              <button
+                onClick={generateNewToken}
+                className="px-3.5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 transition-all shadow-md active:scale-95"
+              >
+                <RefreshCw className="w-3.5 h-3.5" /> Reset Timer
+              </button>
+              <button
+                onClick={handleCopyLink}
+                className="px-3.5 py-2.5 bg-slate-900 hover:bg-slate-800 text-slate-200 rounded-xl text-xs font-black uppercase tracking-wider flex items-center gap-1.5 transition-all border border-white/10 active:scale-95"
+              >
+                <Copy className="w-3.5 h-3.5" /> Copy Link
+              </button>
+            </div>
 
             {/* QUICK STATS SUMMARY */}
             <div className="grid grid-cols-2 gap-3">
