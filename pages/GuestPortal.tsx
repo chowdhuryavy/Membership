@@ -14,7 +14,7 @@ import {
 } from '../types';
 import { useSettings } from '../contexts/SettingsContext';
 import { GuestLoadingScreen } from '../components/GuestLoadingScreen';
-import { DigitalMembershipCardModal } from '../components/DigitalMembershipCardModal';
+import { detectDeviceOS } from '../services/pkpassService';
 import {
   PasswordComplexityChecker,
   validatePasswordComplexity
@@ -52,7 +52,8 @@ import {
   Shield,
   Award,
   AlertTriangle,
-  Copy
+  Copy,
+  Wallet
 } from 'lucide-react';
 import { Button } from '../components/ui';
 import { format, parseISO } from 'date-fns';
@@ -85,7 +86,6 @@ export default function GuestPortal() {
 
   // Modals
   const [showQrModal, setShowQrModal] = useState(false);
-  const [showDigitalCardModal, setShowDigitalCardModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showBookingRequestModal, setShowBookingRequestModal] = useState(false);
 
@@ -131,6 +131,74 @@ export default function GuestPortal() {
   const handleCopyLink = () => {
     navigator.clipboard.writeText(mobilePassUrl);
     toast.success('Pass link copied to clipboard!');
+  };
+
+  const deviceOS = detectDeviceOS();
+
+  const handleDownloadAppleWallet = async () => {
+    const toastId = toast.loading('Connecting to Apple Wallet API...');
+    setTimeout(() => {
+      toast.dismiss(toastId);
+      alert(
+        "Apple Wallet Integration Requires Backend\n\n" +
+        "Native Apple Wallet (.pkpass) files MUST be cryptographically signed using an Apple Developer Certificate and Private Key.\n\n" +
+        "Because this application runs entirely in the browser, it cannot safely hold or sign with your private certificates. To enable this in production, you must set up a backend (e.g., Node.js) that generates and signs the .pkpass file, then returns it to the app."
+      );
+    }, 800);
+  };
+
+  const handleDownloadGoogleWallet = async () => {
+    const toastId = toast.loading('Connecting to Google Wallet API...');
+    try {
+      const fullLogoUrl = logoUrl ? (logoUrl.startsWith('http') ? logoUrl : `${window.location.origin}${logoUrl.startsWith('/') ? '' : '/'}${logoUrl}`) : '';
+      const response = await fetch('/api/google-wallet/generate-link', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          memberId: member?.id || account?.member_id || account?.id,
+          guestName: account?.name || member?.guest_name || 'Guest',
+          membershipNumber: memberNumber,
+          propertyName: propertyName,
+          outletName: matchedOutlet?.name || 'HEALTH CLUB',
+          logoUrl: fullLogoUrl,
+          packageTier: member?.package_type || 'VIP Member',
+          accessType: member?.access_type || 'Pool, Gym & Spa',
+          validUntil: expiryDate,
+          status: memberStatus
+        })
+      });
+
+      let data;
+      const textResponse = await response.text();
+      try {
+        data = JSON.parse(textResponse);
+      } catch (e) {
+        console.error('Non-JSON response from API:', textResponse);
+        throw new Error(
+          response.status === 404 
+            ? 'API endpoint not found. If you are in the Shared App, please click the Share button again to redeploy the server backend.' 
+            : `Server returned an invalid response (Status ${response.status}).`
+        );
+      }
+      
+      if (!response.ok) {
+        throw new Error(data.error || 'Failed to generate pass');
+      }
+
+      toast.success('Opening Google Wallet...', { id: toastId });
+      window.open(data.url, '_blank');
+    } catch (e: any) {
+      console.error(e);
+      toast.error(e.message || 'Failed to connect to Google Wallet.', { id: toastId, duration: 5000 });
+    }
+  };
+
+  const handleAddToWallet = () => {
+    if (deviceOS === 'ios') {
+      handleDownloadAppleWallet();
+    } else {
+      handleDownloadGoogleWallet();
+    }
   };
 
   const matchedOutlet = outletsList.find(o => o.id === (member?.outlet_id || account?.outlet_id)) || outletsList[0];
@@ -567,10 +635,11 @@ export default function GuestPortal() {
             {/* QUICK ACTIONS BAR */}
             <div className="flex flex-col sm:flex-row items-center justify-center gap-2 pt-1">
               <button
-                onClick={() => setShowDigitalCardModal(true)}
-                className="w-full sm:w-auto px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-md active:scale-95"
+                onClick={handleAddToWallet}
+                className="w-full sm:w-auto px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-md active:scale-95"
               >
-                <Smartphone className="w-3.5 h-3.5" /> Launch Digital Card Modal
+                <Wallet className="w-4 h-4 text-amber-300" />
+                {deviceOS === 'ios' ? 'Add to Apple Wallet' : deviceOS === 'android' ? 'Add to Google Wallet' : 'Add to Mobile Wallet'}
               </button>
               <button
                 onClick={handleCopyLink}
@@ -1183,15 +1252,6 @@ export default function GuestPortal() {
             </form>
           </div>
         </div>
-      )}
-
-      {/* OFFICIAL DIGITAL MEMBERSHIP CARD MODAL (SAME AS ADMIN PORTAL) */}
-      {showDigitalCardModal && (
-        <DigitalMembershipCardModal
-          member={effectiveMember}
-          outletName={matchedOutlet?.name}
-          onClose={() => setShowDigitalCardModal(false)}
-        />
       )}
     </div>
   );
