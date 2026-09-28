@@ -241,6 +241,9 @@ export default function GuestPortal() {
         return false;
       });
       setSales(matchedSales);
+
+      // Smooth loading transition so property logo and animation are clearly seen
+      await new Promise(r => setTimeout(r, 1200));
     } catch (e) {
       console.error('[GuestPortal] Error loading data:', e);
     } finally {
