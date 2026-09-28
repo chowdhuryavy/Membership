@@ -53,6 +53,7 @@ export default function PTMembers() {
     const logoUrl = currentOutlet?.logo_url || currentProperty?.logo_url || settings?.logo_url || '';
     
     const [viewScope, setViewScope] = useState<'outlet' | 'property'>('outlet');
+    const [selectedOutletFilter, setSelectedOutletFilter] = useState<string>('all');
 
     const allowedOutletsInProperty = useMemo(() => {
         if (!currentProperty || !user || !outlets) return [];
@@ -307,6 +308,11 @@ export default function PTMembers() {
     };
 
     useEffect(() => {
+        setSelectedMember(null);
+        setSelectedPackage(null);
+        setSelectedMemberSale(null);
+        setSessions([]);
+        setSelectedOutletFilter('all');
         loadData();
         const handleBookingUpdate = () => {
             loadData();
@@ -433,7 +439,11 @@ export default function PTMembers() {
             });
 
             // Reload data and update selected member counts
-            const updatedMembers = await db.getPTMembers(currentOutlet!.id);
+            const isProp = viewScope === 'property';
+            const allowedIds = allowedOutletsInProperty.map(o => o.id);
+            const updatedMembers = isProp 
+                ? await db.getPTMembers(currentProperty!.id, true, undefined, undefined, allowedIds) 
+                : await db.getPTMembers(currentOutlet!.id, false);
             setPtMembers(updatedMembers);
             
             const updatedTarget = updatedMembers.find(m => m.id === activeTargetPkg.id);
@@ -486,8 +496,16 @@ export default function PTMembers() {
         return matchingSales.reduce((sum, s) => sum + (s.net_amount || (s as any).total_amount || 0), 0);
     };
 
-    // Filtered PT Members directory
+    // Filtered PT Members directory with strict outlet & property scoping
     const filteredMembers = ptMembers.filter(m => {
+        // Enforce strict outlet and property boundary
+        if (viewScope === 'outlet' && currentOutlet) {
+            if (m.outlet_id && m.outlet_id !== currentOutlet.id) return false;
+        } else if (viewScope === 'property' && currentProperty) {
+            if (m.property_id && m.property_id !== currentProperty.id) return false;
+            if (selectedOutletFilter !== 'all' && m.outlet_id !== selectedOutletFilter) return false;
+        }
+
         const matchesSearch = m.guest_name.toLowerCase().includes(search.toLowerCase()) || 
                               (m.phone && m.phone.includes(search)) || 
                               (m.email && m.email.toLowerCase().includes(search.toLowerCase()));
@@ -882,18 +900,36 @@ export default function PTMembers() {
 
                     {/* Search & Status Filters */}
                     <div className="flex flex-col md:flex-row justify-between items-center gap-4 bg-white p-4 rounded-3xl border border-slate-200/80 shadow-sm">
-                        <div className="relative w-full md:w-96">
-                            <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                            <Input 
-                                value={search}
-                                onChange={e => setSearch(e.target.value)}
-                                placeholder="Search client name, phone, or email..."
-                                className="pl-10 h-12 rounded-2xl text-xs font-bold bg-slate-50 border-slate-200 focus:bg-white shadow-sm"
-                            />
+                        <div className="flex flex-col sm:flex-row items-center gap-3 w-full md:w-auto flex-1">
+                            <div className="relative w-full sm:w-80">
+                                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                                <Input 
+                                    value={search}
+                                    onChange={e => setSearch(e.target.value)}
+                                    placeholder="Search client name, phone, or email..."
+                                    className="pl-10 h-12 rounded-2xl text-xs font-bold bg-slate-50 border-slate-200 focus:bg-white shadow-sm w-full"
+                                />
+                            </div>
+
+                            {/* Outlet Selector when in Property Scope */}
+                            {viewScope === 'property' && allowedOutletsInProperty.length > 1 && (
+                                <div className="w-full sm:w-56 shrink-0">
+                                    <select
+                                        value={selectedOutletFilter}
+                                        onChange={e => setSelectedOutletFilter(e.target.value)}
+                                        className="w-full h-12 px-4 rounded-2xl bg-slate-50 border border-slate-200 text-xs font-black uppercase tracking-wider text-slate-800 focus:ring-2 focus:ring-indigo-600 focus:bg-white transition-all outline-none"
+                                    >
+                                        <option value="all">All Outlets ({allowedOutletsInProperty.length})</option>
+                                        {allowedOutletsInProperty.map(o => (
+                                            <option key={o.id} value={o.id}>{o.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
                         </div>
 
                         {/* Status Filter Tabs */}
-                        <div className="flex bg-slate-100 p-1.5 rounded-2xl text-xs font-black uppercase tracking-wider w-full md:w-auto">
+                        <div className="flex bg-slate-100 p-1.5 rounded-2xl text-xs font-black uppercase tracking-wider w-full md:w-auto shrink-0">
                             {(['All', 'Active', 'Completed'] as const).map(st => (
                                 <button
                                     key={st}
@@ -1190,118 +1226,127 @@ export default function PTMembers() {
                             {/* TAB 1: PURCHASES & SESSION TRACKER */}
                             {activeTab === 'history' && (
                                 <div className="space-y-6">
-                                    {/* LEVEL 2: IF NO SPECIFIC PACKAGE IS SELECTED, SHOW ALL PURCHASES FOR THIS MEMBER */}
-                                    {!selectedPackage ? (
-                                        <div className="space-y-4">
-                                            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                                                <div>
-                                                    <h3 className="text-sm font-black text-indigo-950 uppercase tracking-wide flex items-center gap-2">
-                                                        <Dumbbell className="w-4 h-4 text-indigo-600" />
-                                                        Purchased PT Packages ({ptMembers.filter(m => m.guest_name.toLowerCase() === selectedMember.guest_name.toLowerCase() || m.id === selectedMember.id).length})
-                                                    </h3>
-                                                    <p className="text-xs text-slate-500 font-medium">Select any purchased package below to view its session attendance tracker or book a session.</p>
-                                                </div>
-                                            </div>
-
-                                            <div className="grid grid-cols-1 gap-4">
-                                                {ptMembers.filter(m => m.guest_name.toLowerCase() === selectedMember.guest_name.toLowerCase() || m.id === selectedMember.id).map((pkg, idx) => {
-                                                    const pkgRev = getMemberRevenue(pkg);
-                                                    const isComp = pkg.used_sessions >= pkg.total_sessions;
-                                                    const rem = Math.max(0, pkg.total_sessions - pkg.used_sessions);
-
+                                            {/* LEVEL 2: IF NO SPECIFIC PACKAGE IS SELECTED, SHOW ALL PURCHASES FOR THIS MEMBER */}
+                                            {!selectedPackage ? (
+                                                (() => {
+                                                    const memberPackages = ptMembers.filter(m => 
+                                                        (m.id === selectedMember.id || (m.guest_name && m.guest_name.toLowerCase() === selectedMember.guest_name.toLowerCase())) &&
+                                                        (viewScope === 'property' || !m.outlet_id || m.outlet_id === currentOutlet?.id) &&
+                                                        (!m.property_id || m.property_id === currentProperty?.id)
+                                                    );
                                                     return (
-                                                        <Card key={pkg.id} className="rounded-3xl border-slate-200 shadow-md hover:shadow-lg transition-all overflow-hidden bg-white">
-                                                            <div className="p-6 bg-slate-900 text-white space-y-4">
-                                                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
-                                                                    <div>
-                                                                        <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-indigo-400">
-                                                                            <span>Purchase #{idx + 1}</span>
-                                                                            <span>• Ref: #SALE-{(pkg.sale_id || pkg.id).slice(0, 8).toUpperCase()}</span>
-                                                                        </div>
-                                                                        <h4 className="text-lg font-black uppercase tracking-tight text-white mt-1">
-                                                                            {pkg.notes || `${pkg.total_sessions} Sessions Personal Training`}
-                                                                        </h4>
-                                                                    </div>
-                                                                    <div className="flex items-center gap-2">
-                                                                        <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${isComp ? 'bg-amber-400/20 text-amber-300 border border-amber-400/30' : 'bg-emerald-400/20 text-emerald-300 border border-emerald-400/30'}`}>
-                                                                            {isComp ? 'Completed' : 'Active Package'}
-                                                                        </span>
-                                                                    </div>
-                                                                </div>
-
-                                                                {/* Metrics Grid */}
-                                                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
-                                                                    <div className="bg-white/5 p-3 rounded-2xl border border-white/10">
-                                                                        <span className="text-[10px] font-black uppercase text-indigo-300 block">Package Size</span>
-                                                                        <span className="text-base font-black text-white">{pkg.total_sessions} Sessions</span>
-                                                                    </div>
-                                                                    <div className="bg-white/5 p-3 rounded-2xl border border-white/10">
-                                                                        <span className="text-[10px] font-black uppercase text-indigo-300 block">Completed</span>
-                                                                        <span className="text-base font-black text-amber-400">{pkg.used_sessions} Sessions</span>
-                                                                    </div>
-                                                                    <div className="bg-white/5 p-3 rounded-2xl border border-white/10">
-                                                                        <span className="text-[10px] font-black uppercase text-indigo-300 block">Remaining</span>
-                                                                        <span className="text-base font-black text-emerald-400">{rem} Sessions</span>
-                                                                    </div>
-                                                                    <div className="bg-white/5 p-3 rounded-2xl border border-white/10">
-                                                                        <span className="text-[10px] font-black uppercase text-indigo-300 block">Validity</span>
-                                                                        <span className="text-xs font-bold text-slate-200">{pkg.start_date} to {pkg.end_date}</span>
-                                                                    </div>
-                                                                </div>
-
-                                                                {/* Actions */}
-                                                                <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-800">
-                                                                    <div className="text-xs font-bold text-indigo-300">
-                                                                        Total Value: <span className="font-black text-emerald-400">{formatMoney(pkgRev)}</span>
-                                                                    </div>
-
-                                                                    <div className="flex flex-wrap items-center gap-2">
-                                                                        <Button
-                                                                            onClick={() => setShowAgreementForPackage(pkg)}
-                                                                            variant="secondary"
-                                                                            className="h-9 px-3 rounded-xl text-xs font-black uppercase tracking-wider bg-indigo-500/20 text-indigo-300 hover:bg-indigo-500/30 border border-indigo-400/30"
-                                                                        >
-                                                                            <FileText className="w-3.5 h-3.5 mr-1" /> Agreement Form
-                                                                        </Button>
-                                                                        <Button
-                                                                            onClick={() => {
-                                                                                setSelectedPackage(pkg);
-                                                                                setPrintingPackageForm(true);
-                                                                            }}
-                                                                            variant="secondary"
-                                                                            className="h-9 px-3 rounded-xl text-xs font-black uppercase tracking-wider bg-white/10 text-white hover:bg-white/20 border border-white/20"
-                                                                        >
-                                                                            <Printer className="w-3.5 h-3.5 mr-1" /> Print Form
-                                                                        </Button>
-
-                                                                        <Button
-                                                                            onClick={() => {
-                                                                                setSelectedPackage(pkg);
-                                                                                setSessionNotes(`Session #${pkg.used_sessions + 1} Workout`);
-                                                                                setShowLogSession(true);
-                                                                            }}
-                                                                            disabled={isComp}
-                                                                            className="h-9 px-4 rounded-xl text-xs font-black uppercase tracking-wider bg-emerald-500 hover:bg-emerald-600 text-white shadow-md flex items-center gap-1"
-                                                                        >
-                                                                            <Plus className="w-3.5 h-3.5" /> Book Session
-                                                                        </Button>
-
-                                                                        <Button
-                                                                            onClick={() => handleSelectPackage(pkg)}
-                                                                            className="h-9 px-4 rounded-xl text-xs font-black uppercase tracking-wider bg-indigo-600 hover:bg-indigo-700 text-white shadow-md flex items-center gap-1"
-                                                                        >
-                                                                            <span>View Attendance Log</span>
-                                                                            <ChevronRight className="w-4 h-4 ml-1" />
-                                                                        </Button>
-                                                                    </div>
+                                                        <div className="space-y-4">
+                                                            <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                                                                <div>
+                                                                    <h3 className="text-sm font-black text-indigo-950 uppercase tracking-wide flex items-center gap-2">
+                                                                        <Dumbbell className="w-4 h-4 text-indigo-600" />
+                                                                        Purchased PT Packages ({memberPackages.length})
+                                                                    </h3>
+                                                                    <p className="text-xs text-slate-500 font-medium">Select any purchased package below to view its session attendance tracker or book a session.</p>
                                                                 </div>
                                                             </div>
-                                                        </Card>
+
+                                                            <div className="grid grid-cols-1 gap-4">
+                                                                {memberPackages.map((pkg, idx) => {
+                                                                    const pkgRev = getMemberRevenue(pkg);
+                                                                    const isComp = pkg.used_sessions >= pkg.total_sessions;
+                                                                    const rem = Math.max(0, pkg.total_sessions - pkg.used_sessions);
+
+                                                                    return (
+                                                                        <Card key={pkg.id} className="rounded-3xl border-slate-200 shadow-md hover:shadow-lg transition-all overflow-hidden bg-white">
+                                                                            <div className="p-6 bg-slate-900 text-white space-y-4">
+                                                                                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+                                                                                    <div>
+                                                                                        <div className="flex items-center gap-2 text-[10px] font-black uppercase tracking-widest text-indigo-400">
+                                                                                            <span>Purchase #{idx + 1}</span>
+                                                                                            <span>• Ref: #SALE-{(pkg.sale_id || pkg.id).slice(0, 8).toUpperCase()}</span>
+                                                                                        </div>
+                                                                                        <h4 className="text-lg font-black uppercase tracking-tight text-white mt-1">
+                                                                                            {pkg.notes || `${pkg.total_sessions} Sessions Personal Training`}
+                                                                                        </h4>
+                                                                                    </div>
+                                                                                    <div className="flex items-center gap-2">
+                                                                                        <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${isComp ? 'bg-amber-400/20 text-amber-300 border border-amber-400/30' : 'bg-emerald-400/20 text-emerald-300 border border-emerald-400/30'}`}>
+                                                                                            {isComp ? 'Completed' : 'Active Package'}
+                                                                                        </span>
+                                                                                    </div>
+                                                                                </div>
+
+                                                                                {/* Metrics Grid */}
+                                                                                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+                                                                                    <div className="bg-white/5 p-3 rounded-2xl border border-white/10">
+                                                                                        <span className="text-[10px] font-black uppercase text-indigo-300 block">Package Size</span>
+                                                                                        <span className="text-base font-black text-white">{pkg.total_sessions} Sessions</span>
+                                                                                    </div>
+                                                                                    <div className="bg-white/5 p-3 rounded-2xl border border-white/10">
+                                                                                        <span className="text-[10px] font-black uppercase text-indigo-300 block">Completed</span>
+                                                                                        <span className="text-base font-black text-amber-400">{pkg.used_sessions} Sessions</span>
+                                                                                    </div>
+                                                                                    <div className="bg-white/5 p-3 rounded-2xl border border-white/10">
+                                                                                        <span className="text-[10px] font-black uppercase text-indigo-300 block">Remaining</span>
+                                                                                        <span className="text-base font-black text-emerald-400">{rem} Sessions</span>
+                                                                                    </div>
+                                                                                    <div className="bg-white/5 p-3 rounded-2xl border border-white/10">
+                                                                                        <span className="text-[10px] font-black uppercase text-indigo-300 block">Validity</span>
+                                                                                        <span className="text-xs font-bold text-slate-200">{pkg.start_date} to {pkg.end_date}</span>
+                                                                                    </div>
+                                                                                </div>
+
+                                                                                {/* Actions */}
+                                                                                <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-800">
+                                                                                    <div className="text-xs font-bold text-indigo-300">
+                                                                                        Total Value: <span className="font-black text-emerald-400">{formatMoney(pkgRev)}</span>
+                                                                                    </div>
+
+                                                                                    <div className="flex flex-wrap items-center gap-2">
+                                                                                        <Button
+                                                                                            onClick={() => setShowAgreementForPackage(pkg)}
+                                                                                            variant="secondary"
+                                                                                            className="h-9 px-3 rounded-xl text-xs font-black uppercase tracking-wider bg-indigo-500/20 text-indigo-300 hover:bg-indigo-500/30 border border-indigo-400/30"
+                                                                                        >
+                                                                                            <FileText className="w-3.5 h-3.5 mr-1" /> Agreement Form
+                                                                                        </Button>
+                                                                                        <Button
+                                                                                            onClick={() => {
+                                                                                                setSelectedPackage(pkg);
+                                                                                                setPrintingPackageForm(true);
+                                                                                            }}
+                                                                                            variant="secondary"
+                                                                                            className="h-9 px-3 rounded-xl text-xs font-black uppercase tracking-wider bg-white/10 text-white hover:bg-white/20 border border-white/20"
+                                                                                        >
+                                                                                            <Printer className="w-3.5 h-3.5 mr-1" /> Print Form
+                                                                                        </Button>
+
+                                                                                        <Button
+                                                                                            onClick={() => {
+                                                                                                setSelectedPackage(pkg);
+                                                                                                setSessionNotes(`Session #${pkg.used_sessions + 1} Workout`);
+                                                                                                setShowLogSession(true);
+                                                                                            }}
+                                                                                            disabled={isComp}
+                                                                                            className="h-9 px-4 rounded-xl text-xs font-black uppercase tracking-wider bg-emerald-500 hover:bg-emerald-600 text-white shadow-md flex items-center gap-1"
+                                                                                        >
+                                                                                            <Plus className="w-3.5 h-3.5" /> Book Session
+                                                                                        </Button>
+
+                                                                                        <Button
+                                                                                            onClick={() => handleSelectPackage(pkg)}
+                                                                                            className="h-9 px-4 rounded-xl text-xs font-black uppercase tracking-wider bg-indigo-600 hover:bg-indigo-700 text-white shadow-md flex items-center gap-1"
+                                                                                        >
+                                                                                            <span>View Attendance Log</span>
+                                                                                            <ChevronRight className="w-4 h-4 ml-1" />
+                                                                                        </Button>
+                                                                                    </div>
+                                                                                </div>
+                                                                            </div>
+                                                                        </Card>
+                                                                    );
+                                                                })}
+                                                            </div>
+                                                        </div>
                                                     );
-                                                })}
-                                            </div>
-                                        </div>
-                                    ) : (
+                                                })()
+                                            ) : (
                                         /* LEVEL 3: SELECTED PACKAGE ATTENDANCE TRACKER */
                                         <div className="space-y-6">
                                             {/* Package Navigation Bar */}

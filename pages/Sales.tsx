@@ -925,7 +925,7 @@ const Sales = () => {
     const [loading, setLoading] = useState(true);
     const [showForm, setShowForm] = useState(false);
     const [editingSale, setEditingSale] = useState<Sale | null>(null);
-    const [showPTRegistration, setShowPTRegistration] = useState<{ guestName: string; saleId?: string; qty: number; itemName?: string; trainerId?: string; price?: number } | null>(null);
+    const [showPTRegistration, setShowPTRegistration] = useState<{ guestName: string; saleId?: string; qty: number; itemName?: string; trainerId?: string; price?: number; outlet_id?: string; property_id?: string } | null>(null);
     const [showEntranceFeeConsent, setShowEntranceFeeConsent] = useState<{ guestName: string; saleId?: string; sale_id?: string; itemName?: string; item_name?: string; outlet_id?: string; price?: number } | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [categoryFilter, setCategoryFilter] = useState('All');
@@ -1472,7 +1472,9 @@ const Sales = () => {
                                         qty: saleData.quantity || 10,
                                         itemName: saleData.item_name,
                                         trainerId: saleData.sold_by_id || (saleData as any).therapist_id || '',
-                                        price: saleData.net_amount || saleData.total_amount || 0
+                                        price: saleData.net_amount || saleData.total_amount || 0,
+                                        outlet_id: saleData.outlet_id,
+                                        property_id: saleData.property_id
                                     });
                                 } else if (saleData && isEntrance) {
                                     setShowEntranceFeeConsent({

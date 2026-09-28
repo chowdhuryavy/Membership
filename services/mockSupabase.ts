@@ -3113,10 +3113,17 @@ class DatabaseService {
             query = query.eq('phone', phone);
         } else if (email) {
             query = query.eq('email', email);
-        } else if (!isProperty && scopeId) {
+        }
+
+        // Apply strict scope filter at DB level even when phone/email is queried
+        if (!isProperty && scopeId) {
             query = query.eq('outlet_id', scopeId);
-        } else if (isProperty && limitToOutletIds && limitToOutletIds.length > 0) {
-            query = query.in('outlet_id', limitToOutletIds);
+        } else if (isProperty) {
+            if (limitToOutletIds && limitToOutletIds.length > 0) {
+                query = query.in('outlet_id', limitToOutletIds);
+            } else if (scopeId) {
+                query = query.eq('property_id', scopeId);
+            }
         }
         
         const { data, error } = await query.order('created_at', { ascending: false });
@@ -3168,27 +3175,45 @@ class DatabaseService {
           };
         });
 
-        // Also keep any purely local members that haven't synced yet
+        // Also keep any purely local members that haven't synced yet, strictly matching the requested scope
         const dbIds = new Set(supabaseMembers.map(m => m.id));
-        const unsyncedLocals = localMembers.filter(m => !dbIds.has(m.id));
+        const unsyncedLocals = localMembers.filter(m => {
+          if (dbIds.has(m.id)) return false;
+          if (phone && m.phone !== phone) return false;
+          if (email && m.email !== email) return false;
+          if (isProperty) {
+            if (limitToOutletIds && limitToOutletIds.length > 0) return limitToOutletIds.includes(m.outlet_id);
+            if (scopeId) return m.property_id === scopeId;
+            return false;
+          }
+          return scopeId ? m.outlet_id === scopeId : false;
+        });
+
         if (unsyncedLocals.length > 0) {
           allMembers = [...allMembers, ...unsyncedLocals];
         }
 
-        localStorage.setItem('pt_members', JSON.stringify(allMembers));
+        const updatedLocal = [...localMembers];
+        allMembers.forEach(m => {
+          const idx = updatedLocal.findIndex(l => l.id === m.id);
+          if (idx !== -1) updatedLocal[idx] = m;
+          else updatedLocal.push(m);
+        });
+        localStorage.setItem('pt_members', JSON.stringify(updatedLocal));
       } catch (e) {
         allMembers = supabaseMembers;
       }
     } else {
       try {
         allMembers = (JSON.parse(localStorage.getItem('pt_members') || '[]') as PTMember[]).filter(m => {
-          if (phone) return m.phone === phone;
-          if (email) return m.email === email;
+          if (phone && m.phone !== phone) return false;
+          if (email && m.email !== email) return false;
           if (isProperty) {
             if (limitToOutletIds && limitToOutletIds.length > 0) return limitToOutletIds.includes(m.outlet_id);
-            return true;
+            if (scopeId) return m.property_id === scopeId;
+            return false;
           }
-          return !scopeId || m.outlet_id === scopeId;
+          return scopeId ? m.outlet_id === scopeId : false;
         });
       } catch (e) {}
     }
@@ -3257,6 +3282,22 @@ class DatabaseService {
         localStorage.setItem('pt_members', JSON.stringify(updatedLocal));
       } catch (e) {}
     }
+
+    // Final strict scope enforcement across all cases
+    allMembers = allMembers.filter(m => {
+      if (isProperty) {
+        if (limitToOutletIds && limitToOutletIds.length > 0) {
+          return limitToOutletIds.includes(m.outlet_id);
+        }
+        if (scopeId) {
+          return m.property_id === scopeId;
+        }
+        return false;
+      } else if (scopeId) {
+        return m.outlet_id === scopeId;
+      }
+      return true;
+    });
 
     return allMembers.sort((a,b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
   }
@@ -3368,8 +3409,18 @@ class DatabaseService {
   }
 
   async addPTMember(member: Omit<PTMember, 'id' | 'created_at'>) {
+    let resolvedPropertyId = member.property_id;
+    if (!resolvedPropertyId && member.outlet_id) {
+      try {
+        const localOutlets = JSON.parse(localStorage.getItem('outlets') || '[]') as Outlet[];
+        const matched = localOutlets.find(o => o.id === member.outlet_id);
+        if (matched?.property_id) resolvedPropertyId = matched.property_id;
+      } catch (e) {}
+    }
+
     const payload: PTMember = {
       ...member,
+      property_id: resolvedPropertyId,
       id: crypto.randomUUID(),
       created_at: new Date().toISOString()
     };

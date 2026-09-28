@@ -18,7 +18,7 @@ export const PTRegistrationModal = ({
     isOpen: boolean;
     onClose: () => void;
     onSuccess: (ptMember: PTMember) => void;
-    initialData: { guestName: string; saleId?: string; qty: number; itemName?: string; trainerId?: string; price?: number };
+    initialData: { guestName: string; saleId?: string; qty: number; itemName?: string; trainerId?: string; price?: number; outlet_id?: string; property_id?: string };
     staff: any[];
 }) => {
     const { currentOutlet, currentProperty, settings, currency, currencies } = useSettings();
@@ -115,14 +115,17 @@ export const PTRegistrationModal = ({
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!formData.guest_name || !formData.total_sessions || !currentOutlet) {
+        const targetOutletId = initialData?.outlet_id || currentOutlet?.id;
+        const targetPropertyId = initialData?.property_id || currentProperty?.id;
+
+        if (!formData.guest_name || !formData.total_sessions || !targetOutletId) {
             setError('Please fill all required fields.');
             return;
         }
 
         const memberData = {
-            outlet_id: currentOutlet.id,
-            property_id: currentProperty?.id,
+            outlet_id: targetOutletId,
+            property_id: targetPropertyId,
             guest_name: formData.guest_name,
             membership_number: formData.membership_number,
             phone: formData.phone,
@@ -130,7 +133,7 @@ export const PTRegistrationModal = ({
             dob: formData.dob,
             total_sessions: Number(formData.total_sessions),
             used_sessions: 0,
-            sale_id: initialData.saleId,
+            sale_id: initialData?.saleId,
             start_date: formData.start_date,
             end_date: formData.end_date,
             status: 'Active',

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import { 
   BookUser, 
   Search, 
@@ -801,9 +802,9 @@ export const PhoneBook: React.FC = () => {
       </Card>
 
       {/* 5. ADD / EDIT CONTACT MODAL */}
-      {showAddModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-[2.5rem] max-w-xl w-full p-8 shadow-2xl border border-slate-100 max-h-[90vh] overflow-y-auto custom-scrollbar">
+      {showAddModal && createPortal(
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-3 sm:p-6 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200 overflow-y-auto">
+          <div className="bg-white rounded-3xl sm:rounded-[2.5rem] max-w-xl w-full p-5 sm:p-8 shadow-2xl border border-slate-100 max-h-[calc(100dvh-2rem)] sm:max-h-[90vh] overflow-y-auto custom-scrollbar my-auto">
             
             <div className="flex items-center justify-between pb-6 border-b border-slate-100">
               <div className="flex items-center gap-4">
@@ -985,24 +986,25 @@ export const PhoneBook: React.FC = () => {
 
             </form>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* 6. VIEW DOSSIER MODAL */}
-      {viewingContact && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-[2.5rem] max-w-lg w-full p-8 shadow-2xl border border-slate-100 max-h-[90vh] overflow-y-auto custom-scrollbar space-y-6">
+      {viewingContact && createPortal(
+        <div className="fixed inset-0 z-[200] flex items-center justify-center p-3 sm:p-6 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200 overflow-y-auto">
+          <div className="bg-white rounded-3xl sm:rounded-[2.5rem] max-w-lg w-full p-5 sm:p-8 shadow-2xl border border-slate-100 max-h-[calc(100dvh-2rem)] sm:max-h-[90vh] overflow-y-auto custom-scrollbar space-y-5 sm:space-y-6 my-auto">
             
-            <div className="flex items-center justify-between pb-6 border-b border-slate-100">
-              <div className="flex items-center gap-4">
-                <div className="w-14 h-14 bg-slate-900 text-white rounded-2xl flex items-center justify-center font-black text-lg shadow-md">
+            <div className="flex items-center justify-between pb-4 sm:pb-6 border-b border-slate-100">
+              <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+                <div className="w-12 h-12 sm:w-14 sm:h-14 bg-slate-900 text-white rounded-2xl flex items-center justify-center font-black text-base sm:text-lg shadow-md shrink-0">
                   {viewingContact.name?.charAt(0)?.toUpperCase()}
                 </div>
-                <div>
-                  <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight">
+                <div className="min-w-0">
+                  <h3 className="text-lg sm:text-xl font-black text-slate-900 uppercase tracking-tight truncate">
                     {viewingContact.name}
                   </h3>
-                  <div className="flex items-center gap-2 mt-1">
+                  <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-1">
                     <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-black uppercase border shadow-2xs ${getSourceBadgeStyle(viewingContact.source)}`}>
                       {viewingContact.category || viewingContact.source}
                     </span>
@@ -1016,18 +1018,19 @@ export const PhoneBook: React.FC = () => {
               </div>
               <button 
                 onClick={() => setViewingContact(null)}
-                className="w-10 h-10 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-400 hover:text-slate-600 flex items-center justify-center transition-all"
+                className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-400 hover:text-slate-600 flex items-center justify-center transition-all shrink-0 ml-2"
+                aria-label="Close Dossier"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4 sm:w-5 sm:h-5" />
               </button>
             </div>
 
             {/* QUICK COMM ACTIONS */}
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-2 gap-2.5 sm:gap-3">
               {viewingContact.phone && (
                 <a
                   href={`tel:${viewingContact.phone}`}
-                  className="flex items-center justify-center gap-2 h-12 bg-slate-100 hover:bg-slate-200 text-slate-900 rounded-2xl font-black text-xs uppercase tracking-wider transition-all"
+                  className="flex items-center justify-center gap-2 h-11 sm:h-12 bg-slate-100 hover:bg-slate-200 text-slate-900 rounded-2xl font-black text-xs uppercase tracking-wider transition-all"
                 >
                   <Phone className="w-4 h-4 text-indigo-600" /> Call Direct
                 </a>
@@ -1038,7 +1041,7 @@ export const PhoneBook: React.FC = () => {
                   href={`https://wa.me/${getCleanPhone(viewingContact.phone)}`}
                   target="_blank"
                   rel="noreferrer"
-                  className="flex items-center justify-center gap-2 h-12 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-black text-xs uppercase tracking-wider transition-all shadow-lg shadow-emerald-100"
+                  className="flex items-center justify-center gap-2 h-11 sm:h-12 bg-emerald-600 hover:bg-emerald-700 text-white rounded-2xl font-black text-xs uppercase tracking-wider transition-all shadow-lg shadow-emerald-100"
                 >
                   <WhatsAppIcon className="w-4 h-4" /> WhatsApp Chat
                 </a>
@@ -1046,7 +1049,7 @@ export const PhoneBook: React.FC = () => {
             </div>
 
             {/* DETAILS GRID */}
-            <div className="p-6 bg-slate-50 rounded-3xl border border-slate-100 space-y-4 text-xs">
+            <div className="p-4 sm:p-6 bg-slate-50 rounded-2xl sm:rounded-3xl border border-slate-100 space-y-3.5 sm:space-y-4 text-xs">
               <div className="flex items-center justify-between pb-3 border-b border-slate-200/60">
                 <span className="font-bold text-slate-400 uppercase tracking-widest text-[10px]">Phone Number</span>
                 <span className="font-mono font-black text-slate-900 text-sm">{viewingContact.phone || 'N/A'}</span>
@@ -1093,7 +1096,7 @@ export const PhoneBook: React.FC = () => {
               )}
             </div>
 
-            <div className="flex items-center gap-3 pt-2">
+            <div className="flex items-center gap-2.5 sm:gap-3 pt-2">
               {canEdit && (isSuperAdmin || isOwner || !viewingContact.outlet_id || allowedOutletsInProperty.some(o => o.id === viewingContact.outlet_id)) && (
                 <Button
                   type="button"
@@ -1103,7 +1106,7 @@ export const PhoneBook: React.FC = () => {
                     setViewingContact(null);
                     handleOpenEdit(c);
                   }}
-                  className="flex-1 h-12 rounded-2xl border-slate-200 text-slate-700 hover:text-indigo-600 hover:border-indigo-300 font-black uppercase text-xs flex items-center justify-center gap-2 cursor-pointer"
+                  className="flex-1 h-11 sm:h-12 rounded-2xl border-slate-200 text-slate-700 hover:text-indigo-600 hover:border-indigo-300 font-black uppercase text-xs flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <Edit3 className="w-4 h-4 text-indigo-600" /> Edit Contact
                 </Button>
@@ -1113,7 +1116,7 @@ export const PhoneBook: React.FC = () => {
                   type="button"
                   variant="outline"
                   onClick={() => setContactToDelete({ id: viewingContact.id, name: viewingContact.name })}
-                  className="h-12 px-4 rounded-2xl border-rose-200 text-rose-600 hover:bg-rose-50 font-black uppercase text-xs flex items-center justify-center gap-2 cursor-pointer"
+                  className="h-11 sm:h-12 px-3 sm:px-4 rounded-2xl border-rose-200 text-rose-600 hover:bg-rose-50 font-black uppercase text-xs flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <Trash2 className="w-4 h-4" /> Delete
                 </Button>
@@ -1121,14 +1124,15 @@ export const PhoneBook: React.FC = () => {
               <Button
                 type="button"
                 onClick={() => setViewingContact(null)}
-                className="flex-1 h-12 rounded-2xl bg-slate-900 text-white font-black uppercase text-xs cursor-pointer"
+                className="flex-1 h-11 sm:h-12 rounded-2xl bg-slate-900 text-white font-black uppercase text-xs cursor-pointer"
               >
                 Close
               </Button>
             </div>
 
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* 7. APP DEFAULT CONFIRMATION MODAL */}
