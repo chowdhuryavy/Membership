@@ -85,8 +85,57 @@ export class GuestAuthService {
   public async getAccountByEmail(email: string): Promise<GuestAccount | null> {
     const cleanEmail = (email || '').trim().toLowerCase();
     if (!cleanEmail) return null;
-    const accounts = await this.getAccounts();
-    return accounts.find(a => a.email.toLowerCase() === cleanEmail) || null;
+    let accounts = await this.getAccounts();
+    let account = accounts.find(a => a.email.toLowerCase() === cleanEmail);
+
+    if (!account) {
+      try {
+        const [members, ptMembers, guests] = await Promise.all([
+          db.getMembers('').catch(() => []),
+          db.getPTMembers('').catch(() => []),
+          db.getGuests('').catch(() => [])
+        ]);
+
+        const matchedMember = members.find((m: any) => m.email && m.email.toLowerCase() === cleanEmail);
+        const matchedPT = ptMembers.find((p: any) => p.email && p.email.toLowerCase() === cleanEmail);
+        const matchedGuest = guests.find((g: any) => g.email && g.email.toLowerCase() === cleanEmail);
+
+        if (matchedMember) {
+          const res = await this.provisionGuestAccount({
+            email: matchedMember.email,
+            name: matchedMember.guest_name,
+            phone: matchedMember.phone,
+            property_id: matchedMember.property_id,
+            outlet_id: matchedMember.outlet_id,
+            member_id: matchedMember.id
+          });
+          return res.account;
+        } else if (matchedPT) {
+          const res = await this.provisionGuestAccount({
+            email: matchedPT.email,
+            name: matchedPT.guest_name,
+            phone: matchedPT.phone,
+            property_id: matchedPT.property_id,
+            outlet_id: matchedPT.outlet_id,
+            member_id: matchedPT.id
+          });
+          return res.account;
+        } else if (matchedGuest) {
+          const res = await this.provisionGuestAccount({
+            email: matchedGuest.email,
+            name: matchedGuest.name,
+            phone: matchedGuest.phone,
+            property_id: matchedGuest.property_id,
+            guest_id: matchedGuest.id
+          });
+          return res.account;
+        }
+      } catch (e) {
+        console.warn('[GuestAuth] Error auto-provisioning guest by email:', e);
+      }
+    }
+
+    return account || null;
   }
 
   // --- PROVISIONING ON NEW GUEST CREATION ---
@@ -189,7 +238,11 @@ export class GuestAuthService {
       return { error: 'Your mobile portal access is currently suspended. Please contact front desk management.' };
     }
 
-    if (account.password !== cleanPass) {
+    const isPasswordValid = 
+      account.password === cleanPass || 
+      account.temp_password === cleanPass;
+
+    if (!isPasswordValid) {
       return { error: 'Incorrect email or password. Please verify and try again.' };
     }
 
