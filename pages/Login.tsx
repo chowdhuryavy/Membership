@@ -100,6 +100,15 @@ const Login = () => {
     }
   };
 
+  const handleGuestPortalClick = () => {
+    const host = window.location.hostname.toLowerCase();
+    if (host.includes('perfection.my')) {
+      window.location.href = 'https://hcm-guest.perfection.my/#/guest-login';
+    } else {
+      navigate('/guest-login');
+    }
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden bg-[#fcfdfe] selection:bg-indigo-100">
       
@@ -236,6 +245,29 @@ const Login = () => {
                     Authenticate <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                   </span>
                 </Button>
+              </div>
+
+              <div className="pt-4 border-t border-slate-100 flex flex-col items-center gap-1.5 text-center">
+                <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                  Switch Portal
+                </p>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={handleStaffPortalClick}
+                    className="text-[11px] font-bold text-slate-600 hover:text-indigo-600 transition-colors"
+                  >
+                    Staff Portal
+                  </button>
+                  <span className="text-slate-300">&bull;</span>
+                  <button
+                    type="button"
+                    onClick={handleGuestPortalClick}
+                    className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 transition-colors"
+                  >
+                    Guest Mobile Portal
+                  </button>
+                </div>
               </div>
             </form>
           ) : (

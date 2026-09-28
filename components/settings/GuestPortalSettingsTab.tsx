@@ -1,0 +1,572 @@
+import React, { useState, useEffect } from 'react';
+import { guestAuth, DEFAULT_GUEST_PORTAL_SETTINGS } from '../../services/guestAuthService';
+import { GuestAccount, GuestPortalSettings } from '../../types';
+import { useSettings } from '../../contexts/SettingsContext';
+import { useAuth } from '../../contexts/AuthContext';
+import {
+  Smartphone,
+  ShieldCheck,
+  ShieldAlert,
+  QrCode,
+  Dumbbell,
+  Sparkles,
+  Ticket,
+  Receipt,
+  FileText,
+  User,
+  Mail,
+  KeyRound,
+  RefreshCw,
+  Search,
+  ExternalLink,
+  Power,
+  ToggleLeft,
+  ToggleRight,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  Phone,
+  Send,
+  Lock
+} from 'lucide-react';
+import { Button, Input, Card } from '../ui';
+import { format, parseISO } from 'date-fns';
+import toast from 'react-hot-toast';
+
+export const GuestPortalSettingsTab: React.FC = () => {
+  const { currentProperty, settings } = useSettings();
+  const { isSuperAdmin } = useAuth();
+
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [portalSettings, setPortalSettings] = useState<GuestPortalSettings>(DEFAULT_GUEST_PORTAL_SETTINGS);
+  const [accounts, setAccounts] = useState<GuestAccount[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const [ps, accs] = await Promise.all([
+        guestAuth.getPortalSettings(),
+        guestAuth.getAccounts()
+      ]);
+      setPortalSettings(ps);
+      setAccounts(accs);
+    } catch (e) {
+      console.error('Error loading guest portal settings:', e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const handleToggleSetting = async (key: keyof GuestPortalSettings) => {
+    const updated = { ...portalSettings, [key]: !portalSettings[key] };
+    setPortalSettings(updated);
+    setSaving(true);
+    try {
+      await guestAuth.savePortalSettings(updated);
+      toast.success('Guest portal settings updated successfully.');
+    } catch (e) {
+      toast.error('Failed to save settings');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleSaveTextSettings = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setSaving(true);
+    try {
+      await guestAuth.savePortalSettings(portalSettings);
+      toast.success('Portal preferences saved successfully.');
+    } catch (e) {
+      toast.error('Failed to save preferences');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleToggleAccountActive = async (id: string) => {
+    setActionLoadingId(id);
+    try {
+      const updated = await guestAuth.toggleAccountActive(id);
+      if (updated) {
+        setAccounts(prev => prev.map(a => a.id === id ? updated : a));
+        toast.success(`Account ${updated.is_active ? 'Activated' : 'Suspended'}`);
+      }
+    } catch (e) {
+      toast.error('Failed to update account status');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const handleResendCredentials = async (account: GuestAccount) => {
+    setActionLoadingId(account.id);
+    try {
+      const res = await guestAuth.provisionGuestAccount({
+        email: account.email,
+        name: account.name,
+        phone: account.phone,
+        property_id: account.property_id,
+        outlet_id: account.outlet_id,
+        forceResend: true
+      });
+      toast.success(`Credentials dispatched to ${account.email}`);
+      await loadData();
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to dispatch credentials');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
+  const filteredAccounts = accounts.filter(a => {
+    const q = searchTerm.toLowerCase();
+    return (
+      a.name.toLowerCase().includes(q) ||
+      a.email.toLowerCase().includes(q) ||
+      (a.phone && a.phone.includes(q))
+    );
+  });
+
+  const portalDomainUrl = 'https://hcm-guest.perfection.my/#/guest-login';
+
+  return (
+    <div className="space-y-8 animate-in fade-in duration-300">
+      {/* HEADER HERO */}
+      <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 rounded-[2.5rem] p-8 text-white relative overflow-hidden border border-slate-800 shadow-xl">
+        <div className="absolute top-0 right-0 w-80 h-80 bg-indigo-500/10 rounded-full blur-3xl pointer-events-none" />
+        
+        <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="space-y-2 max-w-xl">
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-300 text-[10px] font-black uppercase tracking-widest border border-indigo-400/20">
+              <Smartphone className="w-3.5 h-3.5" /> Super Admin Control
+            </div>
+            <h2 className="text-2xl sm:text-3xl font-black uppercase tracking-tight text-white">
+              Guest Mobile Portal Management
+            </h2>
+            <p className="text-slate-300 text-xs sm:text-sm font-medium leading-relaxed">
+              Configure guest visibility, touchless QR check-in, PT session tracking, spa booking requests, and manage authenticated guest accounts.
+            </p>
+          </div>
+
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+            <a
+              href={portalDomainUrl}
+              target="_blank"
+              rel="noreferrer"
+              className="px-5 py-3 rounded-2xl bg-white/10 hover:bg-white/20 text-white text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 border border-white/10 transition-all"
+            >
+              <ExternalLink className="w-4 h-4" /> Open Guest Portal
+            </a>
+            <button
+              onClick={() => handleToggleSetting('is_enabled')}
+              className={`px-5 py-3 rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-lg ${
+                portalSettings.is_enabled
+                  ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/30'
+                  : 'bg-red-600 hover:bg-red-700 text-white shadow-red-600/30'
+              }`}
+            >
+              <Power className="w-4 h-4" />
+              {portalSettings.is_enabled ? 'Portal Online' : 'Portal Offline'}
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* FEATURE VISIBILITY MATRIX */}
+      <div className="space-y-4">
+        <div className="flex justify-between items-center px-1">
+          <div>
+            <h3 className="text-lg font-black uppercase text-slate-900 tracking-tight">
+              Guest Privilege &amp; Feature Visibility Matrix
+            </h3>
+            <p className="text-xs text-slate-500 font-medium">
+              Control what guests can see and access from their mobile phones
+            </p>
+          </div>
+          {saving && (
+            <span className="text-[10px] font-black uppercase text-indigo-600 animate-pulse">
+              Saving changes...
+            </span>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {/* 1. DIGITAL CARD & QR */}
+          <div className="p-5 rounded-3xl bg-white border border-slate-200/80 shadow-sm space-y-3 flex flex-col justify-between">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="p-2.5 rounded-2xl bg-amber-50 text-amber-600">
+                  <QrCode className="w-5 h-5" />
+                </div>
+                <button
+                  onClick={() => handleToggleSetting('allow_digital_card')}
+                  className="text-2xl"
+                >
+                  {portalSettings.allow_digital_card ? (
+                    <ToggleRight className="w-8 h-8 text-indigo-600" />
+                  ) : (
+                    <ToggleLeft className="w-8 h-8 text-slate-300" />
+                  )}
+                </button>
+              </div>
+              <h4 className="text-sm font-black text-slate-900 uppercase">
+                Digital Card &amp; QR Check-In
+              </h4>
+              <p className="text-xs text-slate-500 leading-relaxed font-medium">
+                Displays the holographic digital VIP membership card and dynamic barcode for touchless front desk/turnstile check-in.
+              </p>
+            </div>
+            <div className="pt-2 border-t border-slate-100 flex items-center gap-2">
+              <span className={`text-[10px] font-black uppercase tracking-wider ${portalSettings.allow_digital_card ? 'text-emerald-600' : 'text-slate-400'}`}>
+                {portalSettings.allow_digital_card ? '● Enabled for Guests' : '○ Hidden from Guests'}
+              </span>
+            </div>
+          </div>
+
+          {/* 2. PT TRACKER */}
+          <div className="p-5 rounded-3xl bg-white border border-slate-200/80 shadow-sm space-y-3 flex flex-col justify-between">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="p-2.5 rounded-2xl bg-blue-50 text-blue-600">
+                  <Dumbbell className="w-5 h-5" />
+                </div>
+                <button
+                  onClick={() => handleToggleSetting('allow_pt_tracking')}
+                  className="text-2xl"
+                >
+                  {portalSettings.allow_pt_tracking ? (
+                    <ToggleRight className="w-8 h-8 text-indigo-600" />
+                  ) : (
+                    <ToggleLeft className="w-8 h-8 text-slate-300" />
+                  )}
+                </button>
+              </div>
+              <h4 className="text-sm font-black text-slate-900 uppercase">
+                Personal Training Tracker
+              </h4>
+              <p className="text-xs text-slate-500 leading-relaxed font-medium">
+                Enables guests to track remaining training sessions, assigned trainer details, and workout attendance history.
+              </p>
+            </div>
+            <div className="pt-2 border-t border-slate-100 flex items-center gap-2">
+              <span className={`text-[10px] font-black uppercase tracking-wider ${portalSettings.allow_pt_tracking ? 'text-emerald-600' : 'text-slate-400'}`}>
+                {portalSettings.allow_pt_tracking ? '● Enabled for Guests' : '○ Hidden from Guests'}
+              </span>
+            </div>
+          </div>
+
+          {/* 3. SPA & WELLNESS BOOKINGS */}
+          <div className="p-5 rounded-3xl bg-white border border-slate-200/80 shadow-sm space-y-3 flex flex-col justify-between">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="p-2.5 rounded-2xl bg-purple-50 text-purple-600">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <button
+                  onClick={() => handleToggleSetting('allow_massage_bookings')}
+                  className="text-2xl"
+                >
+                  {portalSettings.allow_massage_bookings ? (
+                    <ToggleRight className="w-8 h-8 text-indigo-600" />
+                  ) : (
+                    <ToggleLeft className="w-8 h-8 text-slate-300" />
+                  )}
+                </button>
+              </div>
+              <h4 className="text-sm font-black text-slate-900 uppercase">
+                Spa &amp; Massage Reservations
+              </h4>
+              <p className="text-xs text-slate-500 leading-relaxed font-medium">
+                Allows guests to view confirmed massage treatments, assigned therapists, and submit appointment requests.
+              </p>
+            </div>
+            <div className="pt-2 border-t border-slate-100 flex items-center gap-2">
+              <span className={`text-[10px] font-black uppercase tracking-wider ${portalSettings.allow_massage_bookings ? 'text-emerald-600' : 'text-slate-400'}`}>
+                {portalSettings.allow_massage_bookings ? '● Enabled for Guests' : '○ Hidden from Guests'}
+              </span>
+            </div>
+          </div>
+
+          {/* 4. ENTRANCE PASSES */}
+          <div className="p-5 rounded-3xl bg-white border border-slate-200/80 shadow-sm space-y-3 flex flex-col justify-between">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="p-2.5 rounded-2xl bg-emerald-50 text-emerald-600">
+                  <Ticket className="w-5 h-5" />
+                </div>
+                <button
+                  onClick={() => handleToggleSetting('allow_entrance_passes')}
+                  className="text-2xl"
+                >
+                  {portalSettings.allow_entrance_passes ? (
+                    <ToggleRight className="w-8 h-8 text-indigo-600" />
+                  ) : (
+                    <ToggleLeft className="w-8 h-8 text-slate-300" />
+                  )}
+                </button>
+              </div>
+              <h4 className="text-sm font-black text-slate-900 uppercase">
+                Day Passes &amp; Pool Entries
+              </h4>
+              <p className="text-xs text-slate-500 leading-relaxed font-medium">
+                Displays active entrance fee passes (e.g. Ground Floor Pool vs. 1st Floor Pool) and signed digital waivers.
+              </p>
+            </div>
+            <div className="pt-2 border-t border-slate-100 flex items-center gap-2">
+              <span className={`text-[10px] font-black uppercase tracking-wider ${portalSettings.allow_entrance_passes ? 'text-emerald-600' : 'text-slate-400'}`}>
+                {portalSettings.allow_entrance_passes ? '● Enabled for Guests' : '○ Hidden from Guests'}
+              </span>
+            </div>
+          </div>
+
+          {/* 5. FINANCIAL INVOICES */}
+          <div className="p-5 rounded-3xl bg-white border border-slate-200/80 shadow-sm space-y-3 flex flex-col justify-between">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="p-2.5 rounded-2xl bg-indigo-50 text-indigo-600">
+                  <Receipt className="w-5 h-5" />
+                </div>
+                <button
+                  onClick={() => handleToggleSetting('allow_financial_history')}
+                  className="text-2xl"
+                >
+                  {portalSettings.allow_financial_history ? (
+                    <ToggleRight className="w-8 h-8 text-indigo-600" />
+                  ) : (
+                    <ToggleLeft className="w-8 h-8 text-slate-300" />
+                  )}
+                </button>
+              </div>
+              <h4 className="text-sm font-black text-slate-900 uppercase">
+                Billing &amp; Receipts
+              </h4>
+              <p className="text-xs text-slate-500 leading-relaxed font-medium">
+                Allows guests to review past transaction amounts, payment methods, and download official payment slips.
+              </p>
+            </div>
+            <div className="pt-2 border-t border-slate-100 flex items-center gap-2">
+              <span className={`text-[10px] font-black uppercase tracking-wider ${portalSettings.allow_financial_history ? 'text-emerald-600' : 'text-slate-400'}`}>
+                {portalSettings.allow_financial_history ? '● Enabled for Guests' : '○ Hidden from Guests'}
+              </span>
+            </div>
+          </div>
+
+          {/* 6. PROFILE EDITING */}
+          <div className="p-5 rounded-3xl bg-white border border-slate-200/80 shadow-sm space-y-3 flex flex-col justify-between">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="p-2.5 rounded-2xl bg-teal-50 text-teal-600">
+                  <User className="w-5 h-5" />
+                </div>
+                <button
+                  onClick={() => handleToggleSetting('allow_profile_editing')}
+                  className="text-2xl"
+                >
+                  {portalSettings.allow_profile_editing ? (
+                    <ToggleRight className="w-8 h-8 text-indigo-600" />
+                  ) : (
+                    <ToggleLeft className="w-8 h-8 text-slate-300" />
+                  )}
+                </button>
+              </div>
+              <h4 className="text-sm font-black text-slate-900 uppercase">
+                Guest Profile Modifications
+              </h4>
+              <p className="text-xs text-slate-500 leading-relaxed font-medium">
+                Allows guests to update contact information and emergency phone numbers from their mobile devices.
+              </p>
+            </div>
+            <div className="pt-2 border-t border-slate-100 flex items-center gap-2">
+              <span className={`text-[10px] font-black uppercase tracking-wider ${portalSettings.allow_profile_editing ? 'text-emerald-600' : 'text-slate-400'}`}>
+                {portalSettings.allow_profile_editing ? '● Enabled for Guests' : '○ Hidden from Guests'}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* PORTAL SUPPORT & DIRECTIVE CONFIGURATION */}
+      <Card className="rounded-[2rem] p-6 sm:p-8 border-slate-200/80 shadow-sm bg-white space-y-5">
+        <div>
+          <h3 className="text-base font-black uppercase text-slate-900 tracking-tight">
+            Guest Portal Concierge &amp; Support Info
+          </h3>
+          <p className="text-xs text-slate-500 font-medium">
+            Contact information displayed at the bottom of the guest portal
+          </p>
+        </div>
+
+        <form onSubmit={handleSaveTextSettings} className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">
+                Support Phone Number
+              </label>
+              <input
+                type="text"
+                value={portalSettings.support_phone || ''}
+                onChange={e => setPortalSettings({ ...portalSettings, support_phone: e.target.value })}
+                placeholder="+60 3-1234 5678"
+                className="w-full h-11 px-4 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold"
+              />
+            </div>
+
+            <div className="space-y-1">
+              <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">
+                Support Concierge Email
+              </label>
+              <input
+                type="email"
+                value={portalSettings.support_email || ''}
+                onChange={e => setPortalSettings({ ...portalSettings, support_email: e.target.value })}
+                placeholder="support@perfection.my"
+                className="w-full h-11 px-4 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold"
+              />
+            </div>
+          </div>
+
+          <div className="flex justify-end pt-2">
+            <Button
+              type="submit"
+              isLoading={saving}
+              className="h-11 px-6 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs uppercase tracking-wider shadow-lg"
+            >
+              Save Concierge Details
+            </Button>
+          </div>
+        </form>
+      </Card>
+
+      {/* GUEST ACCOUNTS DIRECTORY */}
+      <Card className="rounded-[2.5rem] border-slate-200/80 shadow-sm bg-white overflow-hidden">
+        <div className="p-6 sm:p-8 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+          <div>
+            <h3 className="text-base font-black uppercase text-slate-900 tracking-tight">
+              Authenticated Guest Accounts ({accounts.length})
+            </h3>
+            <p className="text-xs text-slate-500 font-medium">
+              Manage member credentials, resend temporary passwords, or suspend access
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <div className="relative w-64">
+              <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={searchTerm}
+                onChange={e => setSearchTerm(e.target.value)}
+                placeholder="Search guest or email..."
+                className="w-full h-10 pl-10 pr-4 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+            <button
+              onClick={loadData}
+              className="p-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600"
+              title="Refresh List"
+            >
+              <RefreshCw className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full text-left">
+            <thead className="bg-slate-50 border-b border-slate-100 text-[10px] font-black uppercase text-slate-400 tracking-wider">
+              <tr>
+                <th className="px-6 py-4">Guest / Member</th>
+                <th className="px-6 py-4">Login Email</th>
+                <th className="px-6 py-4">Status</th>
+                <th className="px-6 py-4">Security State</th>
+                <th className="px-6 py-4">Last Login</th>
+                <th className="px-6 py-4 text-right">Actions</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 text-xs font-semibold text-slate-700">
+              {filteredAccounts.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-6 py-12 text-center text-slate-400 font-medium">
+                    No guest accounts found. New accounts are automatically provisioned when members or guests are created with an email address.
+                  </td>
+                </tr>
+              ) : (
+                filteredAccounts.map(acc => (
+                  <tr key={acc.id} className="hover:bg-slate-50/60 transition-colors">
+                    <td className="px-6 py-4 font-bold text-slate-900">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center font-black text-xs">
+                          {acc.name.charAt(0).toUpperCase()}
+                        </div>
+                        <div>
+                          <p>{acc.name}</p>
+                          {acc.phone && <p className="text-[10px] text-slate-400 font-normal">{acc.phone}</p>}
+                        </div>
+                      </div>
+                    </td>
+                    <td className="px-6 py-4 font-mono text-slate-600">
+                      {acc.email}
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
+                        acc.is_active
+                          ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                          : 'bg-red-50 text-red-700 border border-red-200'
+                      }`}>
+                        {acc.is_active ? 'Active' : 'Suspended'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      {acc.must_change_password ? (
+                        <span className="text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase">
+                          Temporary Pass
+                        </span>
+                      ) : (
+                        <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase">
+                          Permanent Key
+                        </span>
+                      )}
+                    </td>
+                    <td className="px-6 py-4 text-slate-500 text-[11px]">
+                      {acc.last_login ? format(parseISO(acc.last_login), 'dd MMM yyyy, HH:mm') : 'Never'}
+                    </td>
+                    <td className="px-6 py-4 text-right">
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          onClick={() => handleResendCredentials(acc)}
+                          disabled={actionLoadingId === acc.id}
+                          className="px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-[11px] font-bold flex items-center gap-1.5 transition-colors"
+                          title="Resend welcome credentials email"
+                        >
+                          <Send className="w-3 h-3" /> Resend Credentials
+                        </button>
+                        <button
+                          onClick={() => handleToggleAccountActive(acc.id)}
+                          disabled={actionLoadingId === acc.id}
+                          className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-colors ${
+                            acc.is_active
+                              ? 'bg-red-50 hover:bg-red-100 text-red-700'
+                              : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700'
+                          }`}
+                        >
+                          {acc.is_active ? 'Suspend' : 'Activate'}
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </Card>
+    </div>
+  );
+};

@@ -35,7 +35,7 @@ export type Permission =
   
   // System Configuration & Settings
   | 'settings:view' | 'settings:edit' 
-  | 'settings:view_global' | 'settings:view_properties' | 'settings:view_outlets' | 'settings:view_roles' | 'settings:view_currency' | 'settings:view_shortcuts' | 'settings:view_documents' | 'settings:view_smtp' | 'settings:view_maintenance' | 'settings:view_navigation' | 'settings:view_incentives' | 'settings:manage_visibility' | 'settings:view_staff_portal' | 'settings:view_booking_engine' | 'settings:view_membership_types' | 'settings:view_massage_rooms' | 'settings:view_reports_config' | 'settings:view_custom_reports' | 'settings:view_entrance_fee' | 'settings:view_expiration_reminders'
+  | 'settings:view_global' | 'settings:view_properties' | 'settings:view_outlets' | 'settings:view_roles' | 'settings:view_currency' | 'settings:view_shortcuts' | 'settings:view_documents' | 'settings:view_smtp' | 'settings:view_maintenance' | 'settings:view_navigation' | 'settings:view_incentives' | 'settings:manage_visibility' | 'settings:view_staff_portal' | 'settings:view_guest_portal' | 'settings:view_booking_engine' | 'settings:view_membership_types' | 'settings:view_massage_rooms' | 'settings:view_reports_config' | 'settings:view_custom_reports' | 'settings:view_entrance_fee' | 'settings:view_expiration_reminders'
   | 'settings:manage_global' | 'settings:manage_properties' | 'settings:manage_outlets' | 'settings:manage_roles' | 'settings:manage_currency' | 'settings:manage_shortcuts' | 'settings:manage_documents' | 'settings:manage_smtp' | 'settings:manage_maintenance' | 'settings:manage_navigation' | 'settings:manage_incentives' | 'settings:manage_staff_portal' | 'settings:manage_booking_engine' | 'settings:manage_membership_types' | 'settings:manage_massage_rooms' | 'settings:manage_reports_config' | 'settings:manage_custom_reports' | 'settings:manage_entrance_fee' | 'settings:manage_expiration_reminders'
   
   // WhatsApp Automation
@@ -371,10 +371,45 @@ export interface CompanySettings {
   restricted_permissions?: string[];
   conditions?: string;
   staff_portal_settings?: Record<string, any>;
+  guest_portal_settings?: GuestPortalSettings;
   expiration_reminder_config?: ExpirationReminderConfig;
   session_timeout_minutes?: number;
   whatsapp_disabled_properties?: string[];
   whatsapp_disabled_outlets?: string[];
+}
+
+export interface GuestPortalSettings {
+  is_enabled: boolean;
+  allow_digital_card: boolean;
+  allow_pt_tracking: boolean;
+  allow_massage_bookings: boolean;
+  allow_entrance_passes: boolean;
+  allow_waiver_signing: boolean;
+  allow_financial_history: boolean;
+  allow_profile_editing: boolean;
+  require_mandatory_waiver: boolean;
+  welcome_message?: string;
+  support_phone?: string;
+  support_email?: string;
+}
+
+export interface GuestAccount {
+  id: string;
+  email: string;
+  password?: string;
+  temp_password?: string;
+  name: string;
+  phone?: string;
+  property_id?: string;
+  outlet_id?: string;
+  member_id?: string;
+  guest_id?: string;
+  is_active: boolean;
+  must_change_password: boolean;
+  created_at: string;
+  last_login?: string;
+  otp_code?: string;
+  otp_expires_at?: string;
 }
 
 export enum MemberStatus {

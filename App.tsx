@@ -27,6 +27,8 @@ import UsersPage from './pages/Users';
 import StaffPage from './pages/Staff'; 
 import StaffLogin from './pages/StaffLogin';
 import StaffSchedule from './pages/StaffSchedule';
+import GuestLogin from './pages/GuestLogin';
+import GuestPortal from './pages/GuestPortal';
 import Reports from './pages/Reports';
 import Logs from './pages/Logs';
 import SettingsPage from './pages/Settings';
@@ -366,8 +368,12 @@ const ProtectedLayout = () => {
   }, [checkShortcut, navigate]);
 
   if (!user && !combinedLoading) {
-    const isStaffDomain = window.location.hostname.toLowerCase().includes('hcm-staff');
-    return <Navigate to={isStaffDomain ? "/staff-login" : "/login"} replace />;
+    const host = window.location.hostname.toLowerCase();
+    const isGuestDomain = host.includes('hcm-guest');
+    const isStaffDomain = host.includes('hcm-staff');
+    if (isGuestDomain) return <Navigate to="/guest-login" replace />;
+    if (isStaffDomain) return <Navigate to="/staff-login" replace />;
+    return <Navigate to="/login" replace />;
   }
   
   return (
@@ -923,6 +929,8 @@ const App = () => {
           <Route path="/login" element={<Login />} />
           <Route path="/staff-login" element={<StaffLogin />} />
           <Route path="/staff-schedule" element={<StaffSchedule />} />
+          <Route path="/guest-login" element={<GuestLogin />} />
+          <Route path="/guest-portal" element={<GuestPortal />} />
           <Route path="/pass" element={<PublicMemberPass />} />
           <Route path="/signature/:signatureId" element={<SignatureCapturePage />} />
           <Route element={<ProtectedLayout />}>

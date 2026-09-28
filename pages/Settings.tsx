@@ -59,9 +59,11 @@ import {
   BellRing,
   Server,
   MessageSquare,
+  Smartphone,
   Loader2
 } from 'lucide-react';
 import { PropertySmtpConfig } from '../components/settings/PropertySmtpConfig';
+import { GuestPortalSettingsTab } from '../components/settings/GuestPortalSettingsTab';
 import { WhatsAppAutomationRulesTab } from '../components/whatsapp/WhatsAppAutomationRulesTab';
 import { WhatsAppTemplatesTab } from '../components/whatsapp/WhatsAppTemplatesTab';
 import { WhatsAppSettingsTab } from '../components/whatsapp/WhatsAppSettingsTab';
@@ -182,7 +184,7 @@ const PermissionMatrix = ({
   );
 };
 
-type TabId = 'company' | 'incentives' | 'navigation' | 'properties' | 'smtp' | 'outlets' | 'roles' | 'currency' | 'shortcuts' | 'documents' | 'maintenance' | 'booking' | 'massage_rooms' | 'functions' | 'membership_types' | 'reports_config' | 'custom_reports' | 'expiration_reminders' | 'staff_portal' | 'whatsapp_config' | 'whatsapp_rules' | 'whatsapp_templates' | 'whatsapp_settings';
+type TabId = 'company' | 'incentives' | 'navigation' | 'properties' | 'smtp' | 'outlets' | 'roles' | 'currency' | 'shortcuts' | 'documents' | 'maintenance' | 'booking' | 'massage_rooms' | 'functions' | 'membership_types' | 'reports_config' | 'custom_reports' | 'expiration_reminders' | 'staff_portal' | 'guest_portal' | 'whatsapp_config' | 'whatsapp_rules' | 'whatsapp_templates' | 'whatsapp_settings';
 
 const SignatoryConfig = ({
   config = {},
@@ -309,6 +311,7 @@ const SettingsPage = () => {
       { id: 'navigation', label: 'Navigation', visible: isSuper || hasPermission(user?.role_id || '', 'settings:view_navigation'), icon: ListOrdered },
       { id: 'functions', label: 'Feature Visibility', visible: isSuper, icon: ShieldAlert },
       { id: 'staff_portal', label: 'Staff Portal', visible: isSuper || hasPermission(user?.role_id || '', 'settings:view_staff_portal'), icon: Users },
+      { id: 'guest_portal', label: 'Guest Portal', visible: isSuper || hasPermission(user?.role_id || '', 'settings:view_guest_portal'), icon: Smartphone },
       { id: 'maintenance', label: 'Maintenance', visible: isSuper || hasPermission(user?.role_id || '', 'settings:view_maintenance'), icon: Zap },
       
       // Accessible to others with permission
@@ -2091,6 +2094,10 @@ const SettingsPage = () => {
                           </div>
                       </CardContent>
                   </Card>
+              )}
+
+              {activeTab === 'guest_portal' && (
+                  <GuestPortalSettingsTab />
               )}
 
               {activeTab === 'membership_types' && (

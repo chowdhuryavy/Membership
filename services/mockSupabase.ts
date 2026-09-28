@@ -1645,6 +1645,22 @@ class DatabaseService {
     }).catch(err => {
       console.error('[Email Service Dynamic Import Error]:', err);
     });
+
+    // Automatically provision Guest Mobile Portal account if email is present
+    if (member.email && member.email.includes('@')) {
+      import('./guestAuthService').then(({ guestAuth }) => {
+        guestAuth.provisionGuestAccount({
+          email: member.email!,
+          name: member.guest_name,
+          phone: member.phone,
+          property_id: member.property_id,
+          outlet_id: member.outlet_id,
+          member_id: member.id
+        }).catch(err => {
+          console.error('[Automatic Guest Portal Provisioning Error]:', err);
+        });
+      }).catch(console.error);
+    }
   }
 
   async syncGoogleWalletPassForMember(memberId: string, memberData?: Partial<Member>): Promise<void> {
@@ -3323,6 +3339,21 @@ class DatabaseService {
     }
 
     await this.logAction('CREATE_ENTRANCE_FEE_CONSENT', `Entrance Fee Consent logged for ${payload.guest_name}`);
+
+    // Automatically provision Guest Mobile Portal account if email is present
+    if (payload.email && payload.email.includes('@')) {
+      import('./guestAuthService').then(({ guestAuth }) => {
+        guestAuth.provisionGuestAccount({
+          email: payload.email!,
+          name: payload.guest_name,
+          phone: payload.phone,
+          outlet_id: payload.outlet_id
+        }).catch(err => {
+          console.error('[Automatic Guest Portal Provisioning Error]:', err);
+        });
+      }).catch(console.error);
+    }
+
     return payload;
   }
 
@@ -3532,6 +3563,22 @@ class DatabaseService {
           outlet_id: payload.outlet_id,
           user_id: payload.trainer_id || undefined
         });
+
+        // Automatically provision Guest Mobile Portal account if email is present
+        if (payload.email && payload.email.includes('@')) {
+          import('./guestAuthService').then(({ guestAuth }) => {
+            guestAuth.provisionGuestAccount({
+              email: payload.email!,
+              name: payload.guest_name,
+              phone: payload.phone,
+              property_id: payload.property_id,
+              outlet_id: payload.outlet_id,
+              member_id: payload.id
+            }).catch(err => {
+              console.error('[Automatic Guest Portal Provisioning Error]:', err);
+            });
+          }).catch(console.error);
+        }
       }, null);
     }
   }
@@ -4188,15 +4235,49 @@ class DatabaseService {
           
           const { data, error } = await supabase.from('guests').update(updates).eq('id', existing.id).select().single();
           if (error) throw error;
+          if (data && data.email && data.email.includes('@')) {
+            import('./guestAuthService').then(({ guestAuth }) => {
+              guestAuth.provisionGuestAccount({
+                email: data.email!,
+                name: data.name,
+                phone: data.phone,
+                property_id: data.property_id,
+                guest_id: data.id
+              }).catch(console.error);
+            }).catch(console.error);
+          }
           return data as Guest;
         } else {
           const { data, error } = await supabase.from('guests').insert([{ ...guest, id: crypto.randomUUID(), created_at: new Date().toISOString() }]).select().single();
           if (error) throw error;
+          if (data && data.email && data.email.includes('@')) {
+            import('./guestAuthService').then(({ guestAuth }) => {
+              guestAuth.provisionGuestAccount({
+                email: data.email!,
+                name: data.name,
+                phone: data.phone,
+                property_id: data.property_id,
+                guest_id: data.id
+              }).catch(console.error);
+            }).catch(console.error);
+          }
           return data as Guest;
         }
       }, { ...guest, id: crypto.randomUUID(), created_at: new Date().toISOString() } as Guest);
     }
-    return { ...guest, id: crypto.randomUUID(), created_at: new Date().toISOString() } as Guest;
+    const fallbackGuest = { ...guest, id: crypto.randomUUID(), created_at: new Date().toISOString() } as Guest;
+    if (fallbackGuest.email && fallbackGuest.email.includes('@')) {
+      import('./guestAuthService').then(({ guestAuth }) => {
+        guestAuth.provisionGuestAccount({
+          email: fallbackGuest.email!,
+          name: fallbackGuest.name,
+          phone: fallbackGuest.phone,
+          property_id: fallbackGuest.property_id,
+          guest_id: fallbackGuest.id
+        }).catch(console.error);
+      }).catch(console.error);
+    }
+    return fallbackGuest;
   }
 
   async deleteGuest(id: string) {
