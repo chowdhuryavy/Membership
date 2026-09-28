@@ -233,9 +233,10 @@ export default function GuestPortal() {
     setAccount(session);
 
     try {
+      const activeScopeId = session.outlet_id || session.property_id;
       const [ps, props, outlets, allMembers, allPtMembers, allPtSessions, allBookings, allConsents, allSales] =
         await Promise.all([
-          guestAuth.getPortalSettings(),
+          guestAuth.getPortalSettings(activeScopeId),
           db.getProperties().catch(() => []),
           db.getOutlets().catch(() => []),
           db.getMembers(session.outlet_id || 'all').catch(() => []),
@@ -973,10 +974,10 @@ export default function GuestPortal() {
             {/* SUPPORT CONTACT */}
             <div className="p-4 bg-slate-900/50 rounded-2xl border border-white/5 text-center space-y-1">
               <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">
-                Front Desk Concierge
+                Front Desk Concierge &bull; {matchedOutlet?.name || matchedProperty?.name || propertyName}
               </p>
               <p className="text-xs font-bold text-indigo-400">
-                {portalSettings?.support_phone || '+60 3-1234 5678'} &bull; {portalSettings?.support_email || 'support@perfection.my'}
+                {portalSettings?.support_phone || matchedOutlet?.phone || matchedProperty?.phone || settings?.phone || '+60 3-1234 5678'} &bull; {portalSettings?.support_email || matchedOutlet?.email || matchedProperty?.email || settings?.email || 'support@perfection.my'}
               </p>
             </div>
 

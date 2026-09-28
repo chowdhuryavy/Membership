@@ -34,8 +34,11 @@ import { format, parseISO } from 'date-fns';
 import toast from 'react-hot-toast';
 
 export const GuestPortalSettingsTab: React.FC = () => {
-  const { currentProperty, settings } = useSettings();
+  const { currentOutlet, currentProperty, settings } = useSettings();
   const { isSuperAdmin } = useAuth();
+
+  const activeScopeId = currentOutlet?.id || currentProperty?.id;
+  const activeScopeName = currentOutlet?.name || currentProperty?.name || settings?.name || 'All Facilities';
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -48,9 +51,17 @@ export const GuestPortalSettingsTab: React.FC = () => {
     setLoading(true);
     try {
       const [ps, accs] = await Promise.all([
-        guestAuth.getPortalSettings(),
+        guestAuth.getPortalSettings(activeScopeId),
         guestAuth.getAccounts()
       ]);
+
+      if (!ps.support_phone) {
+        ps.support_phone = currentOutlet?.phone || currentProperty?.phone || settings?.phone || '+60 3-1234 5678';
+      }
+      if (!ps.support_email) {
+        ps.support_email = currentOutlet?.email || currentProperty?.email || settings?.email || 'support@perfection.my';
+      }
+
       setPortalSettings(ps);
       setAccounts(accs);
     } catch (e) {
@@ -62,15 +73,15 @@ export const GuestPortalSettingsTab: React.FC = () => {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [currentOutlet?.id, currentProperty?.id]);
 
   const handleToggleSetting = async (key: keyof GuestPortalSettings) => {
     const updated = { ...portalSettings, [key]: !portalSettings[key] };
     setPortalSettings(updated);
     setSaving(true);
     try {
-      await guestAuth.savePortalSettings(updated);
-      toast.success('Guest portal settings updated successfully.');
+      await guestAuth.savePortalSettings(updated, activeScopeId);
+      toast.success(`Guest portal settings updated for ${activeScopeName}.`);
     } catch (e) {
       toast.error('Failed to save settings');
     } finally {
@@ -82,8 +93,8 @@ export const GuestPortalSettingsTab: React.FC = () => {
     e.preventDefault();
     setSaving(true);
     try {
-      await guestAuth.savePortalSettings(portalSettings);
-      toast.success('Portal preferences saved successfully.');
+      await guestAuth.savePortalSettings(portalSettings, activeScopeId);
+      toast.success(`Concierge preferences saved for ${activeScopeName}.`);
     } catch (e) {
       toast.error('Failed to save preferences');
     } finally {
@@ -145,11 +156,17 @@ export const GuestPortalSettingsTab: React.FC = () => {
         
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-2 max-w-xl">
-            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-300 text-[10px] font-black uppercase tracking-widest border border-indigo-400/20">
-              <Smartphone className="w-3.5 h-3.5" /> Super Admin Control
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-300 text-[10px] font-black uppercase tracking-widest border border-indigo-400/20">
+                <Smartphone className="w-3.5 h-3.5" /> Super Admin Control
+              </div>
+              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-black uppercase tracking-widest border border-amber-400/30">
+                <span>Facility Scope:</span>
+                <span className="text-white font-bold">{activeScopeName}</span>
+              </div>
             </div>
             <h2 className="text-2xl sm:text-3xl font-black uppercase tracking-tight text-white">
-              Guest Mobile Portal Management
+              Guest Portal Settings — {activeScopeName}
             </h2>
             <p className="text-slate-300 text-xs sm:text-sm font-medium leading-relaxed">
               Configure guest visibility, touchless QR check-in, PT session tracking, spa booking requests, and manage authenticated guest accounts.

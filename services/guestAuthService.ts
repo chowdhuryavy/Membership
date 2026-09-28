@@ -33,13 +33,17 @@ export class GuestAuthService {
   }
 
   // --- SETTINGS MANAGEMENT ---
-  public async getPortalSettings(): Promise<GuestPortalSettings> {
+  public async getPortalSettings(scopeId?: string): Promise<GuestPortalSettings> {
+    const key = scopeId ? `${GUEST_PORTAL_SETTINGS_KEY}_${scopeId}` : GUEST_PORTAL_SETTINGS_KEY;
     try {
       const companySettings = await db.getSettings().catch(() => null);
+      if (companySettings?.guest_portal_settings_map && scopeId && companySettings.guest_portal_settings_map[scopeId]) {
+        return { ...DEFAULT_GUEST_PORTAL_SETTINGS, ...companySettings.guest_portal_settings_map[scopeId] };
+      }
       if (companySettings?.guest_portal_settings) {
         return { ...DEFAULT_GUEST_PORTAL_SETTINGS, ...companySettings.guest_portal_settings };
       }
-      const local = localStorage.getItem(GUEST_PORTAL_SETTINGS_KEY);
+      const local = localStorage.getItem(key) || localStorage.getItem(GUEST_PORTAL_SETTINGS_KEY);
       if (local) {
         return { ...DEFAULT_GUEST_PORTAL_SETTINGS, ...JSON.parse(local) };
       }
@@ -49,16 +53,20 @@ export class GuestAuthService {
     return DEFAULT_GUEST_PORTAL_SETTINGS;
   }
 
-  public async savePortalSettings(settings: Partial<GuestPortalSettings>): Promise<GuestPortalSettings> {
-    const current = await this.getPortalSettings();
+  public async savePortalSettings(settings: Partial<GuestPortalSettings>, scopeId?: string): Promise<GuestPortalSettings> {
+    const current = await this.getPortalSettings(scopeId);
     const updated = { ...current, ...settings };
+    const key = scopeId ? `${GUEST_PORTAL_SETTINGS_KEY}_${scopeId}` : GUEST_PORTAL_SETTINGS_KEY;
     try {
-      localStorage.setItem(GUEST_PORTAL_SETTINGS_KEY, JSON.stringify(updated));
+      localStorage.setItem(key, JSON.stringify(updated));
       const companySettings = await db.getSettings().catch(() => null);
       if (companySettings) {
+        const existingMap = companySettings.guest_portal_settings_map || {};
+        const updatedMap = scopeId ? { ...existingMap, [scopeId]: updated } : existingMap;
         await db.updateSettings({
           ...companySettings,
-          guest_portal_settings: updated
+          guest_portal_settings: scopeId ? (companySettings.guest_portal_settings || updated) : updated,
+          guest_portal_settings_map: updatedMap
         });
       }
     } catch (e) {
