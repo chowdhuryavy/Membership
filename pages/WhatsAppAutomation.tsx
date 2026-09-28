@@ -29,7 +29,11 @@ import toast from 'react-hot-toast';
 export const WhatsAppAutomation: React.FC = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const { properties, outlets, userAllowedOutlets, currentProperty, currentOutlet, settings, refreshSettings } = useSettings();
+  const { properties, outlets, userAllowedOutlets, currentProperty, currentOutlet, settings, refreshSettings, hasPermission } = useSettings();
+
+  const canView = Boolean(user && hasPermission(user.role_id, 'whatsapp:view'));
+  const canSend = Boolean(user && hasPermission(user.role_id, 'whatsapp:send'));
+  const canManage = Boolean(user && hasPermission(user.role_id, 'whatsapp:manage'));
 
   // Companies (Tenant Hierarchy Root)
   const [companies, setCompanies] = useState<Company[]>(DEFAULT_COMPANIES);
@@ -78,6 +82,10 @@ export const WhatsAppAutomation: React.FC = () => {
   }, [activeOutlet, activeProperty, settings]);
 
   const handleToggleOutletWhatsApp = async () => {
+    if (!canManage) {
+      toast.error('Permission Denied: You do not have permission to manage WhatsApp status.');
+      return;
+    }
     if (!activeOutlet) return;
     try {
       const newState = !isWhatsAppActive;
@@ -212,6 +220,10 @@ export const WhatsAppAutomation: React.FC = () => {
 
   // Messaging Handlers - senderName strictly uses Outlet Name and Property Name
   const handleSendMessage = async (text: string, templateId?: string) => {
+    if (!canSend) {
+      toast.error('Permission Denied: You do not have permission to send WhatsApp messages.');
+      return;
+    }
     if (!activeConversationId || !activeCompany?.id || !activeProperty?.id || !activeOutlet?.id) return;
     setIsSendingMessage(true);
     try {
@@ -246,6 +258,10 @@ export const WhatsAppAutomation: React.FC = () => {
   };
 
   const handleUpdateStatus = async (convId: string, status: 'open' | 'resolved') => {
+    if (!canManage) {
+      toast.error('Permission Denied: You do not have permission to manage WhatsApp conversations.');
+      return;
+    }
     if (!activeCompany?.id || !activeProperty?.id || !activeOutlet?.id) return;
     const ok = await WhatsAppService.updateConversationStatus(
       convId, 
@@ -261,6 +277,10 @@ export const WhatsAppAutomation: React.FC = () => {
   };
 
   const handleStartNewChat = async (name: string, phone: string, initialMessage: string, memberId?: string) => {
+    if (!canSend) {
+      toast.error('Permission Denied: You do not have permission to send WhatsApp messages.');
+      return;
+    }
     if (!activeCompany?.id || !activeProperty?.id || !activeOutlet?.id) return;
     const newConv = await WhatsAppService.startConversation({
       companyId: activeCompany.id,
@@ -282,6 +302,22 @@ export const WhatsAppAutomation: React.FC = () => {
   const unreadTotal = useMemo(() => {
     return conversations.reduce((acc, c) => acc + (c.unread_count > 0 ? 1 : 0), 0);
   }, [conversations]);
+
+  if (!canView) {
+    return (
+      <div className="h-full flex items-center justify-center p-8">
+        <div className="text-center bg-white p-8 rounded-3xl border border-slate-200 shadow-sm max-w-md">
+          <div className="w-16 h-16 bg-rose-50 text-rose-600 rounded-full flex items-center justify-center mx-auto mb-4">
+            <WhatsAppIcon className="w-8 h-8" />
+          </div>
+          <h2 className="text-xl font-bold text-slate-900 uppercase">Access Restricted</h2>
+          <p className="text-slate-500 mt-2 text-sm leading-relaxed">
+            You do not have the required role permissions to access the WhatsApp module.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-3.5 max-w-7xl mx-auto pb-10">

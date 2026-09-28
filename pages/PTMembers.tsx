@@ -44,12 +44,15 @@ export default function PTMembers() {
     const { user, isSuperAdmin } = useAuth();
     const { currentOutlet, currentProperty, settings, setPageLoading, formatMoney, outlets = [], hasPermission } = useSettings();
 
-    const canView = user && hasPermission(user.role_id, 'pt_members:view');
-    const canCreate = user && hasPermission(user.role_id, 'pt_members:create');
-    const canEdit = user && hasPermission(user.role_id, 'pt_members:edit');
-    const canDelete = user && hasPermission(user.role_id, 'pt_members:delete');
-    const canManageSessions = user && hasPermission(user.role_id, 'pt_members:manage_sessions');
-    const canPrint = user && hasPermission(user.role_id, 'pt_members:print');
+    const canView = Boolean(user && hasPermission(user.role_id, 'pt_members:view'));
+    const canCreate = Boolean(user && hasPermission(user.role_id, 'pt_members:create'));
+    const canEdit = Boolean(user && hasPermission(user.role_id, 'pt_members:edit'));
+    const canDelete = Boolean(user && hasPermission(user.role_id, 'pt_members:delete'));
+    const canManageSessions = Boolean(user && hasPermission(user.role_id, 'pt_members:manage_sessions'));
+    const canPrint = Boolean(user && hasPermission(user.role_id, 'pt_members:print'));
+    const canExport = Boolean(user && hasPermission(user.role_id, 'pt_members:export'));
+    const canViewHealthConsent = Boolean(user && hasPermission(user.role_id, 'pt_members:view_health_consent'));
+    const canAssignTrainer = Boolean(user && hasPermission(user.role_id, 'pt_members:assign_trainer'));
 
     const logoUrl = currentOutlet?.logo_url || currentProperty?.logo_url || settings?.logo_url || '';
     
@@ -139,6 +142,10 @@ export default function PTMembers() {
     const [editingMember, setEditingMember] = useState<PTMember | null>(null);
 
     const handleMemberUpdated = async (updated: PTMember) => {
+        if (!canEdit) {
+            toast.error("Access Denied: You do not have permission to edit PT member profiles.");
+            return;
+        }
         toast.success(`PT Member profile for "${updated.guest_name}" updated successfully!`);
         if (selectedMember && (selectedMember.id === updated.id || selectedMember.guest_name === updated.guest_name)) {
             setSelectedMember(prev => prev ? { ...prev, ...updated } : updated);
@@ -158,6 +165,10 @@ export default function PTMembers() {
 
     const executeDeleteMember = async () => {
         if (!deletingMember) return;
+        if (!canDelete) {
+            toast.error("Access Denied: You do not have permission to delete PT member profiles.");
+            return;
+        }
         const targetId = deletingMember.id;
         setPageLoading(true);
         try {
@@ -183,6 +194,10 @@ export default function PTMembers() {
     };
 
     const startEditSession = (s: PTSession) => {
+        if (!canManageSessions) {
+            toast.error("Access Denied: You do not have permission to edit training sessions.");
+            return;
+        }
         setEditingSession(s);
         let dateVal = s.date;
         try {
@@ -198,6 +213,10 @@ export default function PTMembers() {
 
     const handleSaveEditSession = async () => {
         if (!editingSession || !selectedMember) return;
+        if (!canManageSessions) {
+            toast.error("Access Denied: You do not have permission to modify training sessions.");
+            return;
+        }
         setPageLoading(true);
         try {
             const updatedDate = editSessionDate ? new Date(editSessionDate).toISOString() : editingSession.date;
@@ -239,6 +258,10 @@ export default function PTMembers() {
 
     const executeDeleteSession = async () => {
         if (!deletingSession || !selectedMember) return;
+        if (!canManageSessions) {
+            toast.error("Access Denied: You do not have permission to delete training sessions.");
+            return;
+        }
         const activeTargetPkg = selectedPackage || selectedMember;
         const targetId = deletingSession.id;
         setPageLoading(true);
@@ -346,6 +369,10 @@ export default function PTMembers() {
     const handleUpdateTrainer = async (trainerId: string) => {
         const activeTarget = selectedPackage || selectedMember;
         if (!activeTarget) return;
+        if (!canAssignTrainer) {
+            toast.error("Access Denied: You do not have permission to assign or reassign trainers.");
+            return;
+        }
         setPageLoading(true);
         try {
             await db.updatePTMember(activeTarget.id, { trainer_id: trainerId });
@@ -1053,31 +1080,35 @@ export default function PTMembers() {
                                     {/* Action Footer Button with Quick Edit & Delete */}
                                     <div className="p-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-2">
                                         <div className="flex items-center gap-1.5">
-                                            <button 
-                                                type="button"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setEditingMember(member);
-                                                }}
-                                                className="h-8 px-3 rounded-xl bg-white border border-slate-200 hover:bg-indigo-50 hover:border-indigo-300 text-slate-700 hover:text-indigo-700 font-black text-[10px] uppercase tracking-wider transition-all flex items-center gap-1 shadow-2xs"
-                                                title="Edit PT Profile"
-                                            >
-                                                <Edit3 className="w-3.5 h-3.5 text-indigo-600" />
-                                                <span>Edit</span>
-                                            </button>
+                                            {canEdit && (
+                                                <button 
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setEditingMember(member);
+                                                    }}
+                                                    className="h-8 px-3 rounded-xl bg-white border border-slate-200 hover:bg-indigo-50 hover:border-indigo-300 text-slate-700 hover:text-indigo-700 font-black text-[10px] uppercase tracking-wider transition-all flex items-center gap-1 shadow-2xs"
+                                                    title="Edit PT Profile"
+                                                >
+                                                    <Edit3 className="w-3.5 h-3.5 text-indigo-600" />
+                                                    <span>Edit</span>
+                                                </button>
+                                            )}
 
-                                            <button 
-                                                type="button"
-                                                onClick={(e) => {
-                                                    e.stopPropagation();
-                                                    setDeletingMember(member);
-                                                }}
-                                                className="h-8 px-3 rounded-xl bg-white border border-slate-200 hover:bg-rose-50 hover:border-rose-300 text-slate-700 hover:text-rose-700 font-black text-[10px] uppercase tracking-wider transition-all flex items-center gap-1 shadow-2xs"
-                                                title="Delete PT Profile"
-                                            >
-                                                <Trash2 className="w-3.5 h-3.5 text-rose-600" />
-                                                <span>Delete</span>
-                                            </button>
+                                            {canDelete && (
+                                                <button 
+                                                    type="button"
+                                                    onClick={(e) => {
+                                                        e.stopPropagation();
+                                                        setDeletingMember(member);
+                                                    }}
+                                                    className="h-8 px-3 rounded-xl bg-white border border-slate-200 hover:bg-rose-50 hover:border-rose-300 text-slate-700 hover:text-rose-700 font-black text-[10px] uppercase tracking-wider transition-all flex items-center gap-1 shadow-2xs"
+                                                    title="Delete PT Profile"
+                                                >
+                                                    <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                                                    <span>Delete</span>
+                                                </button>
+                                            )}
                                         </div>
 
                                         <div className="flex items-center text-indigo-900 font-black text-[11px] uppercase tracking-wider group-hover:text-indigo-600 transition-colors">
@@ -1139,33 +1170,39 @@ export default function PTMembers() {
 
                                     {/* Action Buttons Group */}
                                     <div className="flex flex-wrap items-center gap-2.5 shrink-0">
-                                        <Button 
-                                            onClick={() => setEditingMember(selectedPackage || selectedMember)}
-                                            variant="secondary"
-                                            className="h-12 px-5 rounded-2xl font-black text-xs uppercase tracking-widest bg-white/10 hover:bg-white/20 text-white border border-white/20 backdrop-blur-md transition-all flex items-center gap-2"
-                                            title="Edit Profile Details"
-                                        >
-                                            <Edit3 className="w-4 h-4 text-indigo-300" />
-                                            <span>Edit Profile</span>
-                                        </Button>
+                                        {canEdit && (
+                                            <Button 
+                                                onClick={() => setEditingMember(selectedPackage || selectedMember)}
+                                                variant="secondary"
+                                                className="h-12 px-5 rounded-2xl font-black text-xs uppercase tracking-widest bg-white/10 hover:bg-white/20 text-white border border-white/20 backdrop-blur-md transition-all flex items-center gap-2"
+                                                title="Edit Profile Details"
+                                            >
+                                                <Edit3 className="w-4 h-4 text-indigo-300" />
+                                                <span>Edit Profile</span>
+                                            </Button>
+                                        )}
 
-                                        <Button 
-                                            onClick={() => setDeletingMember(selectedPackage || selectedMember)}
-                                            variant="secondary"
-                                            className="h-12 px-5 rounded-2xl font-black text-xs uppercase tracking-widest bg-rose-500/20 hover:bg-rose-600 text-rose-200 hover:text-white border border-rose-400/30 backdrop-blur-md transition-all flex items-center gap-2"
-                                            title="Delete Profile & Sessions"
-                                        >
-                                            <Trash2 className="w-4 h-4 text-rose-400" />
-                                            <span>Delete Profile</span>
-                                        </Button>
+                                        {canDelete && (
+                                            <Button 
+                                                onClick={() => setDeletingMember(selectedPackage || selectedMember)}
+                                                variant="secondary"
+                                                className="h-12 px-5 rounded-2xl font-black text-xs uppercase tracking-widest bg-rose-500/20 hover:bg-rose-600 text-rose-200 hover:text-white border border-rose-400/30 backdrop-blur-md transition-all flex items-center gap-2"
+                                                title="Delete Profile & Sessions"
+                                            >
+                                                <Trash2 className="w-4 h-4 text-rose-400" />
+                                                <span>Delete Profile</span>
+                                            </Button>
+                                        )}
 
-                                        <Button 
-                                            onClick={() => setShowLogSession(true)}
-                                            disabled={currentUsed >= currentTotal}
-                                            className="h-12 px-6 rounded-2xl font-black text-xs uppercase tracking-widest bg-emerald-500 hover:bg-emerald-600 text-white shadow-xl shadow-emerald-950/40 border border-emerald-400/30 flex items-center gap-2"
-                                        >
-                                            <Plus className="w-4 h-4" /> Log Session
-                                        </Button>
+                                        {canManageSessions && (
+                                            <Button 
+                                                onClick={() => setShowLogSession(true)}
+                                                disabled={currentUsed >= currentTotal}
+                                                className="h-12 px-6 rounded-2xl font-black text-xs uppercase tracking-widest bg-emerald-500 hover:bg-emerald-600 text-white shadow-xl shadow-emerald-950/40 border border-emerald-400/30 flex items-center gap-2"
+                                            >
+                                                <Plus className="w-4 h-4" /> Log Session
+                                            </Button>
+                                        )}
                                     </div>
                                 </div>
 
@@ -1241,21 +1278,25 @@ export default function PTMembers() {
                                                 {staff.find(s => s.id === selectedMember.trainer_id)?.name || 'Unassigned'}
                                             </div>
                                         </div>
-                                        <select
-                                            value={selectedMember.trainer_id || ''}
-                                            onChange={e => handleUpdateTrainer(e.target.value)}
-                                            className="bg-indigo-900 border border-indigo-700 text-white text-xs font-bold rounded-lg p-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-400 cursor-pointer"
-                                        >
-                                            <option value="">Assign Staff / Trainer</option>
-                                            {(() => {
-                                                const activeStaff = staff.filter(s => s.is_active !== false);
-                                                const trainers = activeStaff.filter(s => s.role?.toLowerCase().includes('trainer'));
-                                                const displayStaff = trainers.length > 0 ? trainers : activeStaff;
-                                                return displayStaff.map(s => (
-                                                    <option key={s.id} value={s.id}>{s.name} ({s.role || 'Staff'})</option>
-                                                ));
-                                            })()}
-                                        </select>
+                                        {canAssignTrainer ? (
+                                            <select
+                                                value={selectedMember.trainer_id || ''}
+                                                onChange={e => handleUpdateTrainer(e.target.value)}
+                                                className="bg-indigo-900 border border-indigo-700 text-white text-xs font-bold rounded-lg p-1.5 focus:outline-none focus:ring-1 focus:ring-emerald-400 cursor-pointer"
+                                            >
+                                                <option value="">Assign Staff / Trainer</option>
+                                                {(() => {
+                                                    const activeStaff = staff.filter(s => s.is_active !== false);
+                                                    const trainers = activeStaff.filter(s => s.role?.toLowerCase().includes('trainer'));
+                                                    const displayStaff = trainers.length > 0 ? trainers : activeStaff;
+                                                    return displayStaff.map(s => (
+                                                        <option key={s.id} value={s.id}>{s.name} ({s.role || 'Staff'})</option>
+                                                    ));
+                                                })()}
+                                            </select>
+                                        ) : (
+                                            <span className="text-indigo-300 text-xs font-medium italic">Locked</span>
+                                        )}
                                     </div>
 
                                     <div className="bg-white/5 p-3 rounded-xl border border-white/10 flex items-center justify-between">
@@ -1371,53 +1412,63 @@ export default function PTMembers() {
                                                                                     </div>
 
                                                                                     <div className="flex flex-wrap items-center gap-2">
-                                                                                        <Button
-                                                                                            onClick={() => setEditingMember(pkg)}
-                                                                                            variant="secondary"
-                                                                                            className="h-9 px-3 rounded-xl text-xs font-black uppercase tracking-wider bg-white/10 text-indigo-200 hover:bg-white/20 border border-white/20 flex items-center gap-1"
-                                                                                            title="Edit Package Details"
-                                                                                        >
-                                                                                            <Edit3 className="w-3.5 h-3.5" /> Edit
-                                                                                        </Button>
+                                                                                        {canEdit && (
+                                                                                            <Button
+                                                                                                onClick={() => setEditingMember(pkg)}
+                                                                                                variant="secondary"
+                                                                                                className="h-9 px-3 rounded-xl text-xs font-black uppercase tracking-wider bg-white/10 text-indigo-200 hover:bg-white/20 border border-white/20 flex items-center gap-1"
+                                                                                                title="Edit Package Details"
+                                                                                            >
+                                                                                                <Edit3 className="w-3.5 h-3.5" /> Edit
+                                                                                            </Button>
+                                                                                        )}
 
-                                                                                        <Button
-                                                                                            onClick={() => setDeletingMember(pkg)}
-                                                                                            variant="secondary"
-                                                                                            className="h-9 px-3 rounded-xl text-xs font-black uppercase tracking-wider bg-rose-500/20 text-rose-300 hover:bg-rose-600 hover:text-white border border-rose-400/30 flex items-center gap-1"
-                                                                                            title="Delete Package"
-                                                                                        >
-                                                                                            <Trash2 className="w-3.5 h-3.5" /> Delete
-                                                                                        </Button>
+                                                                                        {canDelete && (
+                                                                                            <Button
+                                                                                                onClick={() => setDeletingMember(pkg)}
+                                                                                                variant="secondary"
+                                                                                                className="h-9 px-3 rounded-xl text-xs font-black uppercase tracking-wider bg-rose-500/20 text-rose-300 hover:bg-rose-600 hover:text-white border border-rose-400/30 flex items-center gap-1"
+                                                                                                title="Delete Package"
+                                                                                            >
+                                                                                                <Trash2 className="w-3.5 h-3.5" /> Delete
+                                                                                            </Button>
+                                                                                        )}
 
-                                                                                        <Button
-                                                                                            onClick={() => setShowAgreementForPackage(pkg)}
-                                                                                            variant="secondary"
-                                                                                            className="h-9 px-3 rounded-xl text-xs font-black uppercase tracking-wider bg-indigo-500/20 text-indigo-300 hover:bg-indigo-500/30 border border-indigo-400/30"
-                                                                                        >
-                                                                                            <FileText className="w-3.5 h-3.5 mr-1" /> Agreement Form
-                                                                                        </Button>
-                                                                                        <Button
-                                                                                            onClick={() => {
-                                                                                                setSelectedPackage(pkg);
-                                                                                                setPrintingPackageForm(true);
-                                                                                            }}
-                                                                                            variant="secondary"
-                                                                                            className="h-9 px-3 rounded-xl text-xs font-black uppercase tracking-wider bg-white/10 text-white hover:bg-white/20 border border-white/20"
-                                                                                        >
-                                                                                            <Printer className="w-3.5 h-3.5 mr-1" /> Print Form
-                                                                                        </Button>
+                                                                                        {(canViewHealthConsent || canPrint) && (
+                                                                                            <Button
+                                                                                                onClick={() => setShowAgreementForPackage(pkg)}
+                                                                                                variant="secondary"
+                                                                                                className="h-9 px-3 rounded-xl text-xs font-black uppercase tracking-wider bg-indigo-500/20 text-indigo-300 hover:bg-indigo-500/30 border border-indigo-400/30"
+                                                                                            >
+                                                                                                <FileText className="w-3.5 h-3.5 mr-1" /> Agreement Form
+                                                                                            </Button>
+                                                                                        )}
+                                                                                        {canPrint && (
+                                                                                            <Button
+                                                                                                onClick={() => {
+                                                                                                    setSelectedPackage(pkg);
+                                                                                                    setPrintingPackageForm(true);
+                                                                                                }}
+                                                                                                variant="secondary"
+                                                                                                className="h-9 px-3 rounded-xl text-xs font-black uppercase tracking-wider bg-white/10 text-white hover:bg-white/20 border border-white/20"
+                                                                                            >
+                                                                                                <Printer className="w-3.5 h-3.5 mr-1" /> Print Form
+                                                                                            </Button>
+                                                                                        )}
 
-                                                                                        <Button
-                                                                                            onClick={() => {
-                                                                                                setSelectedPackage(pkg);
-                                                                                                setSessionNotes(`Session #${pkg.used_sessions + 1} Workout`);
-                                                                                                setShowLogSession(true);
-                                                                                            }}
-                                                                                            disabled={isComp}
-                                                                                            className="h-9 px-4 rounded-xl text-xs font-black uppercase tracking-wider bg-emerald-500 hover:bg-emerald-600 text-white shadow-md flex items-center gap-1"
-                                                                                        >
-                                                                                            <Plus className="w-3.5 h-3.5" /> Book Session
-                                                                                        </Button>
+                                                                                        {canManageSessions && (
+                                                                                            <Button
+                                                                                                onClick={() => {
+                                                                                                    setSelectedPackage(pkg);
+                                                                                                    setSessionNotes(`Session #${pkg.used_sessions + 1} Workout`);
+                                                                                                    setShowLogSession(true);
+                                                                                                }}
+                                                                                                disabled={isComp}
+                                                                                                className="h-9 px-4 rounded-xl text-xs font-black uppercase tracking-wider bg-emerald-500 hover:bg-emerald-600 text-white shadow-md flex items-center gap-1"
+                                                                                            >
+                                                                                                <Plus className="w-3.5 h-3.5" /> Book Session
+                                                                                            </Button>
+                                                                                        )}
 
                                                                                         <Button
                                                                                             onClick={() => handleSelectPackage(pkg)}
@@ -1691,27 +1742,33 @@ export default function PTMembers() {
                                                                         {/* Right Side: Usage Snapshot, Signature & Edit/Delete Action Buttons */}
                                                                         <div className="flex sm:flex-col items-end justify-between sm:justify-start gap-3 border-t sm:border-t-0 sm:border-l border-slate-100 pt-3 sm:pt-0 sm:pl-4 w-full sm:w-auto shrink-0">
                                                                             <div className="flex flex-wrap items-center gap-2">
-                                                                                <Button
-                                                                                    onClick={() => setPrintingSession(s)}
-                                                                                    variant="secondary"
-                                                                                    className="h-8 px-3 rounded-lg text-[10px] font-black uppercase tracking-wider bg-slate-100 text-slate-800 hover:bg-slate-900 hover:text-white transition-all flex items-center gap-1 shadow-sm"
-                                                                                >
-                                                                                    <Printer className="w-3.5 h-3.5 text-indigo-600" /> Print Slip
-                                                                                </Button>
-                                                                                <Button
-                                                                                    onClick={() => startEditSession(s)}
-                                                                                    variant="secondary"
-                                                                                    className="h-8 px-3 rounded-lg text-[10px] font-black uppercase tracking-wider bg-indigo-50 text-indigo-700 hover:bg-indigo-900 hover:text-white transition-all flex items-center gap-1"
-                                                                                >
-                                                                                    <Edit3 className="w-3.5 h-3.5" /> Edit
-                                                                                </Button>
-                                                                                <Button
-                                                                                    onClick={() => handleDeleteSession(s)}
-                                                                                    variant="secondary"
-                                                                                    className="h-8 px-3 rounded-lg text-[10px] font-black uppercase tracking-wider bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white transition-all flex items-center gap-1"
-                                                                                >
-                                                                                    <Trash2 className="w-3.5 h-3.5" /> Delete
-                                                                                </Button>
+                                                                                {canPrint && (
+                                                                                    <Button
+                                                                                        onClick={() => setPrintingSession(s)}
+                                                                                        variant="secondary"
+                                                                                        className="h-8 px-3 rounded-lg text-[10px] font-black uppercase tracking-wider bg-slate-100 text-slate-800 hover:bg-slate-900 hover:text-white transition-all flex items-center gap-1 shadow-sm"
+                                                                                    >
+                                                                                        <Printer className="w-3.5 h-3.5 text-indigo-600" /> Print Slip
+                                                                                    </Button>
+                                                                                )}
+                                                                                {canManageSessions && (
+                                                                                    <>
+                                                                                        <Button
+                                                                                            onClick={() => startEditSession(s)}
+                                                                                            variant="secondary"
+                                                                                            className="h-8 px-3 rounded-lg text-[10px] font-black uppercase tracking-wider bg-indigo-50 text-indigo-700 hover:bg-indigo-900 hover:text-white transition-all flex items-center gap-1"
+                                                                                        >
+                                                                                            <Edit3 className="w-3.5 h-3.5" /> Edit
+                                                                                        </Button>
+                                                                                        <Button
+                                                                                            onClick={() => handleDeleteSession(s)}
+                                                                                            variant="secondary"
+                                                                                            className="h-8 px-3 rounded-lg text-[10px] font-black uppercase tracking-wider bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white transition-all flex items-center gap-1"
+                                                                                        >
+                                                                                            <Trash2 className="w-3.5 h-3.5" /> Delete
+                                                                                        </Button>
+                                                                                    </>
+                                                                                )}
                                                                             </div>
 
                                                                             <div className="text-right">
@@ -1992,7 +2049,7 @@ export default function PTMembers() {
             )}
 
             {/* EDIT PT MEMBER MODAL */}
-            {editingMember && (
+            {editingMember && canEdit && (
                 <EditPTMemberModal 
                     isOpen={!!editingMember}
                     member={editingMember}

@@ -4,6 +4,7 @@ import { db } from '../services/mockSupabase';
 import { Card, CardContent, CardHeader, CardTitle, Input, Button } from './ui';
 import { X, User, Phone, Mail, Calendar, Dumbbell, ShieldCheck, AlertCircle, FileText, CheckCircle2, Save } from 'lucide-react';
 import { useSettings } from '../contexts/SettingsContext';
+import { useAuth } from '../contexts/AuthContext';
 
 interface EditPTMemberModalProps {
     isOpen: boolean;
@@ -20,7 +21,9 @@ export const EditPTMemberModal: React.FC<EditPTMemberModalProps> = ({
     member,
     staff
 }) => {
-    const { currentOutlet, currentProperty, outlets = [] } = useSettings();
+    const { user } = useAuth();
+    const { currentOutlet, currentProperty, outlets = [], hasPermission } = useSettings();
+    const canEdit = Boolean(user && hasPermission(user.role_id, 'pt_members:edit'));
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
 
@@ -103,6 +106,10 @@ export const EditPTMemberModal: React.FC<EditPTMemberModalProps> = ({
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!canEdit) {
+            setError('Access Denied: You do not have permission to edit PT member profiles.');
+            return;
+        }
         if (!formData.guest_name.trim()) {
             setError('Please provide the guest full name.');
             return;

@@ -27,8 +27,11 @@ export const EntranceConsentsList = ({ propertyId, outletId }: { propertyId?: st
 
     const todayStr = new Date().toISOString().split('T')[0];
 
-    const canEdit = true;
-    const canDelete = true;
+    const canEdit = Boolean(user && hasPermission(user.role_id, 'entrance_fee:edit'));
+    const canDelete = Boolean(user && hasPermission(user.role_id, 'entrance_fee:delete'));
+    const canPrint = Boolean(user && hasPermission(user.role_id, 'entrance_fee:print'));
+    const canExport = Boolean(user && hasPermission(user.role_id, 'entrance_fee:export'));
+    const canViewHistory = Boolean(user && hasPermission(user.role_id, 'entrance_fee:view_history'));
 
     const loadConsents = async () => {
         setLoading(true);
@@ -61,6 +64,10 @@ export const EntranceConsentsList = ({ propertyId, outletId }: { propertyId?: st
     }, [propertyId, outletId]);
 
     const handleDelete = async (id: string) => {
+        if (!canDelete) {
+            toast.error('Access Denied: You do not have permission to delete entrance fee consents.');
+            return;
+        }
         setIsDeleting(true);
         try {
             await db.deleteEntranceFeeConsent(id);
@@ -426,14 +433,16 @@ export const EntranceConsentsList = ({ propertyId, outletId }: { propertyId?: st
                                 </button>
                             )}
                         </div>
-                        <button
-                            onClick={handlePrintReport}
-                            className="h-10 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-2 transition-all shadow-md shadow-indigo-100 active:scale-95"
-                            title="Print Date-wise Report"
-                        >
-                            <Printer className="w-4 h-4" />
-                            <span className="text-[10px] font-black uppercase tracking-widest hidden lg:inline">Print Report</span>
-                        </button>
+                        {canPrint && (
+                            <button
+                                onClick={handlePrintReport}
+                                className="h-10 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white flex items-center gap-2 transition-all shadow-md shadow-indigo-100 active:scale-95"
+                                title="Print Date-wise Report"
+                            >
+                                <Printer className="w-4 h-4" />
+                                <span className="text-[10px] font-black uppercase tracking-widest hidden lg:inline">Print Report</span>
+                            </button>
+                        )}
                     </div>
                 )}
             </div>
@@ -472,13 +481,15 @@ export const EntranceConsentsList = ({ propertyId, outletId }: { propertyId?: st
                                     </p>
                                 </div>
                                 <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
-                                    <button 
-                                        onClick={() => handlePrint(c)}
-                                        className="w-8 h-8 rounded-full bg-slate-50 text-slate-500 flex items-center justify-center hover:bg-emerald-50 hover:text-emerald-600 transition-colors"
-                                        title="Print Consent Waiver"
-                                    >
-                                        <Printer className="w-4 h-4" />
-                                    </button>
+                                    {canPrint && (
+                                        <button 
+                                            onClick={() => handlePrint(c)}
+                                            className="w-8 h-8 rounded-full bg-slate-50 text-slate-500 flex items-center justify-center hover:bg-emerald-50 hover:text-emerald-600 transition-colors"
+                                            title="Print Consent Waiver"
+                                        >
+                                            <Printer className="w-4 h-4" />
+                                        </button>
+                                    )}
                                     {canEdit && (
                                         <button 
                                             onClick={() => setEditingConsent(c)}
