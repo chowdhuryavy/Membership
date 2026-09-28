@@ -306,21 +306,16 @@ export default function GuestLogin() {
         {/* Right Form Container */}
         <div className="flex flex-col justify-center p-6 sm:p-10 md:p-14 bg-slate-900/90 text-white relative">
           <div className="mb-8 flex flex-col items-center text-center">
-            {/* Master App Name Title Pill */}
-            <span className="px-3.5 py-1 rounded-full bg-indigo-500/15 border border-indigo-400/30 text-indigo-300 text-[10px] font-black uppercase tracking-[0.2em] mb-4 shadow-inner">
-              {fullAppName}
-            </span>
-
             {dynamicLogoUrl ? (
               <img
                 src={dynamicLogoUrl}
                 alt="Logo"
                 referrerPolicy="no-referrer"
-                className="w-32 h-auto object-contain mb-3 filter drop-shadow-md max-h-16"
+                className="w-44 sm:w-52 h-auto object-contain mb-4 filter drop-shadow-lg max-h-24 sm:max-h-28 transition-all"
               />
             ) : (
-              <div className="w-16 h-16 bg-gradient-to-tr from-indigo-600 to-indigo-800 rounded-2xl flex items-center justify-center text-white shadow-2xl mb-3 border border-white/10">
-                <Sparkles className="w-8 h-8 text-amber-300" />
+              <div className="w-20 h-20 sm:w-24 sm:h-24 bg-gradient-to-tr from-indigo-600 to-indigo-800 rounded-3xl flex items-center justify-center text-white shadow-2xl mb-4 border border-white/10">
+                <Sparkles className="w-10 h-10 text-amber-300 animate-pulse" />
               </div>
             )}
 
