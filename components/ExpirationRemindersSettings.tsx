@@ -3,6 +3,7 @@ import { format } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Modal } from './ui';
 import { db } from '../services/mockSupabase';
 import { emailService } from '../services/emailService';
+import { useSettings } from '../contexts/SettingsContext';
 import { 
   Outlet, 
   Property, 
@@ -118,6 +119,8 @@ export const ExpirationRemindersSettings: React.FC<ExpirationRemindersSettingsPr
     }
   };
 
+  const { currentProperty, currentOutlet } = useSettings();
+
   useEffect(() => {
     loadConfigAndLogs();
   }, []);
@@ -130,10 +133,12 @@ export const ExpirationRemindersSettings: React.FC<ExpirationRemindersSettingsPr
   }, [properties, outlets, user, isSuperAdmin]);
 
   useEffect(() => {
-    if (filteredProperties.length > 0 && (!activePropertyId || !filteredProperties.some(p => p.id === activePropertyId))) {
+    if (currentProperty?.id) {
+      setActivePropertyId(currentProperty.id);
+    } else if (filteredProperties.length > 0 && (!activePropertyId || !filteredProperties.some(p => p.id === activePropertyId))) {
       setActivePropertyId(filteredProperties[0].id);
     }
-  }, [filteredProperties, activePropertyId]);
+  }, [currentProperty?.id, filteredProperties, activePropertyId]);
 
   const activeProperty = useMemo(() => {
     return properties.find(p => p.id === activePropertyId);

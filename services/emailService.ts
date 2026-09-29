@@ -1297,7 +1297,7 @@ export const emailService = {
 
     try {
       const config = await db.getExpirationReminderConfig();
-      if (!config.global_enabled && !options?.isManualTrigger) {
+      if (!config.global_enabled) {
         results.details.push('Automated expiration reminders are globally disabled in settings.');
         return results;
       }
@@ -1356,7 +1356,7 @@ export const emailService = {
         const outletConfig = config.outlets?.[outletId];
         const isOutletAllowed = outletConfig ? outletConfig.enabled : false;
         
-        if (!isOutletAllowed && !options?.forceOutletId) {
+        if (!isOutletAllowed) {
           results.skipped++;
           continue;
         }
