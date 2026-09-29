@@ -43,9 +43,11 @@ export class GuestAuthService {
       if (companySettings?.guest_portal_settings) {
         return { ...DEFAULT_GUEST_PORTAL_SETTINGS, ...companySettings.guest_portal_settings };
       }
-      const local = localStorage.getItem(key) || localStorage.getItem(GUEST_PORTAL_SETTINGS_KEY);
-      if (local) {
-        return { ...DEFAULT_GUEST_PORTAL_SETTINGS, ...JSON.parse(local) };
+      if (typeof localStorage !== 'undefined') {
+        const local = localStorage.getItem(key) || localStorage.getItem(GUEST_PORTAL_SETTINGS_KEY);
+        if (local) {
+          return { ...DEFAULT_GUEST_PORTAL_SETTINGS, ...JSON.parse(local) };
+        }
       }
     } catch (e) {
       console.warn('[GuestAuth] Error reading portal settings, using defaults');
@@ -58,7 +60,9 @@ export class GuestAuthService {
     const updated = { ...current, ...settings };
     const key = scopeId ? `${GUEST_PORTAL_SETTINGS_KEY}_${scopeId}` : GUEST_PORTAL_SETTINGS_KEY;
     try {
-      localStorage.setItem(key, JSON.stringify(updated));
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(key, JSON.stringify(updated));
+      }
       const companySettings = await db.getSettings().catch(() => null);
       if (companySettings) {
         const existingMap = companySettings.guest_portal_settings_map || {};
@@ -80,12 +84,16 @@ export class GuestAuthService {
     try {
       const companySettings = await db.getSettings().catch(() => null);
       if (companySettings?.guest_accounts && Array.isArray(companySettings.guest_accounts)) {
-        localStorage.setItem(GUEST_ACCOUNTS_STORAGE_KEY, JSON.stringify(companySettings.guest_accounts));
+        if (typeof localStorage !== 'undefined') {
+          localStorage.setItem(GUEST_ACCOUNTS_STORAGE_KEY, JSON.stringify(companySettings.guest_accounts));
+        }
         return companySettings.guest_accounts;
       }
-      const raw = localStorage.getItem(GUEST_ACCOUNTS_STORAGE_KEY);
-      if (raw) {
-        return JSON.parse(raw) as GuestAccount[];
+      if (typeof localStorage !== 'undefined') {
+        const raw = localStorage.getItem(GUEST_ACCOUNTS_STORAGE_KEY);
+        if (raw) {
+          return JSON.parse(raw) as GuestAccount[];
+        }
       }
     } catch (e) {
       console.warn('[GuestAuth] Error reading guest accounts store:', e);
@@ -95,7 +103,9 @@ export class GuestAuthService {
 
   private async saveAccounts(accounts: GuestAccount[]): Promise<void> {
     try {
-      localStorage.setItem(GUEST_ACCOUNTS_STORAGE_KEY, JSON.stringify(accounts));
+      if (typeof localStorage !== 'undefined') {
+        localStorage.setItem(GUEST_ACCOUNTS_STORAGE_KEY, JSON.stringify(accounts));
+      }
       const companySettings = await db.getSettings().catch(() => null);
       if (companySettings) {
         await db.updateSettings({

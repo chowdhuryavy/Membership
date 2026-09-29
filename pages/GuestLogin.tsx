@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { guestAuth } from '../services/guestAuthService';
+import { guestAuth, DEFAULT_GUEST_PORTAL_SETTINGS } from '../services/guestAuthService';
 import { db } from '../services/mockSupabase';
 import { useSettings } from '../contexts/SettingsContext';
+import { GuestPortalSettings } from '../types';
 import {
   LogIn,
   Mail,
@@ -19,7 +20,11 @@ import {
   HelpCircle,
   Building2,
   ArrowLeft,
-  Smartphone
+  Smartphone,
+  Phone,
+  ExternalLink,
+  AlertTriangle,
+  Power
 } from 'lucide-react';
 import { Button } from '../components/ui';
 import {
@@ -62,6 +67,24 @@ export default function GuestLogin() {
   const [otpCode, setOtpCode] = useState('');
   const [resendCooldown, setResendCooldown] = useState(0);
 
+  // Portal Online/Offline & Preferences State from Database
+  const [portalSettings, setPortalSettings] = useState<GuestPortalSettings>(DEFAULT_GUEST_PORTAL_SETTINGS);
+  const [checkingStatus, setCheckingStatus] = useState(false);
+
+  const fetchPortalSettings = useCallback(async (scopeId?: string) => {
+    try {
+      const activeScope = scopeId || currentProperty?.id;
+      const ps = await guestAuth.getPortalSettings(activeScope);
+      setPortalSettings(ps);
+    } catch (e) {
+      console.warn('Error reading portal settings:', e);
+    }
+  }, [currentProperty?.id]);
+
+  useEffect(() => {
+    fetchPortalSettings();
+  }, [fetchPortalSettings]);
+
   // Sync settings and properties reactively when context updates
   useEffect(() => {
     if (currentProperty?.name) {
@@ -81,16 +104,33 @@ export default function GuestLogin() {
     if (!email || !email.includes('@')) return;
     try {
       const account = await guestAuth.getAccountByEmail(email);
-      if (account && account.property_id) {
-        const props = await db.getProperties().catch(() => []);
-        const matchedProp = props.find((p: any) => p.id === account.property_id);
-        if (matchedProp) {
-          if (matchedProp.name) setDynamicPropertyName(matchedProp.name);
-          if (matchedProp.logo_url) setDynamicLogoUrl(matchedProp.logo_url);
+      if (account) {
+        if (account.property_id || account.outlet_id) {
+          fetchPortalSettings(account.outlet_id || account.property_id);
+        }
+        if (account.property_id) {
+          const props = await db.getProperties().catch(() => []);
+          const matchedProp = props.find((p: any) => p.id === account.property_id);
+          if (matchedProp) {
+            if (matchedProp.name) setDynamicPropertyName(matchedProp.name);
+            if (matchedProp.logo_url) setDynamicLogoUrl(matchedProp.logo_url);
+          }
         }
       }
     } catch (e) {
       console.warn('Could not load property branding by email:', e);
+    }
+  };
+
+  const handleRecheckStatus = async () => {
+    setCheckingStatus(true);
+    try {
+      await fetchPortalSettings();
+      toast.success('Portal status verified from database.');
+    } catch (e) {
+      toast.error('Unable to verify portal status.');
+    } finally {
+      setCheckingStatus(false);
     }
   };
 
@@ -340,86 +380,181 @@ export default function GuestLogin() {
             </div>
           </div>
 
-          {/* VIEW: 1. STANDARD LOGIN */}
+          {/* VIEW: 1. STANDARD LOGIN (OR NICE OFFLINE CONCIERGE MESSAGE IF PORTAL IS DISABLED) */}
           {view === 'login' && (
-            <form onSubmit={handleLoginSubmit} className="space-y-4 max-w-sm mx-auto w-full">
-              <div className="space-y-1.5">
-                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">
-                  Registered Email Address
-                </label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <Mail className="w-4 h-4 text-slate-500" />
-                  </div>
-                  <input
-                    type="email"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    onBlur={handleEmailBlur}
-                    placeholder="guest@resort.com"
-                    className="w-full h-12 pl-11 pr-4 rounded-xl bg-slate-950 border border-slate-800 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 transition-all text-sm font-bold shadow-sm"
-                    required
-                  />
-                </div>
-              </div>
+            <>
+              {portalSettings && !portalSettings.is_enabled ? (
+                /* OFFLINE PORTAL NOTICE WITH LUXURY GUEST CONCIERGE MESSAGE */
+                <div className="space-y-6 max-w-md mx-auto w-full animate-in fade-in zoom-in-95 duration-500 text-center">
+                  <div className="p-6 sm:p-8 rounded-3xl bg-slate-950/80 border border-amber-500/30 shadow-2xl relative overflow-hidden text-left space-y-4">
+                    {/* Ambient Glow */}
+                    <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/10 rounded-full blur-2xl pointer-events-none" />
 
-              <div className="space-y-1.5">
-                <div className="flex justify-between items-center ml-1 mr-1">
-                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                    Private Password
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setError('');
-                      setView('forgot_email');
-                    }}
-                    className="text-[9px] font-black text-amber-400 hover:text-amber-300 uppercase tracking-wider transition-colors"
-                  >
-                    Forgot Password?
-                  </button>
-                </div>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <Lock className="w-4 h-4 text-slate-500" />
-                  </div>
-                  <input
-                    type={showPassword ? 'text' : 'password'}
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    placeholder="••••••••"
-                    className="w-full h-12 pl-11 pr-11 rounded-xl bg-slate-950 border border-slate-800 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 transition-all text-sm font-bold shadow-sm"
-                    required
-                  />
-                  <button
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors"
-                  >
-                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                  </button>
-                </div>
-              </div>
+                    <div className="flex items-center justify-between">
+                      <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[9px] font-black uppercase tracking-widest">
+                        <Power className="w-3 h-3 text-amber-400 animate-pulse" /> Portal Status: Offline
+                      </div>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+                        {dynamicPropertyName}
+                      </span>
+                    </div>
 
-              {error && (
-                <div className="bg-rose-950/50 border border-rose-500/30 text-rose-300 text-xs font-bold p-3.5 rounded-xl flex items-center gap-3 animate-in shake duration-300">
-                  <ShieldAlert className="w-4 h-4 shrink-0 text-rose-400" />
-                  <span>{error}</span>
+                    <div className="space-y-2">
+                      <h3 className="text-xl font-black text-white uppercase tracking-tight">
+                        Concierge Notice
+                      </h3>
+                      <p className="text-slate-300 text-sm font-medium leading-relaxed">
+                        {portalSettings.welcome_message ||
+                          'Our digital guest portal is currently offline for scheduled concierge maintenance. Please visit our front desk reception or contact us directly below.'}
+                      </p>
+                    </div>
+
+                    {/* CONTACT RECEPTION BAR */}
+                    <div className="pt-2 border-t border-white/10 space-y-2">
+                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">
+                        Front Desk &amp; Concierge Assistance
+                      </p>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                        {portalSettings.support_phone && (
+                          <a
+                            href={`tel:${portalSettings.support_phone}`}
+                            className="p-3 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-amber-400/40 rounded-xl flex items-center gap-2.5 transition-all group"
+                          >
+                            <div className="p-1.5 rounded-lg bg-amber-500/20 text-amber-400">
+                              <Phone className="w-3.5 h-3.5" />
+                            </div>
+                            <div className="truncate">
+                              <span className="text-[8px] font-black uppercase text-slate-400 block">Call Front Desk</span>
+                              <span className="text-xs font-bold text-slate-200 group-hover:text-amber-300 transition-colors">
+                                {portalSettings.support_phone}
+                              </span>
+                            </div>
+                          </a>
+                        )}
+
+                        {portalSettings.support_email && (
+                          <a
+                            href={`mailto:${portalSettings.support_email}`}
+                            className="p-3 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-amber-400/40 rounded-xl flex items-center gap-2.5 transition-all group"
+                          >
+                            <div className="p-1.5 rounded-lg bg-indigo-500/20 text-indigo-400">
+                              <Mail className="w-3.5 h-3.5" />
+                            </div>
+                            <div className="truncate">
+                              <span className="text-[8px] font-black uppercase text-slate-400 block">Email Concierge</span>
+                              <span className="text-xs font-bold text-slate-200 group-hover:text-indigo-300 transition-colors truncate block">
+                                {portalSettings.support_email}
+                              </span>
+                            </div>
+                          </a>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
+                    <Button
+                      onClick={handleRecheckStatus}
+                      isLoading={checkingStatus}
+                      className="w-full sm:w-auto h-11 px-6 rounded-xl bg-white/10 hover:bg-white/20 text-white font-black text-xs uppercase tracking-wider border border-white/10 transition-all flex items-center justify-center gap-2"
+                    >
+                      <RefreshCw className={`w-3.5 h-3.5 text-amber-400 ${checkingStatus ? 'animate-spin' : ''}`} />
+                      Check Portal Status
+                    </Button>
+                  </div>
                 </div>
+              ) : (
+                /* ONLINE STANDARD LOGIN FORM */
+                <form onSubmit={handleLoginSubmit} className="space-y-4 max-w-sm mx-auto w-full">
+                  {/* Nice Welcome Concierge Banner when Online */}
+                  {portalSettings.welcome_message && (
+                    <div className="p-3 bg-indigo-950/40 border border-indigo-500/20 rounded-xl flex items-start gap-2.5">
+                      <Sparkles className="w-4 h-4 text-amber-300 shrink-0 mt-0.5" />
+                      <p className="text-[11px] text-indigo-200/90 font-medium leading-relaxed">
+                        {portalSettings.welcome_message}
+                      </p>
+                    </div>
+                  )}
+
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">
+                      Registered Email Address
+                    </label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <Mail className="w-4 h-4 text-slate-500" />
+                      </div>
+                      <input
+                        type="email"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        onBlur={handleEmailBlur}
+                        placeholder="guest@resort.com"
+                        className="w-full h-12 pl-11 pr-4 rounded-xl bg-slate-950 border border-slate-800 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 transition-all text-sm font-bold shadow-sm"
+                        required
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <div className="flex justify-between items-center ml-1 mr-1">
+                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                        Private Password
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setError('');
+                          setView('forgot_email');
+                        }}
+                        className="text-[9px] font-black text-amber-400 hover:text-amber-300 uppercase tracking-wider transition-colors"
+                      >
+                        Forgot Password?
+                      </button>
+                    </div>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <Lock className="w-4 h-4 text-slate-500" />
+                      </div>
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        placeholder="••••••••"
+                        className="w-full h-12 pl-11 pr-11 rounded-xl bg-slate-950 border border-slate-800 text-white placeholder:text-slate-500 focus:outline-none focus:ring-2 focus:ring-indigo-500/40 focus:border-indigo-500 transition-all text-sm font-bold shadow-sm"
+                        required
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-500 hover:text-slate-300 transition-colors"
+                      >
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+
+                  {error && (
+                    <div className="bg-rose-950/50 border border-rose-500/30 text-rose-300 text-xs font-bold p-3.5 rounded-xl flex items-center gap-3 animate-in shake duration-300">
+                      <ShieldAlert className="w-4 h-4 shrink-0 text-rose-400" />
+                      <span>{error}</span>
+                    </div>
+                  )}
+
+                  <div className="pt-2">
+                    <Button
+                      type="submit"
+                      className="w-full h-12 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs uppercase tracking-widest shadow-lg shadow-indigo-600/30 transition-all active:scale-[0.98] group"
+                      isLoading={loading}
+                    >
+                      <span className="flex items-center justify-center gap-2">
+                        Sign In to Portal <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                      </span>
+                    </Button>
+                  </div>
+                </form>
               )}
-
-              <div className="pt-2">
-                <Button
-                  type="submit"
-                  className="w-full h-12 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs uppercase tracking-widest shadow-lg shadow-indigo-600/30 transition-all active:scale-[0.98] group"
-                  isLoading={loading}
-                >
-                  <span className="flex items-center justify-center gap-2">
-                    Sign In to Portal <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                  </span>
-                </Button>
-              </div>
-            </form>
+            </>
           )}
 
           {/* VIEW: 2. FORCE PASSWORD CHANGE */}

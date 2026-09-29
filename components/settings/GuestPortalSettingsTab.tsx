@@ -36,7 +36,7 @@ import { format, parseISO } from 'date-fns';
 import toast from 'react-hot-toast';
 
 export const GuestPortalSettingsTab: React.FC = () => {
-  const { currentOutlet, currentProperty, settings } = useSettings();
+  const { currentOutlet, currentProperty, settings, refreshSettings } = useSettings();
   const { isSuperAdmin } = useAuth();
 
   const activeScopeId = currentOutlet?.id || currentProperty?.id;
@@ -83,6 +83,7 @@ export const GuestPortalSettingsTab: React.FC = () => {
     setSaving(true);
     try {
       await guestAuth.savePortalSettings(updated, activeScopeId);
+      await refreshSettings();
       toast.success(`Guest portal settings updated for ${activeScopeName}.`);
     } catch (e) {
       toast.error('Failed to save settings');
@@ -96,6 +97,7 @@ export const GuestPortalSettingsTab: React.FC = () => {
     setSaving(true);
     try {
       await guestAuth.savePortalSettings(portalSettings, activeScopeId);
+      await refreshSettings();
       toast.success(`Concierge preferences saved for ${activeScopeName}.`);
     } catch (e) {
       toast.error('Failed to save preferences');

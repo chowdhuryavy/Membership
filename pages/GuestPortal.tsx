@@ -89,6 +89,11 @@ export default function GuestPortal() {
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showBookingRequestModal, setShowBookingRequestModal] = useState(false);
 
+  // Specialist, Room, and Treatments cache for booking details
+  const [therapistsList, setTherapistsList] = useState<any[]>([]);
+  const [roomsList, setRoomsList] = useState<any[]>([]);
+  const [massageTypesList, setMassageTypesList] = useState<any[]>([]);
+
   // Password change state
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -234,7 +239,7 @@ export default function GuestPortal() {
 
     try {
       const activeScopeId = session.outlet_id || session.property_id;
-      const [ps, props, outlets, allMembers, allPtMembers, allPtSessions, allBookings, allConsents, allSales] =
+      const [ps, props, outlets, allMembers, allPtMembers, allPtSessions, allBookings, allConsents, allSales, therapistsData, roomsData, typesData] =
         await Promise.all([
           guestAuth.getPortalSettings(activeScopeId),
           db.getProperties().catch(() => []),
@@ -244,12 +249,18 @@ export default function GuestPortal() {
           db.getPTSessions(session.outlet_id || 'all').catch(() => []),
           db.getMassageBookings(session.outlet_id || '').catch(() => []),
           db.getEntranceFeeConsents().catch(() => []),
-          db.getSales(session.outlet_id || '').catch(() => [])
+          db.getSales(session.outlet_id || '').catch(() => []),
+          db.getTherapists().catch(() => []),
+          db.getMassageRooms().catch(() => []),
+          db.getMassageTypes().catch(() => [])
         ]);
 
       setPortalSettings(ps);
       setPropertiesList(props);
       setOutletsList(outlets);
+      setTherapistsList(therapistsData || []);
+      setRoomsList(roomsData || []);
+      setMassageTypesList(typesData || []);
 
       if (session.property_id) {
         const matchedProp = props.find((p: any) => p.id === session.property_id);
@@ -324,6 +335,16 @@ export default function GuestPortal() {
 
   useEffect(() => {
     loadPortalData();
+
+    // Listen for real-time booking confirmation and database updates
+    const handleSync = () => {
+      loadPortalData();
+    };
+
+    window.addEventListener('booking_updated', handleSync);
+    return () => {
+      window.removeEventListener('booking_updated', handleSync);
+    };
   }, [navigate]);
 
   const handleLogout = () => {
@@ -367,6 +388,10 @@ export default function GuestPortal() {
       const mOutlet = outletsList.find(o => o.id === (account.outlet_id || member?.outlet_id)) || outletsList[0];
       const mProp = propertiesList.find(p => p.id === mOutlet?.property_id) || propertiesList[0];
 
+      const [hours, minutes] = (requestTime || '14:00').split(':').map(Number);
+      const endHour = (hours + 1) % 24;
+      const endTime = `${String(endHour).padStart(2, '0')}:${String(minutes || 0).padStart(2, '0')}`;
+
       await db.addMassageBooking({
         outlet_id: mOutlet?.id || account.outlet_id || 'default',
         property_id: mProp?.id || account.property_id || '',
@@ -374,23 +399,19 @@ export default function GuestPortal() {
         guest_email: account.email || member?.email || '',
         phone: account.phone || member?.phone || '',
         type_name: requestService,
-        booking_date: requestDate,
-        time: requestTime,
-        status: 'Pending',
-        notes: requestNotes
-      });
-      toast.success('Spa appointment request submitted successfully!');
+        date: requestDate,
+        start_time: requestTime,
+        end_time: endTime,
+        status: 'pending',
+        notes: requestNotes,
+        price: 0
+      } as any);
+
+      toast.success('Spa appointment request submitted! Awaiting front desk confirmation.');
       setShowBookingRequestModal(false);
       setRequestNotes('');
 
-      // Reload bookings
-      const allBookings = await db.getMassageBookings(account.outlet_id || '').catch(() => []);
-      const matchedBookings = allBookings.filter((b: any) => {
-        if (b.guest_email && b.guest_email.toLowerCase() === account.email.toLowerCase()) return true;
-        if (b.guest_name && b.guest_name.toLowerCase() === account.name.toLowerCase()) return true;
-        return false;
-      });
-      setBookings(matchedBookings);
+      await loadPortalData();
     } catch (err: any) {
       toast.error(err?.message || 'Failed to submit spa appointment request.');
     } finally {
@@ -633,20 +654,58 @@ export default function GuestPortal() {
               )}
             </div>
 
-            {/* QUICK ACTIONS BAR */}
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-2 pt-1">
+            {/* QUICK ACTIONS BAR - ANIMATED PERFECTION - P PASS BUTTON */}
+            <div className="flex flex-col sm:flex-row items-stretch justify-center gap-2 pt-1">
               <button
                 onClick={handleAddToWallet}
-                className="w-full sm:w-auto px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-md active:scale-95"
+                className="group relative overflow-hidden flex-1 py-3 px-4 bg-gradient-to-r from-slate-950 via-slate-900 to-indigo-950 hover:from-slate-900 hover:to-indigo-900 text-white rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-between gap-3 border border-amber-400/40 hover:border-amber-400 shadow-xl shadow-amber-500/10 hover:shadow-amber-500/25 transition-all duration-300 active:scale-[0.98]"
               >
-                <Wallet className="w-4 h-4 text-amber-300" />
-                {deviceOS === 'ios' ? 'Add to Apple Wallet' : deviceOS === 'android' ? 'Add to Google Wallet' : 'Add to Mobile Wallet'}
+                {/* Animated shimmer sweep overlay */}
+                <div className="absolute inset-0 pointer-events-none opacity-30 group-hover:opacity-60 transition-opacity">
+                  <div className="w-1/2 h-full bg-gradient-to-r from-transparent via-white to-transparent -skew-x-12 animate-perfection-shimmer" />
+                </div>
+
+                <div className="flex items-center gap-3 relative z-10">
+                  {/* Perfection (P) Animated Emblem */}
+                  <div className="relative flex items-center justify-center w-7 h-7 shrink-0">
+                    <span className="absolute inset-0 rounded-full bg-amber-400/40 blur-[3px] animate-perfection-glow" />
+                    <span className="absolute inset-0 rounded-full bg-gradient-to-r from-amber-400 to-amber-600 animate-perfection-ring" />
+                    <div className="relative z-10 w-full h-full rounded-full bg-gradient-to-tr from-amber-400 via-amber-200 to-yellow-100 p-[1.5px] shadow-md shadow-amber-500/30 flex items-center justify-center">
+                      <div className="w-full h-full rounded-full bg-slate-950 flex items-center justify-center">
+                        <span className="text-amber-400 font-serif font-black text-xs tracking-tight select-none">
+                          P
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="text-left">
+                    <div className="flex items-center gap-1.5">
+                      <span className="font-black text-white text-xs tracking-wider">
+                        {deviceOS === 'ios' ? 'Add to Apple Wallet' : deviceOS === 'android' ? 'Add to Google Wallet' : 'Add to Perfection Pass'}
+                      </span>
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping" />
+                    </div>
+                    <span className="text-[9px] text-amber-300/80 font-bold tracking-normal block normal-case">
+                      Perfection Official Digital Pass
+                    </span>
+                  </div>
+                </div>
+
+                <div className="relative z-10 flex items-center gap-1 px-2.5 py-1 rounded-xl bg-white/10 border border-white/10 group-hover:border-amber-400/40 text-[10px] text-amber-300 font-black transition-all">
+                  <span>ADD</span>
+                  <ExternalLink className="w-3 h-3 text-amber-400 group-hover:translate-x-0.5 transition-transform" />
+                </div>
               </button>
+
               <button
                 onClick={handleCopyLink}
-                className="w-full sm:w-auto px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-slate-200 rounded-xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all border border-white/10 shadow-md active:scale-95"
+                className="px-4 py-3 bg-slate-900 hover:bg-slate-800 text-slate-300 hover:text-white rounded-2xl text-xs font-black uppercase tracking-wider flex items-center justify-center gap-2 transition-all border border-white/10 shadow-md active:scale-95 shrink-0"
+                title="Copy Pass Link to Clipboard"
               >
-                <Copy className="w-3.5 h-3.5 text-amber-400" /> Copy Pass Link
+                <Copy className="w-3.5 h-3.5 text-amber-400" />
+                <span className="hidden sm:inline">Copy Link</span>
+                <span className="sm:hidden">Copy Pass Link</span>
               </button>
             </div>
 
@@ -798,37 +857,84 @@ export default function GuestPortal() {
                 <p className="text-xs text-slate-500">Tap "Request Slot" to reserve a massage or wellness therapy.</p>
               </div>
             ) : (
-              bookings.map((b) => (
-                <div
-                  key={b.id}
-                  className="bg-slate-900/90 border border-white/10 rounded-3xl p-5 space-y-3"
-                >
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <span className="text-[9px] font-black uppercase tracking-widest text-purple-400">
-                        {(b as any).type_name || 'Wellness Therapy'}
-                      </span>
-                      <h4 className="text-sm font-black text-white uppercase mt-0.5">
-                        {b.date ? format(parseISO(b.date), 'EEEE, dd MMMM yyyy') : 'Scheduled'}
-                      </h4>
-                    </div>
-                    <span className="px-3 py-1 rounded-full bg-purple-500/20 text-purple-300 text-[10px] font-black uppercase">
-                      {b.status || 'Confirmed'}
-                    </span>
-                  </div>
+              bookings.map((b) => {
+                const bStatus = (b.status || 'pending').toLowerCase();
+                const matchedTherapist = therapistsList.find(t => t.id === b.therapist_id);
+                const matchedRoom = roomsList.find(r => r.id === b.room_id);
+                const matchedType = massageTypesList.find(t => t.id === b.massage_type_id);
+                const specialistName = matchedTherapist?.name || (b as any).therapist_name;
+                const roomName = matchedRoom?.name || (b as any).room_name;
+                const serviceName = (b as any).type_name || matchedType?.name || (b.notes?.match(/\[Service: ([^\]]+)\]/i)?.[1]) || 'Wellness Therapy';
 
-                  <div className="flex items-center gap-4 text-xs text-slate-300 pt-2 border-t border-white/5">
-                    <div className="flex items-center gap-1.5">
-                      <Clock className="w-3.5 h-3.5 text-purple-400" />
-                      <span>{b.start_time} - {b.end_time}</span>
+                return (
+                  <div
+                    key={b.id}
+                    className={`bg-slate-900/90 border rounded-3xl p-5 space-y-3 transition-all ${
+                      bStatus === 'pending'
+                        ? 'border-amber-500/40 shadow-lg shadow-amber-500/5'
+                        : bStatus === 'confirmed'
+                        ? 'border-emerald-500/40 shadow-lg shadow-emerald-500/5'
+                        : 'border-white/10'
+                    }`}
+                  >
+                    <div className="flex justify-between items-start">
+                      <div>
+                        <span className="text-[9px] font-black uppercase tracking-widest text-purple-400">
+                          {serviceName}
+                        </span>
+                        <h4 className="text-sm font-black text-white uppercase mt-0.5">
+                          {b.date ? format(parseISO(b.date), 'EEEE, dd MMMM yyyy') : 'Scheduled Date'}
+                        </h4>
+                      </div>
+
+                      {/* Dynamic Status Badge */}
+                      {bStatus === 'pending' && (
+                        <span className="px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-black uppercase flex items-center gap-1.5">
+                          <Clock className="w-3 h-3 text-amber-400 animate-spin" /> Pending Confirmation
+                        </span>
+                      )}
+                      {bStatus === 'confirmed' && (
+                        <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-black uppercase flex items-center gap-1.5">
+                          <CheckCircle2 className="w-3 h-3 text-emerald-400" /> Confirmed
+                        </span>
+                      )}
+                      {bStatus === 'completed' && (
+                        <span className="px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 text-[10px] font-black uppercase flex items-center gap-1.5">
+                          <CheckCircle2 className="w-3 h-3 text-blue-400" /> Completed
+                        </span>
+                      )}
+                      {bStatus === 'cancelled' && (
+                        <span className="px-3 py-1 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[10px] font-black uppercase">
+                          Cancelled
+                        </span>
+                      )}
                     </div>
-                    <div className="flex items-center gap-1.5">
-                      <User className="w-3.5 h-3.5 text-purple-400" />
-                      <span>{(b as any).therapist_name || 'Therapist'}</span>
+
+                    <div className="flex flex-wrap items-center gap-4 text-xs text-slate-300 pt-2 border-t border-white/5">
+                      <div className="flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5 text-purple-400" />
+                        <span>{b.start_time || '14:00'} - {b.end_time || '15:00'}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <User className="w-3.5 h-3.5 text-purple-400" />
+                        <span>{specialistName || (bStatus === 'pending' ? 'To be assigned' : 'Specialist')}</span>
+                      </div>
+                      {roomName && (
+                        <div className="flex items-center gap-1.5">
+                          <MapPin className="w-3.5 h-3.5 text-amber-400" />
+                          <span>{roomName}</span>
+                        </div>
+                      )}
                     </div>
+
+                    {bStatus === 'pending' && (
+                      <p className="text-[10px] text-amber-400/80 font-medium italic">
+                        Front desk concierge will confirm your specialist &amp; room shortly.
+                      </p>
+                    )}
                   </div>
-                </div>
-              ))
+                );
+              })
             )}
           </div>
         )}

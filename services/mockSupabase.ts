@@ -2456,9 +2456,17 @@ class DatabaseService {
             : (typeof data.staff_portal_settings?.session_timeout_minutes === 'number'
                 ? data.staff_portal_settings.session_timeout_minutes
                 : 15);
+          
+          const guestPortalSettings = data.guest_portal_settings || data.staff_portal_settings?.guest_portal_settings;
+          const guestPortalSettingsMap = data.guest_portal_settings_map || data.staff_portal_settings?.guest_portal_settings_map;
+          const guestAccounts = data.guest_accounts || data.staff_portal_settings?.guest_accounts;
+
           return {
             ...data,
-            session_timeout_minutes: timeout
+            session_timeout_minutes: timeout,
+            guest_portal_settings: guestPortalSettings,
+            guest_portal_settings_map: guestPortalSettingsMap,
+            guest_accounts: guestAccounts
           } as CompanySettings;
         }
         return {
@@ -2523,10 +2531,17 @@ class DatabaseService {
     }
 
     if (this.isSupabase()) {
-      // Ensure staff_portal_settings JSONB preserves session_timeout_minutes even if root column does not exist
+      // Ensure staff_portal_settings JSONB preserves session_timeout_minutes, guest_portal_settings, guest_portal_settings_map, and guest_accounts
+      const guestPortalSettings = settings.guest_portal_settings ?? settings.staff_portal_settings?.guest_portal_settings;
+      const guestPortalSettingsMap = settings.guest_portal_settings_map ?? settings.staff_portal_settings?.guest_portal_settings_map;
+      const guestAccounts = settings.guest_accounts ?? settings.staff_portal_settings?.guest_accounts;
+
       const staffPortalSettings = {
         ...(settings.staff_portal_settings || {}),
-        session_timeout_minutes: timeout
+        session_timeout_minutes: timeout,
+        guest_portal_settings: guestPortalSettings,
+        guest_portal_settings_map: guestPortalSettingsMap,
+        guest_accounts: guestAccounts
       };
 
       let payload: any = { 
@@ -4830,9 +4845,7 @@ class DatabaseService {
   async getMassageBookings(scopeId: string, isPropertyScope: boolean = false, limitToOutletIds?: string[], startDate?: string, guestId?: string): Promise<MassageBooking[]> {
     if (this.isSupabase()) {
       return this.safeCall(async () => {
-        // Optimization: Select only required columns to reduce payload size and query time
-        const selectCols = 'id,date,start_time,end_time,guest_id,guest_name,guest_phone,massage_type_id,outlet_id,property_id,room_id,therapist_id,status,notes,total_price,is_paid,staff_id,created_at,updated_at,inventory_item_id,member_id,price,discount';
-        let query = supabase.from('massage_bookings').select(selectCols);
+        let query = supabase.from('massage_bookings').select('*');
         
         if (guestId) {
             query = query.eq('guest_id', guestId).limit(2000);
@@ -4900,12 +4913,55 @@ class DatabaseService {
   async addMassageBooking(booking: Omit<MassageBooking, 'id' | 'created_at'>) {
     if (this.isSupabase()) {
       await this.safeCall(async () => {
-        const { error } = await supabase.from('massage_bookings').insert([{ ...booking, id: crypto.randomUUID(), created_at: new Date().toISOString() }]);
-        if (error) throw error;
+        let payload: any = {
+          ...booking,
+          id: crypto.randomUUID(),
+          created_at: new Date().toISOString()
+        };
+
+        // Normalize phone to guest_phone
+        if (payload.phone && !payload.guest_phone) {
+          payload.guest_phone = payload.phone;
+        }
+
+        let attempts = 0;
+        let lastError: any = null;
+        while (attempts < 6) {
+          attempts++;
+          const { error } = await supabase.from('massage_bookings').insert([payload]);
+          if (!error) {
+            lastError = null;
+            break;
+          }
+          lastError = error;
+
+          // If PostgREST returns missing column (PGRST204)
+          if (error.code === 'PGRST204' || error.message?.includes('Could not find the') || error.message?.includes('schema cache')) {
+            const match = error.message?.match(/Could not find the '([^']+)' column/i);
+            if (match && match[1] && payload[match[1]] !== undefined) {
+              // Preserve stripped values in notes so nothing is lost
+              if (match[1] === 'guest_email' && payload.guest_email) {
+                payload.notes = `[Email: ${payload.guest_email}] ${payload.notes || ''}`.trim();
+              }
+              if (match[1] === 'type_name' && payload.type_name) {
+                payload.notes = `[Service: ${payload.type_name}] ${payload.notes || ''}`.trim();
+              }
+              delete payload[match[1]];
+              continue;
+            }
+          }
+          break;
+        }
+
+        if (lastError) throw lastError;
+
         await this.logAction('CREATE_BOOKING', `Created booking on ${booking.date} at ${booking.start_time} (Therapist ID: ${booking.therapist_id})`, booking.outlet_id);
         
-        const { data: guestData } = await supabase.from('guests').select('name').eq('id', booking.guest_id).single();
-        const guestName = guestData?.name || 'A guest';
+        let guestName = booking.guest_name || 'A guest';
+        if (booking.guest_id) {
+          const { data: guestData } = await supabase.from('guests').select('name').eq('id', booking.guest_id).single();
+          if (guestData?.name) guestName = guestData.name;
+        }
 
         // Add notification for the therapist AND admins
         if (booking.therapist_id && booking.therapist_id !== 'unassigned') {
@@ -4921,7 +4977,9 @@ class DatabaseService {
     }
     
     // Trigger local event for real-time updates
-    window.dispatchEvent(new CustomEvent('booking_updated', { detail: { outlet_id: booking.outlet_id } }));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('booking_updated', { detail: { outlet_id: booking.outlet_id } }));
+    }
     
     // Also broadcast via Supabase for other clients (instant peer-to-peer)
     if (this.isSupabase()) {
@@ -5005,7 +5063,9 @@ class DatabaseService {
     // Trigger local event
     if (updates.outlet_id || booking?.outlet_id) {
       const oid = updates.outlet_id || booking?.outlet_id;
-      window.dispatchEvent(new CustomEvent('booking_updated', { detail: { outlet_id: oid } }));
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('booking_updated', { detail: { outlet_id: oid } }));
+      }
       
       if (this.isSupabase()) {
         supabase.channel(`massage-bookings-${oid}`).send({
