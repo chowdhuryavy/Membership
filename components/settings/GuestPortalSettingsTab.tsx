@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { guestAuth, DEFAULT_GUEST_PORTAL_SETTINGS } from '../../services/guestAuthService';
 import { GuestAccount, GuestPortalSettings } from '../../types';
 import { useSettings } from '../../contexts/SettingsContext';

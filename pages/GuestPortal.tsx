@@ -94,6 +94,10 @@ export default function GuestPortal() {
   const [roomsList, setRoomsList] = useState<any[]>([]);
   const [massageTypesList, setMassageTypesList] = useState<any[]>([]);
 
+  // Multi-membership & Multi-facility support for the same guest
+  const [userMemberships, setUserMemberships] = useState<Member[]>([]);
+  const [selectedMemberId, setSelectedMemberId] = useState<string>('');
+
   // Password change state
   const [oldPassword, setOldPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
@@ -206,11 +210,9 @@ export default function GuestPortal() {
     }
   };
 
-  const matchedOutlet = outletsList.find(o => o.id === (member?.outlet_id || account?.outlet_id)) || outletsList[0];
-  const matchedProperty = propertiesList.find(p => p.id === matchedOutlet?.property_id) || propertiesList[0];
-
   const effectiveMember: Member = useMemo(() => {
-    if (member) return member;
+    const activeM = userMemberships.find(m => m.id === selectedMemberId) || userMemberships[0] || member;
+    if (activeM) return activeM;
     return ({
       id: account?.member_id || account?.id || 'guest-1',
       guest_name: account?.name || 'Valued Guest',
@@ -218,12 +220,31 @@ export default function GuestPortal() {
       status: 'Active',
       access_type: 'Pool, Gym & Spa',
       package_type: 'VIP Member',
-      outlet_id: account?.outlet_id || currentOutlet?.id || matchedOutlet?.id,
+      outlet_id: account?.outlet_id || currentOutlet?.id,
       email: account?.email,
       phone: account?.phone,
       current_end_date: new Date(Date.now() + 365 * 86400000).toISOString().split('T')[0]
     } as unknown) as Member;
-  }, [member, account, memberNumber, currentOutlet, matchedOutlet]);
+  }, [userMemberships, selectedMemberId, member, account, memberNumber, currentOutlet]);
+
+  const matchedOutlet = useMemo(() => {
+    const targetOutletId = effectiveMember?.outlet_id || member?.outlet_id || account?.outlet_id;
+    return outletsList.find(o => o.id === targetOutletId) || outletsList[0];
+  }, [outletsList, effectiveMember, member, account]);
+
+  const matchedProperty = useMemo(() => {
+    if (matchedOutlet?.property_id) {
+      const p = propertiesList.find(prop => prop.id === matchedOutlet.property_id);
+      if (p) return p;
+    }
+    if (effectiveMember?.property_id) {
+      const p = propertiesList.find(prop => prop.id === effectiveMember.property_id);
+      if (p) return p;
+    }
+    // Prefer genuine property over 'test' placeholder
+    const realProp = propertiesList.find(p => p.name && !p.name.toLowerCase().includes('test'));
+    return realProp || propertiesList[0];
+  }, [propertiesList, matchedOutlet, effectiveMember]);
 
   // Validation for changing password
   const passValidation = validatePasswordComplexity(newPassword, confirmPassword);
@@ -244,12 +265,12 @@ export default function GuestPortal() {
           guestAuth.getPortalSettings(activeScopeId),
           db.getProperties().catch(() => []),
           db.getOutlets().catch(() => []),
-          db.getMembers(session.outlet_id || 'all').catch(() => []),
-          db.getPTMembers(session.outlet_id || 'all').catch(() => []),
-          db.getPTSessions(session.outlet_id || 'all').catch(() => []),
-          db.getMassageBookings(session.outlet_id || '').catch(() => []),
+          db.getMembers('').catch(() => []),
+          db.getPTMembers('').catch(() => []),
+          db.getPTSessions('').catch(() => []),
+          db.getMassageBookings('').catch(() => []),
           db.getEntranceFeeConsents().catch(() => []),
-          db.getSales(session.outlet_id || '').catch(() => []),
+          db.getSales('').catch(() => []),
           db.getTherapists().catch(() => []),
           db.getMassageRooms().catch(() => []),
           db.getMassageTypes().catch(() => [])
@@ -262,29 +283,42 @@ export default function GuestPortal() {
       setRoomsList(roomsData || []);
       setMassageTypesList(typesData || []);
 
-      if (session.property_id) {
-        const matchedProp = props.find((p: any) => p.id === session.property_id);
-        if (matchedProp) {
-          if (matchedProp.name) setDynamicPropertyName(matchedProp.name);
-          if (matchedProp.logo_url) setDynamicLogoUrl(matchedProp.logo_url);
-        }
-      } else if (props[0]) {
-        if (props[0].name) setDynamicPropertyName(props[0].name);
-        if (props[0].logo_url) setDynamicLogoUrl(props[0].logo_url);
-      }
-
       const emailLower = session.email.toLowerCase();
       const phoneClean = (session.phone || '').replace(/\D/g, '');
 
-      // Match member record
-      const matchedMember = allMembers.find((m: any) => {
-        if (session.member_id && m.id === session.member_id) return true;
+      // Match all member records for this guest across all properties and facilities
+      const matchedMembers = allMembers.filter((m: any) => {
+        if (m.status === 'Cancelled' || m.status === 'Deleted') return false;
         if (m.email && m.email.toLowerCase() === emailLower) return true;
         if (phoneClean && m.phone && m.phone.replace(/\D/g, '') === phoneClean) return true;
         if (m.guest_name && m.guest_name.toLowerCase() === session.name.toLowerCase()) return true;
         return false;
       });
-      setMember(matchedMember || null);
+
+      // Sort newest created memberships first
+      matchedMembers.sort((a: any, b: any) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+      setUserMemberships(matchedMembers);
+
+      const activeM = matchedMembers[0] || null;
+      setMember(activeM);
+      setSelectedMemberId((prev) => {
+        if (prev && matchedMembers.some(m => m.id === prev)) return prev;
+        return activeM ? activeM.id : '';
+      });
+
+      // Resolve true property and outlet names dynamically
+      const primaryOutlet = outlets.find((o: any) => o.id === activeM?.outlet_id);
+      const primaryProp = props.find((p: any) => p.id === primaryOutlet?.property_id) || props.find((p: any) => p.id === session.property_id);
+      if (primaryProp) {
+        if (primaryProp.name) setDynamicPropertyName(primaryProp.name);
+        if (primaryProp.logo_url) setDynamicLogoUrl(primaryProp.logo_url);
+      } else {
+        const genuineProp = props.find((p: any) => p.name && !p.name.toLowerCase().includes('test'));
+        if (genuineProp) {
+          if (genuineProp.name) setDynamicPropertyName(genuineProp.name);
+          if (genuineProp.logo_url) setDynamicLogoUrl(genuineProp.logo_url);
+        }
+      }
 
       // Match PT Members & Sessions
       const matchedPT = allPtMembers.filter((pt: any) => {
@@ -460,13 +494,6 @@ export default function GuestPortal() {
 
         <div className="flex items-center gap-2">
           <button
-            onClick={() => loadPortalData()}
-            className="p-2 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 transition-colors"
-            title="Refresh"
-          >
-            <RefreshCw className="w-4 h-4" />
-          </button>
-          <button
             onClick={handleLogout}
             className="p-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 transition-colors"
             title="Log Out"
@@ -506,6 +533,54 @@ export default function GuestPortal() {
                 </button>
               </div>
             </div>
+
+            {/* MULTI-FACILITY MEMBERSHIP SWITCHER (When guest has passes at multiple hotels/clubs) */}
+            {userMemberships.length > 1 && (
+              <div className="w-full max-w-[360px] mx-auto p-2.5 px-3.5 rounded-2xl bg-gradient-to-r from-amber-500/15 via-slate-900 to-amber-500/10 border border-amber-400/40 backdrop-blur-md shadow-xl flex items-center justify-between gap-2 animate-in fade-in">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-7 h-7 rounded-lg bg-amber-400/20 border border-amber-400/40 flex items-center justify-center shrink-0">
+                    <Building2 className="w-4 h-4 text-amber-300" />
+                  </div>
+                  <div className="min-w-0 text-left">
+                    <span className="text-[8px] font-black uppercase tracking-widest text-amber-300/80 block">
+                      Active Facility Pass ({userMemberships.length})
+                    </span>
+                    <span className="text-[11px] font-black text-white truncate block">
+                      {propertyName} &bull; {matchedOutlet?.name}
+                    </span>
+                  </div>
+                </div>
+
+                <select
+                  value={selectedMemberId}
+                  onChange={(e) => {
+                    const chosenId = e.target.value;
+                    setSelectedMemberId(chosenId);
+                    const chosenM = userMemberships.find(m => m.id === chosenId);
+                    if (chosenM) {
+                      setMember(chosenM);
+                      const o = outletsList.find(out => out.id === chosenM.outlet_id);
+                      const p = propertiesList.find(pr => pr.id === o?.property_id);
+                      if (p?.name) setDynamicPropertyName(p.name);
+                      if (p?.logo_url) setDynamicLogoUrl(p.logo_url);
+                      toast.success(`Switched to ${p?.name || 'Facility'} (${o?.name || 'Outlet'})`);
+                    }
+                  }}
+                  className="bg-amber-400 hover:bg-amber-300 text-slate-950 text-[10px] font-black uppercase tracking-wider rounded-xl px-2.5 py-1.5 focus:outline-none cursor-pointer transition-colors shadow-md shrink-0"
+                >
+                  {userMemberships.map((m) => {
+                    const o = outletsList.find(out => out.id === m.outlet_id);
+                    const p = propertiesList.find(pr => pr.id === o?.property_id);
+                    const label = p?.name ? `${p.name} - ${o?.name || 'Club'}` : (o?.name || 'Membership');
+                    return (
+                      <option key={m.id} value={m.id} className="bg-slate-900 text-white font-bold">
+                        {label} (#{m.membership_number})
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+            )}
 
             {/* CARD CONTAINER (Apple/Google Wallet Style) */}
             <div className="relative mx-auto w-full max-w-[360px] min-h-[480px] rounded-[2.2rem] bg-gradient-to-br from-slate-900 via-slate-850 to-slate-950 text-white p-6 shadow-2xl border border-amber-500/30 flex flex-col justify-between overflow-hidden group">
@@ -986,53 +1061,7 @@ export default function GuestPortal() {
           </div>
         )}
 
-        {/* TAB 5: FINANCES & RECEIPTS */}
-        {activeTab === 'finances' && portalSettings?.allow_financial_history && (
-          <div className="space-y-4 animate-in fade-in duration-300">
-            <div>
-              <h3 className="text-base font-black text-white uppercase tracking-tight">
-                Billing &amp; Receipts
-              </h3>
-              <p className="text-xs text-slate-400 font-medium">
-                Historical invoices and transaction records
-              </p>
-            </div>
-
-            {sales.length === 0 ? (
-              <div className="p-8 text-center bg-slate-900/50 rounded-3xl border border-white/5 space-y-2">
-                <Receipt className="w-8 h-8 text-slate-600 mx-auto" />
-                <h4 className="text-sm font-bold text-slate-400 uppercase">No Transactions</h4>
-                <p className="text-xs text-slate-500">Your purchases and payments will be listed here.</p>
-              </div>
-            ) : (
-              sales.map((sale) => (
-                <div
-                  key={sale.id}
-                  className="bg-slate-900/90 border border-white/10 rounded-3xl p-4 flex items-center justify-between"
-                >
-                  <div className="space-y-0.5">
-                    <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                      {sale.category || 'Service'}
-                    </span>
-                    <h4 className="text-xs font-black text-white uppercase">
-                      {sale.item_name || 'Transaction'}
-                    </h4>
-                    <p className="text-[10px] text-slate-400">
-                      {sale.created_at ? format(parseISO(sale.created_at), 'dd MMM yyyy') : ''} &bull; {sale.payment_method || 'Paid'}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-black text-emerald-400">
-                      {formatMoney(sale.net_amount || 0)}
-                    </p>
-                  </div>
-                </div>
-              ))
-            )}
-          </div>
-        )}
-
-        {/* TAB 6: PROFILE & SECURITY */}
+        {/* TAB 5: PROFILE, RECEIPTS & SECURITY */}
         {activeTab === 'profile' && (
           <div className="space-y-4 animate-in fade-in duration-300">
             <div>
@@ -1040,7 +1069,7 @@ export default function GuestPortal() {
                 Account &amp; Security
               </h3>
               <p className="text-xs text-slate-400 font-medium">
-                Manage your profile and credentials
+                Manage your profile, credentials, and billing records
               </p>
             </div>
 
@@ -1076,6 +1105,54 @@ export default function GuestPortal() {
             >
               <Lock className="w-4 h-4 text-amber-400" /> Change Private Password
             </Button>
+
+            {/* BILLING & RECEIPTS SECTION (Inside Profile) */}
+            {portalSettings?.allow_financial_history && (
+              <div className="space-y-3 pt-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Receipt className="w-4 h-4 text-amber-400" />
+                    <h4 className="text-xs font-black text-white uppercase tracking-wider">
+                      Billing &amp; Receipts ({sales.length})
+                    </h4>
+                  </div>
+                </div>
+
+                {sales.length === 0 ? (
+                  <div className="p-6 text-center bg-slate-900/50 rounded-2xl border border-white/5 space-y-1.5">
+                    <Receipt className="w-6 h-6 text-slate-600 mx-auto" />
+                    <h5 className="text-xs font-bold text-slate-400 uppercase">No Transactions</h5>
+                    <p className="text-[10px] text-slate-500">Your purchases and payment receipts will appear here.</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2 max-h-[340px] overflow-y-auto pr-1">
+                    {sales.map((sale) => (
+                      <div
+                        key={sale.id}
+                        className="bg-slate-900/90 border border-white/10 rounded-2xl p-3.5 flex items-center justify-between"
+                      >
+                        <div className="space-y-0.5">
+                          <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
+                            {sale.category || 'Service'}
+                          </span>
+                          <h5 className="text-xs font-black text-white uppercase">
+                            {sale.item_name || 'Transaction'}
+                          </h5>
+                          <p className="text-[10px] text-slate-400">
+                            {sale.created_at ? format(parseISO(sale.created_at), 'dd MMM yyyy') : ''} &bull; {sale.payment_method || 'Paid'}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <p className="text-xs font-black text-emerald-400">
+                            {formatMoney(sale.net_amount || 0)}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* SUPPORT CONTACT */}
             <div className="p-4 bg-slate-900/50 rounded-2xl border border-white/5 text-center space-y-1">
@@ -1155,10 +1232,10 @@ export default function GuestPortal() {
             </div>
           </div>
 
-          <span className={`text-[9px] font-black uppercase tracking-widest mt-1 transition-colors ${
-            activeTab === 'card' ? 'text-amber-400 drop-shadow-[0_0_8px_rgba(245,158,11,0.8)]' : 'text-slate-400 group-hover:text-amber-300'
+          <span className={`text-[10px] font-serif font-black uppercase tracking-widest mt-0.5 transition-colors ${
+            activeTab === 'card' ? 'text-amber-300 drop-shadow-[0_0_8px_rgba(245,158,11,0.9)]' : 'text-slate-400 group-hover:text-amber-300'
           }`}>
-            Pass
+            P
           </span>
         </button>
 
@@ -1171,18 +1248,6 @@ export default function GuestPortal() {
           >
             <Ticket className="w-5 h-5" />
             <span className="text-[9px] uppercase tracking-wider">Passes</span>
-          </button>
-        )}
-
-        {portalSettings?.allow_financial_history && (
-          <button
-            onClick={() => setActiveTab('finances')}
-            className={`flex flex-col items-center gap-1 p-2 rounded-2xl transition-all ${
-              activeTab === 'finances' ? 'text-amber-400 font-black' : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Receipt className="w-5 h-5" />
-            <span className="text-[9px] uppercase tracking-wider">Receipts</span>
           </button>
         )}
 

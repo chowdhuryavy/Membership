@@ -155,6 +155,29 @@ export class GuestAuthService {
 
   public async deleteGuestAccountByMemberId(memberId: string): Promise<boolean> {
     const accounts = await this.getAccounts();
+    const targetAcc = accounts.find(a => a.member_id === memberId || a.id === memberId);
+    if (!targetAcc) return false;
+
+    // Check if this guest still has other active memberships under their email
+    try {
+      const allMembers = await db.getMembers('').catch(() => []);
+      const remainingMembers = allMembers.filter(
+        (m: any) => m.id !== memberId && m.email && m.email.toLowerCase() === targetAcc.email.toLowerCase() && m.status !== 'Cancelled'
+      );
+
+      if (remainingMembers.length > 0) {
+        // Relink account to their most recent active membership!
+        remainingMembers.sort((a: any, b: any) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+        const newPrimary = remainingMembers[0];
+        targetAcc.member_id = newPrimary.id;
+        targetAcc.outlet_id = newPrimary.outlet_id;
+        await this.saveAccounts(accounts);
+        return true;
+      }
+    } catch (e) {
+      console.warn('[GuestAuth] Error checking remaining memberships:', e);
+    }
+
     const filtered = accounts.filter(a => a.member_id !== memberId && a.id !== memberId);
     if (filtered.length !== accounts.length) {
       await this.saveAccounts(filtered);
@@ -327,9 +350,21 @@ export class GuestAuthService {
         const members = await db.getMembers('').catch(() => []);
         const matchedMember = members.find((m: any) => m.id === account.member_id);
         if (!matchedMember || matchedMember.status === 'Cancelled') {
-          account.is_active = false;
-          await this.deleteGuestAccountByMemberId(account.member_id);
-          return { error: 'Your membership account is no longer active. Please contact front desk management.' };
+          const anotherMember = members.find((m: any) => m.email && m.email.toLowerCase() === cleanEmail && m.status !== 'Cancelled');
+          if (anotherMember) {
+            account.member_id = anotherMember.id;
+            account.outlet_id = anotherMember.outlet_id;
+            const accounts = await this.getAccounts();
+            const idx = accounts.findIndex(a => a.id === account.id);
+            if (idx !== -1) {
+              accounts[idx] = account;
+              await this.saveAccounts(accounts);
+            }
+          } else {
+            account.is_active = false;
+            await this.deleteGuestAccountByMemberId(account.member_id);
+            return { error: 'Your membership account is no longer active. Please contact front desk management.' };
+          }
         }
       } catch (e) {
         console.warn('[GuestAuth] Could not verify member status:', e);
