@@ -46,16 +46,17 @@ export const GuestPortalSettingsTab: React.FC = () => {
   const [saving, setSaving] = useState(false);
   const [portalSettings, setPortalSettings] = useState<GuestPortalSettings>(DEFAULT_GUEST_PORTAL_SETTINGS);
   const [accounts, setAccounts] = useState<GuestAccount[]>([]);
+  const [members, setMembers] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedOutletFilter, setSelectedOutletFilter] = useState<string>('all');
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const [ps, accs] = await Promise.all([
+      const [ps, accs, mems] = await Promise.all([
         guestAuth.getPortalSettings(activeScopeId),
-        guestAuth.getAccounts()
+        guestAuth.getAccounts(),
+        db.getMembers('').catch(() => [])
       ]);
 
       if (!ps.support_phone) {
@@ -67,6 +68,7 @@ export const GuestPortalSettingsTab: React.FC = () => {
 
       setPortalSettings(ps);
       setAccounts(accs);
+      setMembers(mems || []);
     } catch (e) {
       console.error('Error loading guest portal settings:', e);
     } finally {
@@ -161,12 +163,31 @@ export const GuestPortalSettingsTab: React.FC = () => {
 
   const filteredAccounts = useMemo(() => {
     return accounts.filter(a => {
-      // Scope filter per selected outlet/property filter
-      if (selectedOutletFilter !== 'all') {
-        const matchOutlet = a.outlet_id && a.outlet_id === selectedOutletFilter;
-        const matchProp = a.property_id && a.property_id === selectedOutletFilter;
-        if (!matchOutlet && !matchProp) return false;
+      // Find all matching members for this guest account
+      const guestMembers = members.filter(m => 
+        (a.member_id && m.id === a.member_id) ||
+        (m.email && m.email.toLowerCase() === (a.email || '').toLowerCase())
+      );
+
+      // 1. If an outlet is selected on top
+      if (currentOutlet?.id) {
+        const directMatch = a.outlet_id === currentOutlet.id;
+        const memberMatch = guestMembers.some(m => m.outlet_id === currentOutlet.id);
+        if (!directMatch && !memberMatch) return false;
       }
+      // 2. If a property is selected on top (without a specific outlet)
+      else if (currentProperty?.id) {
+        const directMatch = a.property_id === currentProperty.id;
+        const directOutletMatch = a.outlet_id && outlets?.some(o => o.id === a.outlet_id && o.property_id === currentProperty.id);
+        const memberMatch = guestMembers.some(m => {
+          if (m.property_id === currentProperty.id) return true;
+          const o = outlets?.find(out => out.id === m.outlet_id);
+          return o?.property_id === currentProperty.id;
+        });
+        if (!directMatch && !directOutletMatch && !memberMatch) return false;
+      }
+
+      // 3. Search query filter
       const q = searchTerm.trim().toLowerCase();
       if (!q) return true;
       return (
@@ -175,7 +196,7 @@ export const GuestPortalSettingsTab: React.FC = () => {
         (a.phone && a.phone.includes(q))
       );
     });
-  }, [accounts, selectedOutletFilter, searchTerm]);
+  }, [accounts, members, currentOutlet?.id, currentProperty?.id, outlets, searchTerm]);
 
   const portalDomainUrl = 'https://hcm-guest.perfection.my/#/guest-login';
 
@@ -497,30 +518,21 @@ export const GuestPortalSettingsTab: React.FC = () => {
       <Card className="rounded-[2.5rem] border-slate-200/80 shadow-sm bg-white overflow-hidden">
         <div className="p-6 sm:p-8 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <h3 className="text-base font-black uppercase text-slate-900 tracking-tight">
-              Authenticated Guest Accounts ({filteredAccounts.length}{filteredAccounts.length !== accounts.length ? ` of ${accounts.length}` : ''})
-            </h3>
+            <div className="flex items-center gap-2 mb-1">
+              <h3 className="text-base font-black uppercase text-slate-900 tracking-tight">
+                Authenticated Guest Accounts ({filteredAccounts.length})
+              </h3>
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-200">
+                {currentOutlet ? currentOutlet.name : currentProperty ? currentProperty.name : 'All Facilities'}
+              </span>
+            </div>
             <p className="text-xs text-slate-500 font-medium">
               Manage member credentials, resend temporary passwords, or suspend access
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-3">
-            <select
-              value={selectedOutletFilter}
-              onChange={e => setSelectedOutletFilter(e.target.value)}
-              className="h-10 px-3 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
-            >
-              <option value="all">All Outlets &amp; Facilities ({accounts.length})</option>
-              {outlets?.map(o => (
-                <option key={o.id} value={o.id}>{o.name}</option>
-              ))}
-              {properties?.map(p => (
-                <option key={p.id} value={p.id}>{p.name} (Property)</option>
-              ))}
-            </select>
-
-            <div className="relative w-56 sm:w-64">
+          <div className="flex items-center gap-3">
+            <div className="relative w-64 sm:w-72">
               <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
@@ -557,15 +569,19 @@ export const GuestPortalSettingsTab: React.FC = () => {
                 <tr>
                   <td colSpan={6} className="px-6 py-12 text-center text-slate-400 font-medium">
                     {accounts.length > 0 ? (
-                      <div className="space-y-3">
-                        <p className="text-slate-600 font-bold">No accounts match the current filter ({accounts.length} total registered accounts).</p>
-                        <button
-                          type="button"
-                          onClick={() => { setSelectedOutletFilter('all'); setSearchTerm(''); }}
-                          className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-black uppercase tracking-wider shadow-md hover:bg-indigo-700 transition-all"
-                        >
-                          View All Accounts ({accounts.length})
-                        </button>
+                      <div className="space-y-2">
+                        <p className="text-slate-600 font-bold">
+                          No guest accounts found for {currentOutlet ? currentOutlet.name : currentProperty ? currentProperty.name : 'this view'}.
+                        </p>
+                        {searchTerm && (
+                          <button
+                            type="button"
+                            onClick={() => setSearchTerm('')}
+                            className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-black uppercase tracking-wider shadow-md hover:bg-indigo-700 transition-all"
+                          >
+                            Clear Search Filter
+                          </button>
+                        )}
                       </div>
                     ) : (
                       "No guest accounts found. New accounts are automatically provisioned when members or guests are created with an email address."
@@ -574,8 +590,13 @@ export const GuestPortalSettingsTab: React.FC = () => {
                 </tr>
               ) : (
                 filteredAccounts.map(acc => {
-                  const matchedOutlet = outlets?.find(o => o.id === acc.outlet_id);
-                  const matchedProp = properties?.find(p => p.id === acc.property_id);
+                  const guestMember = members.find(m => 
+                    (currentOutlet && m.outlet_id === currentOutlet.id && (m.id === acc.member_id || m.email?.toLowerCase() === acc.email.toLowerCase())) ||
+                    (m.id === acc.member_id || m.email?.toLowerCase() === acc.email.toLowerCase())
+                  );
+                  const effectiveOutletId = (currentOutlet?.id) || acc.outlet_id || guestMember?.outlet_id;
+                  const matchedOutlet = outlets?.find(o => o.id === effectiveOutletId);
+                  const matchedProp = properties?.find(p => p.id === matchedOutlet?.property_id || p.id === acc.property_id || p.id === guestMember?.property_id);
                   const facilityName = matchedOutlet?.name || matchedProp?.name;
 
                   return (

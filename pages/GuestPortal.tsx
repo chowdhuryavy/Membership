@@ -536,49 +536,59 @@ export default function GuestPortal() {
 
             {/* MULTI-FACILITY MEMBERSHIP SWITCHER (When guest has passes at multiple hotels/clubs) */}
             {userMemberships.length > 1 && (
-              <div className="w-full max-w-[360px] mx-auto p-2.5 px-3.5 rounded-2xl bg-gradient-to-r from-amber-500/15 via-slate-900 to-amber-500/10 border border-amber-400/40 backdrop-blur-md shadow-xl flex items-center justify-between gap-2 animate-in fade-in">
-                <div className="flex items-center gap-2 min-w-0">
-                  <div className="w-7 h-7 rounded-lg bg-amber-400/20 border border-amber-400/40 flex items-center justify-center shrink-0">
-                    <Building2 className="w-4 h-4 text-amber-300" />
-                  </div>
-                  <div className="min-w-0 text-left">
-                    <span className="text-[8px] font-black uppercase tracking-widest text-amber-300/80 block">
-                      Active Facility Pass ({userMemberships.length})
-                    </span>
-                    <span className="text-[11px] font-black text-white truncate block">
-                      {propertyName} &bull; {matchedOutlet?.name}
-                    </span>
-                  </div>
+              <div className="w-full max-w-[360px] mx-auto space-y-1.5 animate-in fade-in">
+                <div className="flex items-center justify-between px-1">
+                  <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 flex items-center gap-1.5">
+                    <Building2 className="w-3.5 h-3.5 text-amber-400" />
+                    Available Facilities ({userMemberships.length})
+                  </span>
                 </div>
 
-                <select
-                  value={selectedMemberId}
-                  onChange={(e) => {
-                    const chosenId = e.target.value;
-                    setSelectedMemberId(chosenId);
-                    const chosenM = userMemberships.find(m => m.id === chosenId);
-                    if (chosenM) {
-                      setMember(chosenM);
-                      const o = outletsList.find(out => out.id === chosenM.outlet_id);
-                      const p = propertiesList.find(pr => pr.id === o?.property_id);
-                      if (p?.name) setDynamicPropertyName(p.name);
-                      if (p?.logo_url) setDynamicLogoUrl(p.logo_url);
-                      toast.success(`Switched to ${p?.name || 'Facility'} (${o?.name || 'Outlet'})`);
-                    }
-                  }}
-                  className="bg-amber-400 hover:bg-amber-300 text-slate-950 text-[10px] font-black uppercase tracking-wider rounded-xl px-2.5 py-1.5 focus:outline-none cursor-pointer transition-colors shadow-md shrink-0"
-                >
+                <div className="grid grid-cols-2 gap-2">
                   {userMemberships.map((m) => {
                     const o = outletsList.find(out => out.id === m.outlet_id);
                     const p = propertiesList.find(pr => pr.id === o?.property_id);
-                    const label = p?.name ? `${p.name} - ${o?.name || 'Club'}` : (o?.name || 'Membership');
+                    const isSelected = m.id === (selectedMemberId || userMemberships[0]?.id);
+                    const hotelName = p?.name || 'Hotel';
+                    const clubName = o?.name || 'Club';
+
                     return (
-                      <option key={m.id} value={m.id} className="bg-slate-900 text-white font-bold">
-                        {label} (#{m.membership_number})
-                      </option>
+                      <button
+                        key={m.id}
+                        type="button"
+                        onClick={() => {
+                          setSelectedMemberId(m.id);
+                          setMember(m);
+                          if (p?.name) setDynamicPropertyName(p.name);
+                          if (p?.logo_url) setDynamicLogoUrl(p.logo_url);
+                          toast.success(`Active Pass: ${hotelName} (${clubName})`);
+                        }}
+                        className={`p-2.5 rounded-2xl text-left border transition-all relative overflow-hidden flex flex-col justify-between ${
+                          isSelected
+                            ? 'bg-gradient-to-br from-amber-500/20 via-slate-900 to-amber-950/40 border-amber-400 shadow-md shadow-amber-500/10 ring-1 ring-amber-400/50'
+                            : 'bg-slate-900/60 hover:bg-slate-900 border-white/10 text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        {isSelected && (
+                          <div className="absolute top-2 right-2 w-2 h-2 rounded-full bg-amber-400 animate-pulse" />
+                        )}
+                        <span className={`text-[8px] font-black uppercase tracking-wider truncate block pr-2.5 ${
+                          isSelected ? 'text-amber-300' : 'text-slate-400'
+                        }`}>
+                          {hotelName}
+                        </span>
+                        <span className={`text-xs font-black truncate block mt-0.5 ${
+                          isSelected ? 'text-white' : 'text-slate-300'
+                        }`}>
+                          {clubName}
+                        </span>
+                        <span className="text-[9px] font-mono text-slate-400 mt-1 block">
+                          #{m.membership_number}
+                        </span>
+                      </button>
                     );
                   })}
-                </select>
+                </div>
               </div>
             )}
 
