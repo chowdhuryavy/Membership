@@ -137,6 +137,12 @@ export default function GuestLogin() {
   useEffect(() => {
     localStorage.setItem('preferred_portal', 'guest');
 
+    const host = window.location.hostname.toLowerCase();
+    if ((host.includes('hcm.perfection.my') || host.includes('hcm-staff.perfection.my')) && !host.includes('hcm-guest')) {
+      window.location.href = 'https://hcm-guest.perfection.my/#/guest-login';
+      return;
+    }
+
     const existing = guestAuth.getActiveSession();
     if (existing && existing.email && !existing.must_change_password) {
       navigate('/guest-portal');

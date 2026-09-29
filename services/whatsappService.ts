@@ -17,7 +17,7 @@ const CACHE_TEMPLATES_PREFIX = 'hcm_whatsapp_templates_';
 export const DEFAULT_COMPANIES: Company[] = [
   {
     id: 'comp_hcm_global',
-    name: 'Health Club Management & Hospitality',
+    name: 'Health Club Management ',
     code: 'HCM',
     logo_url: 'https://i.imgur.com/oZVRrvo.png',
     description: 'Primary Corporate Hotel & Wellness Group'

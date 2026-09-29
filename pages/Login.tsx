@@ -88,15 +88,17 @@ const Login = () => {
     const host = window.location.hostname.toLowerCase();
     if (host.includes('hcm-staff')) {
       window.location.href = 'https://hcm-staff.perfection.my/#/staff-login';
+    } else if (host.includes('hcm-guest')) {
+      window.location.href = 'https://hcm-guest.perfection.my/#/guest-login';
     }
   }, [navigate]);
 
   const handleStaffPortalClick = () => {
-    navigate('/staff-login');
+    window.location.href = 'https://hcm-staff.perfection.my/#/staff-login';
   };
 
   const handleGuestPortalClick = () => {
-    navigate('/guest-login');
+    window.location.href = 'https://hcm-guest.perfection.my/#/guest-login';
   };
 
   return (

@@ -820,12 +820,13 @@ const DynamicHead = () => {
     if (!settings) return;
 
     const updateManifest = () => {
-      const isStaff = window.location.hash.includes('staff') || window.location.search.includes('portal=staff');
+      const isStaff = window.location.hash.includes('staff') || window.location.search.includes('portal=staff') || window.location.hostname.includes('hcm-staff');
+      const isGuest = window.location.hash.includes('guest') || window.location.search.includes('portal=guest') || window.location.hostname.includes('hcm-guest');
       const manifestLink = document.querySelector('link[rel="manifest"]') as HTMLLinkElement;
       
       if (manifestLink) {
-        // Use static manifest files for iPhone compatibility
-        const manifestPath = isStaff ? '/manifest-staff.json' : '/manifest.json';
+        // Use static manifest files for iPhone & Android compatibility
+        const manifestPath = isStaff ? '/manifest-staff.json' : isGuest ? '/manifest-guest.json' : '/manifest.json';
         manifestLink.setAttribute('href', window.location.origin + manifestPath);
       }
 
@@ -840,7 +841,7 @@ const DynamicHead = () => {
         meta.content = content;
       };
 
-      const portalName = isStaff ? "Staff Portal" : (settings.name || "Health Club");
+      const portalName = isStaff ? "HCM - Staff Portal" : isGuest ? "HCM - Guest Portal" : (settings.name || "HCM - Guest Portal");
       updateMeta('apple-mobile-web-app-title', portalName);
       updateMeta('application-name', portalName);
     };
