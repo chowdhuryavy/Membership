@@ -562,6 +562,47 @@ export class GuestAuthService {
 
     return newTemp;
   }
+  // --- GUEST NOTIFICATIONS ---
+  public async getGuestNotifications(email: string): Promise<{ id: string; email: string; title: string; message: string; type?: 'info' | 'success' | 'warning' | 'error'; created_at: string; read: boolean }[]> {
+    const cleanEmail = (email || '').trim().toLowerCase();
+    if (!cleanEmail) return [];
+    try {
+      const all = JSON.parse(localStorage.getItem('hcm_guest_notifications_store') || '[]') as any[];
+      return all.filter(n => n.email.toLowerCase() === cleanEmail).sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+    } catch (e) {
+      return [];
+    }
+  }
+
+  public async addGuestNotification(email: string, title: string, message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info'): Promise<void> {
+    const cleanEmail = (email || '').trim().toLowerCase();
+    if (!cleanEmail) return;
+    try {
+      const all = JSON.parse(localStorage.getItem('hcm_guest_notifications_store') || '[]') as any[];
+      all.unshift({
+        id: crypto.randomUUID(),
+        email: cleanEmail,
+        title,
+        message,
+        type,
+        created_at: new Date().toISOString(),
+        read: false
+      });
+      localStorage.setItem('hcm_guest_notifications_store', JSON.stringify(all));
+    } catch (e) {
+      console.error('[GuestAuth] Error adding guest notification:', e);
+    }
+  }
+
+  public async markGuestNotificationsRead(email: string): Promise<void> {
+    const cleanEmail = (email || '').trim().toLowerCase();
+    if (!cleanEmail) return;
+    try {
+      const all = JSON.parse(localStorage.getItem('hcm_guest_notifications_store') || '[]') as any[];
+      const updated = all.map(n => n.email.toLowerCase() === cleanEmail ? { ...n, read: true } : n);
+      localStorage.setItem('hcm_guest_notifications_store', JSON.stringify(updated));
+    } catch (e) {}
+  }
 }
 
 export const guestAuth = GuestAuthService.getInstance();

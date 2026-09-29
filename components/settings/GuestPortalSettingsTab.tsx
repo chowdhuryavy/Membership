@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { guestAuth, DEFAULT_GUEST_PORTAL_SETTINGS } from '../../services/guestAuthService';
+import { db } from '../../services/mockSupabase';
 import { GuestAccount, GuestPortalSettings } from '../../types';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useAuth } from '../../contexts/AuthContext';

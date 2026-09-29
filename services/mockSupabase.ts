@@ -5107,15 +5107,31 @@ class DatabaseService {
 
         // Notification for status change
         if (status && status !== booking.status) {
-            const { data: guest } = await supabase.from('guests').select('name').eq('id', booking.guest_id).single();
+            const { data: guest } = await supabase.from('guests').select('name, email').eq('id', booking.guest_id).maybeSingle();
+            const { data: member } = await supabase.from('members').select('guest_name, email').eq('id', booking.member_id).maybeSingle();
+            
             await this.addNotification({
                 title: `Booking ${status.charAt(0).toUpperCase() + status.slice(1)}`,
-                message: `Booking for ${guest?.name || 'Guest'} on ${booking.date} has been marked as ${status}.`,
+                message: `Booking for ${guest?.name || member?.guest_name || 'Guest'} on ${booking.date} has been marked as ${status}.`,
                 type: status === 'cancelled' ? 'warning' : status === 'completed' ? 'success' : 'info',
                 outlet_id: booking.outlet_id,
                 user_id: booking.therapist_id, // TARGETED to assigned therapist
                 required_permission: 'bookings:view'
             });
+
+            // Dispatch notification to guest's mobile portal
+            const guestEmail = guest?.email || member?.email || (booking as any).guest_email;
+            if (guestEmail) {
+              const statusLabel = status.charAt(0).toUpperCase() + status.slice(1);
+              import('./guestAuthService').then(({ guestAuth }) => {
+                guestAuth.addGuestNotification(
+                  guestEmail,
+                  `Spa Booking ${statusLabel}! 🎉`,
+                  `Your spa reservation for ${booking.date} at ${booking.start_time || 'scheduled time'} has been updated to ${statusLabel}.`,
+                  status === 'cancelled' ? 'warning' : 'success'
+                ).catch(console.error);
+              }).catch(console.error);
+            }
         }
 
         // If status changed FROM completed TO something else, delete the associated sale

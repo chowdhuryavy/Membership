@@ -54,7 +54,9 @@ import {
   AlertTriangle,
   Copy,
   Wallet,
-  Building2
+  Building2,
+  Bell,
+  Check
 } from 'lucide-react';
 import { Button } from '../components/ui';
 import { format, parseISO } from 'date-fns';
@@ -88,6 +90,10 @@ export default function GuestPortal() {
   const [showQrModal, setShowQrModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [showBookingRequestModal, setShowBookingRequestModal] = useState(false);
+  const [showNotificationsModal, setShowNotificationsModal] = useState(false);
+
+  // Guest Notifications
+  const [notifications, setNotifications] = useState<any[]>([]);
 
   // Specialist, Room, and Treatments cache for booking details
   const [therapistsList, setTherapistsList] = useState<any[]>([]);
@@ -282,6 +288,11 @@ export default function GuestPortal() {
       setTherapistsList(therapistsData || []);
       setRoomsList(roomsData || []);
       setMassageTypesList(typesData || []);
+
+      if (session.email) {
+        const notifs = await guestAuth.getGuestNotifications(session.email);
+        setNotifications(notifs);
+      }
 
       const emailLower = session.email.toLowerCase();
       const phoneClean = (session.phone || '').replace(/\D/g, '');
@@ -493,12 +504,33 @@ export default function GuestPortal() {
         </div>
 
         <div className="flex items-center gap-2">
+          {/* NOTIFICATION BELL BUTTON */}
+          <button
+            onClick={async () => {
+              setShowNotificationsModal(true);
+              if (account?.email) {
+                await guestAuth.markGuestNotificationsRead(account.email);
+                const reloaded = await guestAuth.getGuestNotifications(account.email);
+                setNotifications(reloaded);
+              }
+            }}
+            className="p-2.5 rounded-xl bg-white/5 hover:bg-white/10 text-slate-300 hover:text-white transition-colors relative"
+            title="Notifications"
+          >
+            <Bell className="w-4.5 h-4.5 text-amber-400" />
+            {notifications.filter(n => !n.read).length > 0 && (
+              <span className="absolute -top-1 -right-1 w-4 h-4 rounded-full bg-red-500 text-white text-[9px] font-black flex items-center justify-center animate-pulse shadow-sm">
+                {notifications.filter(n => !n.read).length}
+              </span>
+            )}
+          </button>
+
           <button
             onClick={handleLogout}
-            className="p-2 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 transition-colors"
+            className="p-2.5 rounded-xl bg-red-500/10 hover:bg-red-500/20 text-red-400 transition-colors"
             title="Log Out"
           >
-            <LogOut className="w-4 h-4" />
+            <LogOut className="w-4.5 h-4.5" />
           </button>
         </div>
       </header>
@@ -916,7 +948,7 @@ export default function GuestPortal() {
         )}
 
         {/* TAB 3: SPA & WELLNESS */}
-        {activeTab === 'spa' && portalSettings?.allow_massage_bookings && (
+        {activeTab === 'spa' && (
           <div className="space-y-4 animate-in fade-in duration-300">
             <div className="flex justify-between items-center px-1">
               <div>
@@ -927,15 +959,37 @@ export default function GuestPortal() {
                   Your therapy reservations
                 </p>
               </div>
-              <Button
-                onClick={() => setShowBookingRequestModal(true)}
-                className="h-9 px-3.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-black text-[11px] uppercase tracking-wider flex items-center gap-1.5"
-              >
-                <Plus className="w-3.5 h-3.5" /> Request Slot
-              </Button>
+              {portalSettings?.allow_massage_bookings && !(matchedOutlet?.name?.toLowerCase().includes('health club') && !matchedOutlet?.name?.toLowerCase().includes('spa')) && (
+                <Button
+                  onClick={() => setShowBookingRequestModal(true)}
+                  className="h-9 px-3.5 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-black text-[11px] uppercase tracking-wider flex items-center gap-1.5"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Request Slot
+                </Button>
+              )}
             </div>
 
-            {bookings.length === 0 ? (
+            {!portalSettings?.allow_massage_bookings || (matchedOutlet?.name?.toLowerCase().includes('health club') && !matchedOutlet?.name?.toLowerCase().includes('spa')) ? (
+              <div className="p-8 text-center bg-slate-900/80 rounded-3xl border border-amber-500/30 space-y-3">
+                <div className="w-12 h-12 rounded-2xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center mx-auto text-purple-400">
+                  <Sparkles className="w-6 h-6" />
+                </div>
+                <h4 className="text-sm font-black text-white uppercase tracking-wider">
+                  Spa Services Unavailable at {matchedOutlet?.name || propertyName}
+                </h4>
+                <p className="text-xs text-slate-400 max-w-xs mx-auto leading-relaxed font-medium">
+                  Online massage &amp; spa treatment bookings are not offered at this facility. Please switch to a spa facility (e.g. Nova Spa) or contact the front desk concierge.
+                </p>
+                <div className="pt-2 flex justify-center gap-2">
+                  <a
+                    href={`tel:${portalSettings?.support_phone || matchedOutlet?.phone || settings?.phone || '+60 3-1234 5678'}`}
+                    className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-amber-400 text-slate-950 font-black text-xs uppercase tracking-wider shadow-md hover:bg-amber-300 transition-all"
+                  >
+                    <Phone className="w-3.5 h-3.5" /> Call Concierge
+                  </a>
+                </div>
+              </div>
+            ) : bookings.length === 0 ? (
               <div className="p-8 text-center bg-slate-900/50 rounded-3xl border border-white/5 space-y-2">
                 <Sparkles className="w-8 h-8 text-slate-600 mx-auto" />
                 <h4 className="text-sm font-bold text-slate-400 uppercase">No Spa Bookings</h4>
@@ -1461,6 +1515,79 @@ export default function GuestPortal() {
                 Submit Request
               </Button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* GUEST NOTIFICATIONS MODAL */}
+      {showNotificationsModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="w-full max-w-sm bg-slate-900 border border-white/10 rounded-3xl p-5 text-white space-y-4 shadow-2xl animate-in zoom-in-95">
+            <div className="flex justify-between items-center pb-3 border-b border-white/10">
+              <div className="flex items-center gap-2">
+                <Bell className="w-4 h-4 text-amber-400" />
+                <h3 className="text-sm font-black uppercase text-white tracking-wider">
+                  Guest Notifications ({notifications.length})
+                </h3>
+              </div>
+              <button
+                onClick={() => setShowNotificationsModal(false)}
+                className="p-1 rounded-full text-slate-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {notifications.length === 0 ? (
+              <div className="p-8 text-center bg-slate-950/50 rounded-2xl border border-white/5 space-y-2">
+                <Bell className="w-8 h-8 text-slate-600 mx-auto" />
+                <p className="text-xs font-bold text-slate-400 uppercase">No Notifications</p>
+                <p className="text-[10px] text-slate-500">Important messages, confirmations, and alerts will appear here.</p>
+              </div>
+            ) : (
+              <div className="space-y-2.5 max-h-[360px] overflow-y-auto pr-1">
+                {notifications.map((n) => (
+                  <div
+                    key={n.id}
+                    className={`p-3.5 rounded-2xl border text-left space-y-1 transition-all ${
+                      n.type === 'success'
+                        ? 'bg-emerald-950/30 border-emerald-500/40 text-emerald-100'
+                        : n.type === 'warning'
+                        ? 'bg-amber-950/30 border-amber-500/40 text-amber-100'
+                        : 'bg-slate-800/80 border-white/10 text-slate-200'
+                    }`}
+                  >
+                    <div className="flex justify-between items-start gap-2">
+                      <h4 className="text-xs font-black uppercase tracking-wider text-white">
+                        {n.title}
+                      </h4>
+                      <span className="text-[8px] font-mono text-slate-400 shrink-0">
+                        {n.created_at ? format(parseISO(n.created_at), 'MMM dd, HH:mm') : ''}
+                      </span>
+                    </div>
+                    <p className="text-[11px] text-slate-300 leading-relaxed font-medium">
+                      {n.message}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="pt-2">
+              <Button
+                onClick={async () => {
+                  if (account?.email) {
+                    await guestAuth.markGuestNotificationsRead(account.email);
+                    const reloaded = await guestAuth.getGuestNotifications(account.email);
+                    setNotifications(reloaded);
+                  }
+                  setShowNotificationsModal(false);
+                }}
+                className="w-full h-11 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs uppercase tracking-wider"
+              >
+                Close &amp; Mark as Read
+              </Button>
+            </div>
           </div>
         </div>
       )}
