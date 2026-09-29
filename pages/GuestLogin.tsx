@@ -798,38 +798,6 @@ export default function GuestLogin() {
               </div>
             </form>
           )}
-
-          {/* PORTAL SWITCHER LINK PILLS (MATCHING LOGIN / STAFFLOGIN) */}
-          <div className="mt-8 pt-6 border-t border-slate-100 flex flex-wrap items-center justify-center gap-3">
-            <button
-              type="button"
-              onClick={() => {
-                const host = window.location.hostname.toLowerCase();
-                if (host.includes('perfection.my')) {
-                  window.location.href = 'https://hcm-staff.perfection.my/#/staff-login';
-                } else {
-                  navigate('/staff-login');
-                }
-              }}
-              className="px-3.5 py-1.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-black uppercase tracking-wider transition-colors flex items-center gap-1.5"
-            >
-              <span>Staff Portal &rarr;</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                const host = window.location.hostname.toLowerCase();
-                if (host.includes('perfection.my')) {
-                  window.location.href = 'https://hcm.perfection.my/#/login';
-                } else {
-                  navigate('/login');
-                }
-              }}
-              className="px-3.5 py-1.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 text-[10px] font-black uppercase tracking-wider transition-colors flex items-center gap-1.5"
-            >
-              <span>Admin Sign In &rarr;</span>
-            </button>
-          </div>
         </div>
       </div>
     </div>
