@@ -22,6 +22,31 @@ export const DEFAULT_GUEST_PORTAL_SETTINGS: GuestPortalSettings = {
   support_email: 'support@perfection.my'
 };
 
+/**
+ * Generates a unique, high-entropy, elegant temporary password for guests and members.
+ * Never static or repetitive (e.g. 'Zen#7492!kX', 'Luxe$3816@qM', 'Opal*9521#wT').
+ */
+export function generateDynamicTemporaryPassword(): string {
+  const prefixes = [
+    'Zen', 'Spa', 'Luxe', 'Aura', 'Opal', 'Jade', 'Silk', 'Flow',
+    'Pure', 'Vibe', 'Sage', 'Star', 'Nova', 'Echo', 'Vale', 'Peak',
+    'Fern', 'Dawn', 'Rose', 'Glow', 'Luna', 'Sol', 'Mira', 'Breeze'
+  ];
+  const symbols = ['!', '@', '#', '$', '%', '*', '&'];
+  
+  const prefix = prefixes[Math.floor(Math.random() * prefixes.length)];
+  const symbol1 = symbols[Math.floor(Math.random() * symbols.length)];
+  const digits = Math.floor(1000 + Math.random() * 9000); // 4 unique random digits
+  const symbol2 = symbols[Math.floor(Math.random() * symbols.length)];
+  
+  const uppers = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+  const lowers = 'abcdefghijkmnopqrstuvwxyz';
+  const randUpper = uppers[Math.floor(Math.random() * uppers.length)];
+  const randLower = lowers[Math.floor(Math.random() * lowers.length)];
+  
+  return `${prefix}${symbol1}${digits}${symbol2}${randUpper}${randLower}`;
+}
+
 export class GuestAuthService {
   private static instance: GuestAuthService;
 
@@ -221,9 +246,8 @@ export class GuestAuthService {
 
     if (!account) {
       isNew = true;
-      // Generate secure temporary password
-      const randomDigits = Math.floor(100000 + Math.random() * 900000);
-      tempPass = `Guest@${randomDigits}!`;
+      // Generate unique, dynamic temporary password
+      tempPass = generateDynamicTemporaryPassword();
 
       account = {
         id: crypto.randomUUID ? crypto.randomUUID() : `ga_${Date.now()}`,
@@ -243,13 +267,21 @@ export class GuestAuthService {
 
       accounts.push(account);
       await this.saveAccounts(accounts);
-    } else if (params.forceResend) {
-      const randomDigits = Math.floor(100000 + Math.random() * 900000);
-      tempPass = `Guest@${randomDigits}!`;
+    } else if (params.forceResend || account.must_change_password || !account.temp_password || account.temp_password.includes('594510')) {
+      // Whenever resending, or if still on temporary password, or if stuck on old default, generate a fresh unique password!
+      tempPass = generateDynamicTemporaryPassword();
       account.temp_password = tempPass;
       account.password = tempPass;
       account.must_change_password = true;
+      if (params.name) account.name = params.name;
+      if (params.phone) account.phone = params.phone;
+      if (params.property_id) account.property_id = params.property_id;
+      if (params.outlet_id) account.outlet_id = params.outlet_id;
+      if (params.member_id) account.member_id = params.member_id;
+      if (params.guest_id) account.guest_id = params.guest_id;
       await this.saveAccounts(accounts);
+    } else {
+      tempPass = account.temp_password || '';
     }
 
     // Dispatch welcome email if new or explicitly requested
@@ -477,8 +509,7 @@ export class GuestAuthService {
     const idx = accounts.findIndex(a => a.id === id);
     if (idx === -1) throw new Error('Account not found');
 
-    const randomDigits = Math.floor(100000 + Math.random() * 900000);
-    const newTemp = `Guest@${randomDigits}!`;
+    const newTemp = generateDynamicTemporaryPassword();
 
     accounts[idx].password = newTemp;
     accounts[idx].temp_password = newTemp;

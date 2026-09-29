@@ -132,7 +132,10 @@ export const GuestPortalSettingsTab: React.FC = () => {
         outlet_id: account.outlet_id,
         forceResend: true
       });
-      toast.success(`Credentials dispatched to ${account.email}`);
+      toast.success(
+        `Credentials dispatched to ${account.email}. New Temporary Password: ${res.tempPassword || account.temp_password}`,
+        { duration: 8000 }
+      );
       await loadData();
     } catch (e: any) {
       toast.error(e?.message || 'Failed to dispatch credentials');
@@ -566,9 +569,16 @@ export const GuestPortalSettingsTab: React.FC = () => {
                     </td>
                     <td className="px-6 py-4">
                       {acc.must_change_password ? (
-                        <span className="text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase">
-                          Temporary Pass
-                        </span>
+                        <div className="flex flex-col items-start gap-1">
+                          <span className="text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md text-[9px] font-black uppercase">
+                            Temporary Pass
+                          </span>
+                          {acc.temp_password && (
+                            <code className="text-[11px] font-mono font-black text-slate-800 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded select-all" title="Click to copy temporary passcode">
+                              {acc.temp_password}
+                            </code>
+                          )}
+                        </div>
                       ) : (
                         <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase">
                           Permanent Key
