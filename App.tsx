@@ -367,6 +367,13 @@ const ProtectedLayout = () => {
     return () => window.removeEventListener('keydown', handleGlobalShortcuts);
   }, [checkShortcut, navigate]);
 
+  const isPublicPortalRoute = useMemo(() => {
+    const p = location.pathname.toLowerCase();
+    const h = location.hash.toLowerCase();
+    return p.includes('guest') || p.includes('staff') || p.includes('login') || p.includes('pass') ||
+           h.includes('guest') || h.includes('staff') || h.includes('login') || h.includes('pass');
+  }, [location.pathname, location.hash]);
+
   if (!user && !combinedLoading) {
     const host = window.location.hostname.toLowerCase();
     const isGuestDomain = host.includes('hcm-guest');
@@ -378,8 +385,8 @@ const ProtectedLayout = () => {
   
   return (
     <>
-      {!showSplash && <TopLoader />}
-      {showSplash && <SplashLoading />}
+      {!isPublicPortalRoute && !showSplash && <TopLoader />}
+      {!isPublicPortalRoute && showSplash && <SplashLoading />}
       {user && (
         <div className={`flex h-screen bg-slate-50 overflow-hidden print:h-auto print:overflow-visible transition-opacity duration-1000 ${showSplash ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
           <Sidebar onLogout={handleLogout} isCollapsed={isSidebarCollapsed} onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)} />
