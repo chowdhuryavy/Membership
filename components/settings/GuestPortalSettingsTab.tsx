@@ -30,7 +30,8 @@ import {
   Send,
   Lock,
   Trash2,
-  UserPlus
+  UserPlus,
+  Copy
 } from 'lucide-react';
 import { Button, Input, Card } from '../ui';
 import { format, parseISO } from 'date-fns';
@@ -621,7 +622,20 @@ export const GuestPortalSettingsTab: React.FC = () => {
                         </div>
                       </td>
                     <td className="px-6 py-4 font-mono text-slate-600">
-                      {acc.email}
+                      <div className="flex items-center gap-1.5">
+                        <span>{acc.email}</span>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            navigator.clipboard.writeText(acc.email);
+                            toast.success(`Copied email: ${acc.email}`);
+                          }}
+                          className="p-1 rounded-lg border border-slate-200 bg-slate-50 hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 transition-colors shrink-0"
+                          title="Copy Email"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
                     </td>
                     <td className="px-6 py-4">
                       <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
@@ -639,9 +653,23 @@ export const GuestPortalSettingsTab: React.FC = () => {
                             Temporary Pass
                           </span>
                           {acc.temp_password && (
-                            <code className="text-[11px] font-mono font-black text-slate-800 bg-slate-100 border border-slate-200 px-1.5 py-0.5 rounded select-all" title="Click to copy temporary passcode">
-                              {acc.temp_password}
-                            </code>
+                            <div className="flex items-center gap-1.5 mt-0.5">
+                              <code className="text-[11px] font-mono font-black text-slate-800 bg-slate-100 border border-slate-200 px-2 py-1 rounded-lg select-all" title="Temporary Passcode">
+                                {acc.temp_password}
+                              </code>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  navigator.clipboard.writeText(acc.temp_password || '');
+                                  toast.success(`Copied temporary passcode: ${acc.temp_password}`);
+                                }}
+                                className="p-1.5 rounded-lg border border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-800 transition-colors shrink-0 flex items-center gap-1 font-bold text-[10px]"
+                                title="Copy Temporary Password"
+                              >
+                                <Copy className="w-3.5 h-3.5" />
+                                <span>Copy</span>
+                              </button>
+                            </div>
                           )}
                         </div>
                       ) : (

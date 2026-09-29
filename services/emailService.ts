@@ -1656,17 +1656,37 @@ export function buildGuestCredentialsEmailHtml(params: {
                         </td>
                       </tr>
                       <tr>
-                        <td style="padding-bottom: 12px;">
+                        <td style="padding-bottom: 14px;">
                           <div style="font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px;">Registered Email / Username</div>
-                          <div style="font-size: 14px; font-weight: 800; color: #ffffff; font-family: monospace;">${params.guestEmail}</div>
+                          <table role="presentation" border="0" cellspacing="0" cellpadding="0">
+                            <tr>
+                              <td style="background-color: #1e293b; border: 1px solid #334155; padding: 8px 14px; border-top-left-radius: 8px; border-bottom-left-radius: 8px; font-size: 14px; font-weight: 800; color: #ffffff; font-family: monospace;">
+                                ${params.guestEmail}
+                              </td>
+                              <td style="background-color: #334155; border: 1px solid #475569; border-left: none; padding: 8px 12px; border-top-right-radius: 8px; border-bottom-right-radius: 8px; text-align: center; vertical-align: middle;">
+                                <span style="display: inline-block; font-size: 12px; color: #38bdf8; font-weight: 800; font-family: sans-serif; text-transform: uppercase; letter-spacing: 0.05em;" title="Copy Email">
+                                  &#128203; COPY
+                                </span>
+                              </td>
+                            </tr>
+                          </table>
                         </td>
                       </tr>
                       <tr>
                         <td style="padding-bottom: 6px;">
                           <div style="font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px;">Temporary Access Password</div>
-                          <div style="display: inline-block; background-color: #1e293b; border: 1px solid #334155; padding: 8px 16px; border-radius: 8px; font-size: 18px; font-weight: 900; color: #fbbf24; font-family: monospace; letter-spacing: 0.08em;">
-                            ${params.temporaryPassword}
-                          </div>
+                          <table role="presentation" border="0" cellspacing="0" cellpadding="0">
+                            <tr>
+                              <td style="background-color: #1e293b; border: 1px solid #334155; padding: 8px 16px; border-top-left-radius: 8px; border-bottom-left-radius: 8px; font-size: 18px; font-weight: 900; color: #fbbf24; font-family: monospace; letter-spacing: 0.08em;">
+                                ${params.temporaryPassword}
+                              </td>
+                              <td style="background-color: #3b82f6; border: 1px solid #60a5fa; border-left: none; padding: 8px 14px; border-top-right-radius: 8px; border-bottom-right-radius: 8px; text-align: center; vertical-align: middle;">
+                                <span style="display: inline-block; font-size: 12px; color: #ffffff; font-weight: 900; font-family: sans-serif; text-transform: uppercase; letter-spacing: 0.05em;" title="Copy Password">
+                                  &#128203; COPY
+                                </span>
+                              </td>
+                            </tr>
+                          </table>
                         </td>
                       </tr>
                     </table>
