@@ -1297,11 +1297,6 @@ export const emailService = {
 
     try {
       const config = await db.getExpirationReminderConfig();
-      if (!config.global_enabled) {
-        results.details.push('Automated expiration reminders are globally disabled in settings.');
-        return results;
-      }
-
       const members = await db.getMembers();
       const outlets = await db.getOutlets();
       const properties = await db.getProperties();
