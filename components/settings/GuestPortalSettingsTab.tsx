@@ -36,7 +36,7 @@ import { format, parseISO } from 'date-fns';
 import toast from 'react-hot-toast';
 
 export const GuestPortalSettingsTab: React.FC = () => {
-  const { currentOutlet, currentProperty, settings, refreshSettings } = useSettings();
+  const { currentOutlet, currentProperty, settings, refreshSettings, outlets, properties } = useSettings();
   const { isSuperAdmin } = useAuth();
 
   const activeScopeId = currentOutlet?.id || currentProperty?.id;
@@ -47,6 +47,7 @@ export const GuestPortalSettingsTab: React.FC = () => {
   const [portalSettings, setPortalSettings] = useState<GuestPortalSettings>(DEFAULT_GUEST_PORTAL_SETTINGS);
   const [accounts, setAccounts] = useState<GuestAccount[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [selectedOutletFilter, setSelectedOutletFilter] = useState<string>('all');
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
 
   const loadData = async () => {
@@ -158,20 +159,23 @@ export const GuestPortalSettingsTab: React.FC = () => {
     }
   };
 
-  const filteredAccounts = accounts.filter(a => {
-    // Scope filter per selected outlet/property
-    if (activeScopeId) {
-      const matchProp = a.property_id && a.property_id === activeScopeId;
-      const matchOutlet = a.outlet_id && a.outlet_id === activeScopeId;
-      if (!matchProp && !matchOutlet) return false;
-    }
-    const q = searchTerm.toLowerCase();
-    return (
-      a.name.toLowerCase().includes(q) ||
-      a.email.toLowerCase().includes(q) ||
-      (a.phone && a.phone.includes(q))
-    );
-  });
+  const filteredAccounts = useMemo(() => {
+    return accounts.filter(a => {
+      // Scope filter per selected outlet/property filter
+      if (selectedOutletFilter !== 'all') {
+        const matchOutlet = a.outlet_id && a.outlet_id === selectedOutletFilter;
+        const matchProp = a.property_id && a.property_id === selectedOutletFilter;
+        if (!matchOutlet && !matchProp) return false;
+      }
+      const q = searchTerm.trim().toLowerCase();
+      if (!q) return true;
+      return (
+        (a.name || '').toLowerCase().includes(q) ||
+        (a.email || '').toLowerCase().includes(q) ||
+        (a.phone && a.phone.includes(q))
+      );
+    });
+  }, [accounts, selectedOutletFilter, searchTerm]);
 
   const portalDomainUrl = 'https://hcm-guest.perfection.my/#/guest-login';
 
@@ -494,15 +498,29 @@ export const GuestPortalSettingsTab: React.FC = () => {
         <div className="p-6 sm:p-8 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
             <h3 className="text-base font-black uppercase text-slate-900 tracking-tight">
-              Authenticated Guest Accounts ({accounts.length})
+              Authenticated Guest Accounts ({filteredAccounts.length}{filteredAccounts.length !== accounts.length ? ` of ${accounts.length}` : ''})
             </h3>
             <p className="text-xs text-slate-500 font-medium">
               Manage member credentials, resend temporary passwords, or suspend access
             </p>
           </div>
 
-          <div className="flex items-center gap-3">
-            <div className="relative w-64">
+          <div className="flex flex-wrap items-center gap-3">
+            <select
+              value={selectedOutletFilter}
+              onChange={e => setSelectedOutletFilter(e.target.value)}
+              className="h-10 px-3 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            >
+              <option value="all">All Outlets &amp; Facilities ({accounts.length})</option>
+              {outlets?.map(o => (
+                <option key={o.id} value={o.id}>{o.name}</option>
+              ))}
+              {properties?.map(p => (
+                <option key={p.id} value={p.id}>{p.name} (Property)</option>
+              ))}
+            </select>
+
+            <div className="relative w-56 sm:w-64">
               <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
@@ -514,7 +532,7 @@ export const GuestPortalSettingsTab: React.FC = () => {
             </div>
             <button
               onClick={loadData}
-              className="p-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600"
+              className="p-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 transition-colors"
               title="Refresh List"
             >
               <RefreshCw className="w-4 h-4" />
@@ -538,23 +556,48 @@ export const GuestPortalSettingsTab: React.FC = () => {
               {filteredAccounts.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-6 py-12 text-center text-slate-400 font-medium">
-                    No guest accounts found. New accounts are automatically provisioned when members or guests are created with an email address.
+                    {accounts.length > 0 ? (
+                      <div className="space-y-3">
+                        <p className="text-slate-600 font-bold">No accounts match the current filter ({accounts.length} total registered accounts).</p>
+                        <button
+                          type="button"
+                          onClick={() => { setSelectedOutletFilter('all'); setSearchTerm(''); }}
+                          className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-black uppercase tracking-wider shadow-md hover:bg-indigo-700 transition-all"
+                        >
+                          View All Accounts ({accounts.length})
+                        </button>
+                      </div>
+                    ) : (
+                      "No guest accounts found. New accounts are automatically provisioned when members or guests are created with an email address."
+                    )}
                   </td>
                 </tr>
               ) : (
-                filteredAccounts.map(acc => (
-                  <tr key={acc.id} className="hover:bg-slate-50/60 transition-colors">
-                    <td className="px-6 py-4 font-bold text-slate-900">
-                      <div className="flex items-center gap-2">
-                        <div className="w-7 h-7 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center font-black text-xs">
-                          {acc.name.charAt(0).toUpperCase()}
+                filteredAccounts.map(acc => {
+                  const matchedOutlet = outlets?.find(o => o.id === acc.outlet_id);
+                  const matchedProp = properties?.find(p => p.id === acc.property_id);
+                  const facilityName = matchedOutlet?.name || matchedProp?.name;
+
+                  return (
+                    <tr key={acc.id} className="hover:bg-slate-50/60 transition-colors">
+                      <td className="px-6 py-4 font-bold text-slate-900">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center font-black text-xs shrink-0">
+                            {acc.name ? acc.name.charAt(0).toUpperCase() : 'G'}
+                          </div>
+                          <div>
+                            <p>{acc.name}</p>
+                            <div className="flex items-center gap-2 text-[10px] text-slate-400 font-normal">
+                              {acc.phone && <span>{acc.phone}</span>}
+                              {facilityName && (
+                                <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 font-medium">
+                                  {facilityName}
+                                </span>
+                              )}
+                            </div>
+                          </div>
                         </div>
-                        <div>
-                          <p>{acc.name}</p>
-                          {acc.phone && <p className="text-[10px] text-slate-400 font-normal">{acc.phone}</p>}
-                        </div>
-                      </div>
-                    </td>
+                      </td>
                     <td className="px-6 py-4 font-mono text-slate-600">
                       {acc.email}
                     </td>
@@ -620,9 +663,10 @@ export const GuestPortalSettingsTab: React.FC = () => {
                       </div>
                     </td>
                   </tr>
-                ))
-              )}
-            </tbody>
+                );
+              })
+            )}
+          </tbody>
           </table>
         </div>
       </Card>

@@ -1097,18 +1097,8 @@ export default function GuestPortal() {
         )}
       </main>
 
-      {/* BOTTOM MOBILE NAVIGATION BAR */}
-      <nav className="fixed bottom-0 left-0 right-0 max-w-lg mx-auto bg-slate-900/95 backdrop-blur-xl border-t border-white/10 p-2 z-40 flex items-center justify-around shadow-2xl">
-        <button
-          onClick={() => setActiveTab('card')}
-          className={`flex flex-col items-center gap-1 p-2 rounded-2xl transition-all ${
-            activeTab === 'card' ? 'text-amber-400 font-black' : 'text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          <QrCode className="w-5 h-5" />
-          <span className="text-[9px] uppercase tracking-wider">Pass</span>
-        </button>
-
+      {/* BOTTOM MOBILE NAVIGATION BAR WITH ANIMATED CENTER 'P' BUTTON */}
+      <nav className="fixed bottom-0 left-0 right-0 max-w-lg mx-auto bg-slate-900/95 backdrop-blur-xl border-t border-white/10 px-2 py-1.5 z-40 flex items-center justify-around shadow-2xl">
         {portalSettings?.allow_pt_tracking && (
           <button
             onClick={() => setActiveTab('pt')}
@@ -1132,6 +1122,45 @@ export default function GuestPortal() {
             <span className="text-[9px] uppercase tracking-wider">Spa</span>
           </button>
         )}
+
+        {/* CENTER ELEVATED "P" PERFECTION DIGITAL PASS BUTTON */}
+        <button
+          onClick={() => setActiveTab('card')}
+          className="relative -top-4 flex flex-col items-center group focus:outline-none transition-transform active:scale-95 z-20"
+        >
+          {/* Glowing Ambient Halo */}
+          <div className={`absolute -inset-1.5 rounded-full blur-md transition-all duration-500 ${
+            activeTab === 'card' 
+              ? 'bg-amber-400/70 animate-pulse' 
+              : 'bg-amber-500/30 group-hover:bg-amber-400/50'
+          }`} />
+
+          {/* Golden Pulse Ping Ring */}
+          <div className="absolute inset-0 rounded-full border border-amber-400/60 animate-ping opacity-40 pointer-events-none" />
+
+          {/* Golden Circle Emblem */}
+          <div className={`relative w-14 h-14 rounded-full p-[2.5px] bg-gradient-to-tr from-amber-600 via-amber-300 to-yellow-100 shadow-[0_0_20px_rgba(245,158,11,0.7)] transition-all duration-300 ${
+            activeTab === 'card' 
+              ? 'scale-110 shadow-[0_0_30px_rgba(245,158,11,1)] ring-2 ring-amber-400/80 ring-offset-2 ring-offset-slate-900' 
+              : 'group-hover:scale-105'
+          }`}>
+            <div className="w-full h-full rounded-full bg-gradient-to-b from-slate-900 via-amber-950/80 to-black flex items-center justify-center border border-amber-400/50 relative overflow-hidden">
+              {/* Shimmer light effect */}
+              <div className="absolute -top-3 -left-3 w-7 h-7 bg-white/20 rounded-full blur-sm pointer-events-none animate-pulse" />
+              
+              {/* Iconic Golden 'P' with Animation */}
+              <span className="font-serif font-black text-2xl text-transparent bg-clip-text bg-gradient-to-b from-amber-100 via-amber-300 to-yellow-500 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] select-none transform transition-transform group-hover:scale-110">
+                P
+              </span>
+            </div>
+          </div>
+
+          <span className={`text-[9px] font-black uppercase tracking-widest mt-1 transition-colors ${
+            activeTab === 'card' ? 'text-amber-400 drop-shadow-[0_0_8px_rgba(245,158,11,0.8)]' : 'text-slate-400 group-hover:text-amber-300'
+          }`}>
+            Pass
+          </span>
+        </button>
 
         {portalSettings?.allow_entrance_passes && (
           <button
