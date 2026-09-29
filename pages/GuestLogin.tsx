@@ -338,7 +338,7 @@ export default function GuestLogin() {
               {fullAppName}
             </p>
             <p className="text-slate-500 text-[10px] font-black uppercase tracking-widest">
-              &copy; {new Date().getFullYear()} Perfection Hospitality. All Rights Reserved.
+              &copy; {new Date().getFullYear()} Perfection. All Rights Reserved.
             </p>
           </div>
         </div>

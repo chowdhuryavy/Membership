@@ -53,11 +53,11 @@ import {
   Award,
   AlertTriangle,
   Copy,
-  Wallet
+  Wallet,
+  Building2
 } from 'lucide-react';
 import { Button } from '../components/ui';
 import { format, parseISO } from 'date-fns';
-import toast from 'react-hot-toast';
 
 type ActiveTab = 'card' | 'pt' | 'spa' | 'passes' | 'finances' | 'profile';
 

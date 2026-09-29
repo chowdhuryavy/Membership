@@ -2551,7 +2551,9 @@ class DatabaseService {
         id: 'global' 
       };
       // Strip client-only or dynamic metadata fields not present in Supabase table
-      delete payload.expiration_reminder_config;
+      delete payload.guest_portal_settings;
+      delete payload.guest_portal_settings_map;
+      delete payload.guest_accounts;
 
       let attempts = 0;
       let lastError: any = null;
@@ -3714,13 +3716,18 @@ class DatabaseService {
     );
   }
 
-  async getPTSessions(ptMemberId: string): Promise<PTSession[]> {
+  async getPTSessions(ptMemberId?: string): Promise<PTSession[]> {
     let supabaseSessions: PTSession[] | null = null;
     let querySuccess = false;
+    const cleanId = (ptMemberId || '').trim();
 
     if (this.isSupabase()) {
       supabaseSessions = await this.safeCall(async () => {
-        const { data, error } = await supabase.from('pt_sessions').select('*').eq('pt_member_id', ptMemberId).order('date', { ascending: false });
+        let query = supabase.from('pt_sessions').select('*');
+        if (cleanId && cleanId !== 'all') {
+          query = query.eq('pt_member_id', cleanId);
+        }
+        const { data, error } = await query.order('date', { ascending: false });
         if (error) {
             if (error.code === '42P01' || (error.message && error.message.includes('schema cache'))) return [];
             throw error;
@@ -3734,14 +3741,20 @@ class DatabaseService {
       try {
         const localSessions = (JSON.parse(localStorage.getItem('pt_sessions') || '[]') as PTSession[]);
         const fetchedIds = new Set(supabaseSessions.map(s => s.id));
-        const updatedLocal = localSessions.filter(s => s.pt_member_id !== ptMemberId || fetchedIds.has(s.id));
+        const updatedLocal = cleanId && cleanId !== 'all'
+          ? localSessions.filter(s => s.pt_member_id !== cleanId || fetchedIds.has(s.id))
+          : Array.from(new Map([...localSessions, ...supabaseSessions].map(item => [item.id, item])).values());
         localStorage.setItem('pt_sessions', JSON.stringify(updatedLocal));
       } catch (e) {}
 
       return supabaseSessions.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
     } else {
       try {
-        return (JSON.parse(localStorage.getItem('pt_sessions') || '[]') as PTSession[]).filter(s => s.pt_member_id === ptMemberId).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        const allLocal = (JSON.parse(localStorage.getItem('pt_sessions') || '[]') as PTSession[]);
+        if (cleanId && cleanId !== 'all') {
+          return allLocal.filter(s => s.pt_member_id === cleanId).sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        }
+        return allLocal.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
       } catch (e) {
         return [];
       }
