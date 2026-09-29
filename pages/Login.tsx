@@ -86,19 +86,32 @@ const Login = () => {
   useEffect(() => {
     localStorage.setItem('preferred_portal', 'admin');
     const host = window.location.hostname.toLowerCase();
-    if (host.includes('hcm-staff')) {
-      window.location.href = 'https://hcm-staff.perfection.my/#/staff-login';
-    } else if (host.includes('hcm-guest')) {
-      window.location.href = 'https://hcm-guest.perfection.my/#/guest-login';
+    const isProd = host.includes('perfection.my');
+    if (isProd) {
+      if (host.includes('hcm-staff')) {
+        window.location.href = 'https://hcm-staff.perfection.my/#/staff-login';
+      } else if (host.includes('hcm-guest')) {
+        window.location.href = 'https://hcm-guest.perfection.my/#/guest-login';
+      }
     }
   }, [navigate]);
 
   const handleStaffPortalClick = () => {
-    window.location.href = 'https://hcm-staff.perfection.my/#/staff-login';
+    const host = window.location.hostname.toLowerCase();
+    if (host.includes('perfection.my')) {
+      window.location.href = 'https://hcm-staff.perfection.my/#/staff-login';
+    } else {
+      navigate('/staff-login');
+    }
   };
 
   const handleGuestPortalClick = () => {
-    window.location.href = 'https://hcm-guest.perfection.my/#/guest-login';
+    const host = window.location.hostname.toLowerCase();
+    if (host.includes('perfection.my')) {
+      window.location.href = 'https://hcm-guest.perfection.my/#/guest-login';
+    } else {
+      navigate('/guest-login');
+    }
   };
 
   return (

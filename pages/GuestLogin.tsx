@@ -138,7 +138,8 @@ export default function GuestLogin() {
     localStorage.setItem('preferred_portal', 'guest');
 
     const host = window.location.hostname.toLowerCase();
-    if ((host.includes('hcm.perfection.my') || host.includes('hcm-staff.perfection.my')) && !host.includes('hcm-guest')) {
+    const isProd = host.includes('perfection.my');
+    if (isProd && (host.includes('hcm.perfection.my') || host.includes('hcm-staff.perfection.my')) && !host.includes('hcm-guest')) {
       window.location.href = 'https://hcm-guest.perfection.my/#/guest-login';
       return;
     }

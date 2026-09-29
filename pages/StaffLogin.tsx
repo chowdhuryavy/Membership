@@ -42,7 +42,8 @@ const StaffLogin = () => {
     localStorage.setItem('preferred_portal', 'staff');
 
     const host = window.location.hostname.toLowerCase();
-    if (host.includes('hcm.perfection.my') && !host.includes('hcm-staff')) {
+    const isProd = host.includes('perfection.my');
+    if (isProd && host.includes('hcm.perfection.my') && !host.includes('hcm-staff')) {
       window.location.href = 'https://hcm-staff.perfection.my/#/staff-login';
       return;
     }
