@@ -101,6 +101,10 @@ class DatabaseService {
       msg.includes('network error') || 
       msg.includes('database not found') ||
       msg.includes('load failed') ||
+      msg.includes('cors') ||
+      msg.includes('access-control') ||
+      msg.includes('err_failed') ||
+      msg.includes('blocked') ||
       msg.includes('timeout') ||
       msg.includes('abort') ||
       msg.includes('connection') ||

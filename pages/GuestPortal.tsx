@@ -268,7 +268,7 @@ export default function GuestPortal() {
       const activeScopeId = session.outlet_id || session.property_id;
       const [ps, props, outlets, allMembers, allPtMembers, allPtSessions, allBookings, allConsents, allSales, therapistsData, roomsData, typesData] =
         await Promise.all([
-          guestAuth.getPortalSettings(activeScopeId),
+          guestAuth.getPortalSettings(activeScopeId).catch(() => DEFAULT_GUEST_PORTAL_SETTINGS),
           db.getProperties().catch(() => []),
           db.getOutlets().catch(() => []),
           db.getMembers('').catch(() => []),
