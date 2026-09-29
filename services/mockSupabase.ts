@@ -1842,6 +1842,11 @@ class DatabaseService {
         });
       }
     }
+
+    // Automatically remove associated guest portal account
+    import('./guestAuthService').then(({ guestAuth }) => {
+      guestAuth.deleteGuestAccountByMemberId(id).catch(console.error);
+    }).catch(console.error);
   }
 
   async getFreezes(memberId?: string, startDate?: string): Promise<Freeze[]> {

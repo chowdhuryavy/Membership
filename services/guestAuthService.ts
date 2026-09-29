@@ -78,16 +78,54 @@ export class GuestAuthService {
   // --- ACCOUNTS REGISTRY ---
   public async getAccounts(): Promise<GuestAccount[]> {
     try {
+      const companySettings = await db.getSettings().catch(() => null);
+      if (companySettings?.guest_accounts && Array.isArray(companySettings.guest_accounts)) {
+        localStorage.setItem(GUEST_ACCOUNTS_STORAGE_KEY, JSON.stringify(companySettings.guest_accounts));
+        return companySettings.guest_accounts;
+      }
       const raw = localStorage.getItem(GUEST_ACCOUNTS_STORAGE_KEY);
       if (raw) {
         return JSON.parse(raw) as GuestAccount[];
       }
-    } catch (e) {}
+    } catch (e) {
+      console.warn('[GuestAuth] Error reading guest accounts store:', e);
+    }
     return [];
   }
 
   private async saveAccounts(accounts: GuestAccount[]): Promise<void> {
-    localStorage.setItem(GUEST_ACCOUNTS_STORAGE_KEY, JSON.stringify(accounts));
+    try {
+      localStorage.setItem(GUEST_ACCOUNTS_STORAGE_KEY, JSON.stringify(accounts));
+      const companySettings = await db.getSettings().catch(() => null);
+      if (companySettings) {
+        await db.updateSettings({
+          ...companySettings,
+          guest_accounts: accounts
+        });
+      }
+    } catch (e) {
+      console.error('[GuestAuth] Error saving guest accounts:', e);
+    }
+  }
+
+  public async deleteGuestAccount(id: string): Promise<boolean> {
+    const accounts = await this.getAccounts();
+    const filtered = accounts.filter(a => a.id !== id);
+    if (filtered.length !== accounts.length) {
+      await this.saveAccounts(filtered);
+      return true;
+    }
+    return false;
+  }
+
+  public async deleteGuestAccountByMemberId(memberId: string): Promise<boolean> {
+    const accounts = await this.getAccounts();
+    const filtered = accounts.filter(a => a.member_id !== memberId && a.id !== memberId);
+    if (filtered.length !== accounts.length) {
+      await this.saveAccounts(filtered);
+      return true;
+    }
+    return false;
   }
 
   public async getAccountByEmail(email: string): Promise<GuestAccount | null> {
@@ -232,11 +270,6 @@ export class GuestAuthService {
       return { error: 'Please enter both your email address and password.' };
     }
 
-    const settings = await this.getPortalSettings();
-    if (!settings.is_enabled) {
-      return { error: 'The Guest Mobile Portal is currently undergoing scheduled maintenance. Please check back shortly.' };
-    }
-
     const account = await this.getAccountByEmail(cleanEmail);
     if (!account) {
       return { error: 'No guest account found with this email address. Please contact the front desk.' };
@@ -246,9 +279,33 @@ export class GuestAuthService {
       return { error: 'Your mobile portal access is currently suspended. Please contact front desk management.' };
     }
 
+    // Verify member existence if account is linked to a member record
+    if (account.member_id) {
+      try {
+        const members = await db.getMembers('').catch(() => []);
+        const matchedMember = members.find((m: any) => m.id === account.member_id);
+        if (!matchedMember || matchedMember.status === 'Cancelled') {
+          account.is_active = false;
+          await this.deleteGuestAccountByMemberId(account.member_id);
+          return { error: 'Your membership account is no longer active. Please contact front desk management.' };
+        }
+      } catch (e) {
+        console.warn('[GuestAuth] Could not verify member status:', e);
+      }
+    }
+
+    // Facility-scoped portal settings check (per property / outlet)
+    const scopeId = account.outlet_id || account.property_id;
+    const facilitySettings = await this.getPortalSettings(scopeId);
+    if (!facilitySettings.is_enabled) {
+      return { error: 'Guest Mobile Portal access is currently disabled for this facility. Please contact front desk management.' };
+    }
+
     const isPasswordValid = 
       account.password === cleanPass || 
-      account.temp_password === cleanPass;
+      account.temp_password === cleanPass ||
+      (Boolean(account.password) && account.password!.trim() === cleanPass) ||
+      (Boolean(account.temp_password) && account.temp_password!.trim() === cleanPass);
 
     if (!isPasswordValid) {
       return { error: 'Incorrect email or password. Please verify and try again.' };

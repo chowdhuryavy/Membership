@@ -27,7 +27,9 @@ import {
   Clock,
   Phone,
   Send,
-  Lock
+  Lock,
+  Trash2,
+  UserPlus
 } from 'lucide-react';
 import { Button, Input, Card } from '../ui';
 import { format, parseISO } from 'date-fns';
@@ -137,7 +139,27 @@ export const GuestPortalSettingsTab: React.FC = () => {
     }
   };
 
+  const handleDeleteAccount = async (id: string, name: string) => {
+    if (!window.confirm(`Are you sure you want to permanently delete guest portal credentials for ${name}?`)) return;
+    setActionLoadingId(id);
+    try {
+      await guestAuth.deleteGuestAccount(id);
+      setAccounts(prev => prev.filter(a => a.id !== id));
+      toast.success(`Guest portal access deleted for ${name}.`);
+    } catch (e) {
+      toast.error('Failed to delete guest account');
+    } finally {
+      setActionLoadingId(null);
+    }
+  };
+
   const filteredAccounts = accounts.filter(a => {
+    // Scope filter per selected outlet/property
+    if (activeScopeId) {
+      const matchProp = a.property_id && a.property_id === activeScopeId;
+      const matchOutlet = a.outlet_id && a.outlet_id === activeScopeId;
+      if (!matchProp && !matchOutlet) return false;
+    }
     const q = searchTerm.toLowerCase();
     return (
       a.name.toLowerCase().includes(q) ||
@@ -569,11 +591,19 @@ export const GuestPortalSettingsTab: React.FC = () => {
                           disabled={actionLoadingId === acc.id}
                           className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-colors ${
                             acc.is_active
-                              ? 'bg-red-50 hover:bg-red-100 text-red-700'
-                              : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700'
+                              ? 'bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200'
+                              : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200'
                           }`}
                         >
                           {acc.is_active ? 'Suspend' : 'Activate'}
+                        </button>
+                        <button
+                          onClick={() => handleDeleteAccount(acc.id, acc.name)}
+                          disabled={actionLoadingId === acc.id}
+                          className="px-2.5 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-[11px] font-bold flex items-center gap-1 transition-colors"
+                          title="Permanently delete guest account"
+                        >
+                          <Trash2 className="w-3 h-3" /> Delete
                         </button>
                       </div>
                     </td>
