@@ -742,7 +742,10 @@ class DatabaseService {
           if (role?.requires_2fa) {
              const otp = Math.floor(100000 + Math.random() * 900000).toString();
              const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
-             await supabase.from('profiles').update({ otp_code: otp, otp_expires_at: expiresAt }).eq('id', profile.id);
+             
+             // Update profile with OTP in database
+             const { error: otpUpdateError } = await supabase.from('profiles').update({ otp_code: otp, otp_expires_at: expiresAt }).eq('id', profile.id);
+             if (otpUpdateError) throw otpUpdateError;
              
              await emailService.sendAdminLoginOtpEmail({
                userName: profile.name,
@@ -857,82 +860,90 @@ class DatabaseService {
 
       } catch (err: any) {
         console.error("Login attempt error:", err);
-        if (this.isNetworkError(err)) {
+        const isNetwork = this.isNetworkError(err);
+        if (isNetwork) {
           DatabaseService.supabaseFailed = true;
+          return { user: null, error: "Authentication server connection lost. Please check your internet connection.", requiresPasswordChange: false };
         }
+        return { user: null, error: err.message || "An internal error occurred during authentication.", requiresPasswordChange: false };
       }
     }
 
-    // 4. Fallback Mode (when Supabase unavailable or in mock mode)
-    const localLockoutsStr = localStorage.getItem('local_user_lockouts') || '{}';
-    const localLockouts: Record<string, { attempts: number; locked: boolean }> = JSON.parse(localLockoutsStr);
-    const userLockout = localLockouts[cleanEmail] || { attempts: 0, locked: false };
+    // 4. MOCK MODE ONLY (strictly for local development without credentials)
+    if (!supabase) {
+        const localLockoutsStr = localStorage.getItem('local_user_lockouts') || '{}';
+        const localLockouts: Record<string, { attempts: number; locked: boolean }> = JSON.parse(localLockoutsStr);
+        const userLockout = localLockouts[cleanEmail] || { attempts: 0, locked: false };
 
-    if (userLockout.locked) {
-      return {
-        user: null,
-        error: "Account has been locked due to 3 consecutive unsuccessful login attempts. Please contact your Property Administrator or Super Admin to unlock your account.",
-        requiresPasswordChange: false
-      };
-    }
-
-    const isValidMasterPass = isMasterEmail && (passwordAttempt === 'Admin@123' || passwordAttempt === 'admin123');
-    if (isValidMasterPass) {
-      localLockouts[cleanEmail] = { attempts: 0, locked: false };
-      localStorage.setItem('local_user_lockouts', JSON.stringify(localLockouts));
-      const masterUser: UserProfile = {
-        id: 'master-super-admin-id',
-        email: 'chowdhuryavy@gmail.com',
-        name: 'Chowdhury Avy (Master Admin)',
-        role_id: 'super_admin',
-        allowed_outlets: [],
-        is_active: true,
-        failed_login_attempts: 0,
-        is_locked: false
-      };
-      return { user: masterUser, error: null, requiresPasswordChange: false };
-    }
-
-    // Check local fallback users for offline / development environments
-    try {
-      const localUsers: any[] = JSON.parse(localStorage.getItem('membership_local_users') || '[]');
-      const matchedLocalUser = localUsers.find(u => u.email?.toLowerCase() === cleanEmail);
-      if (matchedLocalUser) {
-        if (matchedLocalUser.is_active === false) {
-          return { user: null, error: "Account is inactive. Please contact administration.", requiresPasswordChange: false };
+        if (userLockout.locked) {
+            return {
+                user: null,
+                error: "Account has been locked due to 3 consecutive unsuccessful login attempts. Please contact your Property Administrator or Super Admin to unlock your account.",
+                requiresPasswordChange: false
+            };
         }
-        if (matchedLocalUser.password === passwordAttempt || matchedLocalUser.temp_password === passwordAttempt) {
+
+        const isValidMasterPass = isMasterEmail && (passwordAttempt === 'Admin@123' || passwordAttempt === 'admin123');
+        if (isValidMasterPass) {
           localLockouts[cleanEmail] = { attempts: 0, locked: false };
           localStorage.setItem('local_user_lockouts', JSON.stringify(localLockouts));
-          await this.logAction('AUTH_LOGIN', `Access authorized for ${matchedLocalUser.email}`);
-          return { 
-            user: matchedLocalUser as UserProfile, 
-            error: null, 
-            requiresPasswordChange: !!matchedLocalUser.temp_password 
+          const masterUser: UserProfile = {
+            id: 'master-super-admin-id',
+            email: 'chowdhuryavy@gmail.com',
+            name: 'Chowdhury Avy (Master Admin)',
+            role_id: 'super_admin',
+            allowed_outlets: [],
+            is_active: true,
+            failed_login_attempts: 0,
+            is_locked: false
+          };
+          return { user: masterUser, error: null, requiresPasswordChange: false };
+        }
+
+        // Check local fallback users for offline / development environments
+        try {
+          const localUsers: any[] = JSON.parse(localStorage.getItem('membership_local_users') || '[]');
+          const matchedLocalUser = localUsers.find(u => u.email?.toLowerCase() === cleanEmail);
+          if (matchedLocalUser) {
+            if (matchedLocalUser.is_active === false) {
+              return { user: null, error: "Account is inactive. Please contact administration.", requiresPasswordChange: false };
+            }
+            if (matchedLocalUser.password === passwordAttempt || matchedLocalUser.temp_password === passwordAttempt) {
+              localLockouts[cleanEmail] = { attempts: 0, locked: false };
+              localStorage.setItem('local_user_lockouts', JSON.stringify(localLockouts));
+              await this.logAction('AUTH_LOGIN', `Access authorized for ${matchedLocalUser.email}`);
+              return { 
+                user: matchedLocalUser as UserProfile, 
+                error: null, 
+                requiresPasswordChange: !!matchedLocalUser.temp_password 
+              };
+            }
+          }
+        } catch (e) {}
+
+        userLockout.attempts = (userLockout.attempts || 0) + 1;
+        if (userLockout.attempts >= 3) {
+          userLockout.locked = true;
+          localLockouts[cleanEmail] = userLockout;
+          localStorage.setItem('local_user_lockouts', JSON.stringify(localLockouts));
+          return {
+            user: null,
+            error: "Account has been locked due to 3 consecutive unsuccessful login attempts. Please contact your Property Administrator or Super Admin to unlock your account.",
+            requiresPasswordChange: false
+          };
+        } else {
+          localLockouts[cleanEmail] = userLockout;
+          localStorage.setItem('local_user_lockouts', JSON.stringify(localLockouts));
+          return {
+            user: null,
+            error: `Invalid email or password. Unsuccessful attempt ${userLockout.attempts} of 3. Account will be locked after 3 failed attempts.`,
+            requiresPasswordChange: false
           };
         }
-      }
-    } catch (e) {}
-
-    userLockout.attempts = (userLockout.attempts || 0) + 1;
-    if (userLockout.attempts >= 3) {
-      userLockout.locked = true;
-      localLockouts[cleanEmail] = userLockout;
-      localStorage.setItem('local_user_lockouts', JSON.stringify(localLockouts));
-      return {
-        user: null,
-        error: "Account has been locked due to 3 consecutive unsuccessful login attempts. Please contact your Property Administrator or Super Admin to unlock your account.",
-        requiresPasswordChange: false
-      };
-    } else {
-      localLockouts[cleanEmail] = userLockout;
-      localStorage.setItem('local_user_lockouts', JSON.stringify(localLockouts));
-      return {
-        user: null,
-        error: `Invalid email or password. Unsuccessful attempt ${userLockout.attempts} of 3. Account will be locked after 3 failed attempts.`,
-        requiresPasswordChange: false
-      };
     }
+
+    // Default catch-all for when supabase exists but we reached here (should not happen with return early above)
+    return { user: null, error: "Authentication failed. Please verify your credentials.", requiresPasswordChange: false };
   }
 
   async addUser(user: Omit<UserProfile, 'id'> & { password?: string }): Promise<UserProfile> {
