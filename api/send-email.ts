@@ -1,4 +1,5 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node';
+import { canonicalizeHtmlBody, canonicalizePlainText } from '../services/emailCanonicalizer';
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   // Enable CORS
@@ -42,6 +43,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     console.log(`[Vercel /api/send-email] Sending email to ${emails.join(', ')}...`);
 
+    const canonicalHtml = canonicalizeHtmlBody(html || '');
+    const canonicalText = canonicalizePlainText(html || '');
+
     // Attempt 1: Try configured domain fromEmail
     let resendResponse = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -53,7 +57,8 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         from: `${appName} <${fromEmail}>`,
         to: emails,
         subject,
-        html,
+        html: canonicalHtml,
+        text: canonicalText,
         attachments: attachments || []
       })
     });

@@ -18,9 +18,14 @@ import {
   Globe, 
   Check, 
   ArrowRight,
-  Info
+  Info,
+  Sparkles,
+  Code,
+  FileText,
+  CheckCheck
 } from 'lucide-react';
 import toast from 'react-hot-toast';
+import { computeDkimBodyHash, canonicalizeHtmlBody } from '../../services/emailCanonicalizer';
 
 interface PropertySmtpConfigProps {
   currentProperty: Property | null;
@@ -46,6 +51,7 @@ export const PropertySmtpConfig: React.FC<PropertySmtpConfigProps> = ({
     secure_connection: 'tls',
     from_email: '',
     from_name: '',
+    ses_configuration_set: '',
     is_enabled: false,
     has_password_configured: false
   });
@@ -57,6 +63,17 @@ export const PropertySmtpConfig: React.FC<PropertySmtpConfigProps> = ({
   const [isTesting, setIsTesting] = useState(false);
   const [testEmailInput, setTestEmailInput] = useState('');
   const [showTestModal, setShowTestModal] = useState(false);
+  const [dkimDiagnostics, setDkimDiagnostics] = useState<{ bodyHash: string; bodyLength: number } | null>(null);
+  const [showDkimInspector, setShowDkimInspector] = useState(false);
+
+  useEffect(() => {
+    if (showTestModal) {
+      const sampleHtml = `<!DOCTYPE html>\r\n<html>\r\n<head>\r\n  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />\r\n</head>\r\n<body>\r\n  <h2>SMTP Relay Verification</h2>\r\n  <p>Operational test for ${activeProperty?.name || 'Property'}.</p>\r\n  <a href="https://perfection.my/portal">Open Member Portal</a>\r\n</body>\r\n</html>`;
+      computeDkimBodyHash(canonicalizeHtmlBody(sampleHtml), 'relaxed')
+        .then(res => setDkimDiagnostics(res))
+        .catch(err => console.warn('[DKIM Diagnostics] Computation failed:', err));
+    }
+  }, [showTestModal, activeProperty?.name]);
 
   // Load SMTP settings whenever the active property changes from the top selector
   const loadSettingsForProperty = useCallback(async (propertyId: string) => {
@@ -133,6 +150,7 @@ export const PropertySmtpConfig: React.FC<PropertySmtpConfigProps> = ({
           from_email: formData.from_email.trim(),
           from_name: formData.from_name.trim(),
           is_enabled: formData.is_enabled,
+          ses_configuration_set: (formData.ses_configuration_set || '').trim(),
           last_tested_at: formData.last_tested_at,
           last_test_status: formData.last_test_status,
           last_test_error: formData.last_test_error
@@ -314,6 +332,51 @@ export const PropertySmtpConfig: React.FC<PropertySmtpConfigProps> = ({
               </button>
             </div>
 
+            {/* Quick Provider Presets */}
+            <div className="p-5 rounded-2xl bg-indigo-50/70 border border-indigo-100/80 space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-xs font-black uppercase tracking-wider text-indigo-950 flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-indigo-600" />
+                  Quick Server Presets
+                </span>
+                <span className="text-[10px] font-bold text-indigo-600 bg-indigo-100/70 px-2.5 py-0.5 rounded-full">
+                  Auto-configures Host & TLS Port
+                </span>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                {[
+                  { name: 'AWS SES (US-East-1)', host: 'email-smtp.us-east-1.amazonaws.com', port: 587, sec: 'tls' },
+                  { name: 'AWS SES (US-West-2)', host: 'email-smtp.us-west-2.amazonaws.com', port: 587, sec: 'tls' },
+                  { name: 'AWS SES (EU-West-1)', host: 'email-smtp.eu-west-1.amazonaws.com', port: 587, sec: 'tls' },
+                  { name: 'AWS SES (AP-Southeast-1)', host: 'email-smtp.ap-southeast-1.amazonaws.com', port: 587, sec: 'tls' },
+                  { name: 'Microsoft 365', host: 'smtp.office365.com', port: 587, sec: 'tls' },
+                  { name: 'Google Workspace', host: 'smtp.gmail.com', port: 587, sec: 'tls' },
+                ].map(preset => (
+                  <button
+                    key={preset.name}
+                    type="button"
+                    disabled={!canManage}
+                    onClick={() => {
+                      setFormData(prev => ({
+                        ...prev,
+                        host: preset.host,
+                        port: preset.port,
+                        secure_connection: preset.sec as any
+                      }));
+                      toast.success(`Loaded preset: ${preset.name}`);
+                    }}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all border ${
+                      formData.host === preset.host
+                        ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm'
+                        : 'bg-white hover:bg-indigo-50 text-slate-700 border-slate-200'
+                    }`}
+                  >
+                    {preset.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             {/* Grid of Inputs */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Host */}
@@ -463,6 +526,89 @@ export const PropertySmtpConfig: React.FC<PropertySmtpConfigProps> = ({
               </div>
             </div>
 
+            {/* AWS SES & DKIM Body Hash Canonicalization Protection */}
+            <div className="p-6 rounded-2xl bg-slate-900 text-white space-y-4 shadow-md">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <div className="w-8 h-8 rounded-xl bg-indigo-500/20 text-indigo-400 border border-indigo-500/30 flex items-center justify-center">
+                    <ShieldCheck className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-black uppercase tracking-wider text-white">
+                      DKIM Body Hash &amp; Transit Integrity Engine
+                    </h4>
+                    <p className="text-[10px] text-slate-400 font-medium">
+                      RFC 6376 §3.4.4 Relaxed Canonicalization &amp; Anti-Tampering Shield
+                    </p>
+                  </div>
+                </div>
+                <span className="px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                  Protected
+                </span>
+              </div>
+
+              {/* SES Configuration Set Input */}
+              <div className="space-y-1.5 pt-2 border-t border-slate-800">
+                <label className="text-[11px] font-black uppercase tracking-wider text-slate-300 block">
+                  AWS SES Configuration Set (Optional)
+                </label>
+                <input
+                  type="text"
+                  disabled={!canManage}
+                  placeholder="e.g. disabled-tracking-ruleset"
+                  value={formData.ses_configuration_set || ''}
+                  onChange={e => setFormData(prev => ({ ...prev, ses_configuration_set: e.target.value }))}
+                  className="w-full px-4 py-2.5 rounded-xl bg-slate-800/80 border border-slate-700 text-white text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-indigo-500/30 focus:border-indigo-500 transition-all placeholder:text-slate-500"
+                />
+                <span className="text-[10px] text-slate-400 leading-normal block">
+                  If your AWS account uses a dedicated SES Configuration Set with engagement open/click tracking disabled, provide its name to bind messages via <code className="text-indigo-300">X-SES-CONFIGURATION-SET</code>.
+                </span>
+              </div>
+
+              {/* 4 Feature Badges */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-2">
+                <div className="p-3 rounded-xl bg-slate-800/60 border border-slate-700/60 space-y-1">
+                  <div className="flex items-center gap-1.5 text-emerald-400 text-xs font-bold">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Relaxed CRLF Normalization</span>
+                  </div>
+                  <p className="text-[10px] text-slate-400 leading-relaxed">
+                    Normalizes all body newlines to strict <code className="text-slate-300">\r\n</code> and strips line-trailing whitespace per RFC 6376, eliminating hash drift from intermediate MTA line conversion.
+                  </p>
+                </div>
+
+                <div className="p-3 rounded-xl bg-slate-800/60 border border-slate-700/60 space-y-1">
+                  <div className="flex items-center gap-1.5 text-emerald-400 text-xs font-bold">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Anti-Tracking Link Protection</span>
+                  </div>
+                  <p className="text-[10px] text-slate-400 leading-relaxed">
+                    Injects <code className="text-slate-300">ses:no-track="true"</code> on all hyperlinks so Amazon SES never rewrites URLs to tracking redirectors between signing and dispatch.
+                  </p>
+                </div>
+
+                <div className="p-3 rounded-xl bg-slate-800/60 border border-slate-700/60 space-y-1">
+                  <div className="flex items-center gap-1.5 text-emerald-400 text-xs font-bold">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>Tracking Beacon Suppression</span>
+                  </div>
+                  <p className="text-[10px] text-slate-400 leading-relaxed">
+                    Attaches <code className="text-slate-300">X-SES-MESSAGE-TAGS: ses:no-track=true</code> header to suppress automatic 1x1 open-tracking pixel injection into the HTML footer.
+                  </p>
+                </div>
+
+                <div className="p-3 rounded-xl bg-slate-800/60 border border-slate-700/60 space-y-1">
+                  <div className="flex items-center gap-1.5 text-emerald-400 text-xs font-bold">
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>RFC 2045 Line Folding</span>
+                  </div>
+                  <p className="text-[10px] text-slate-400 leading-relaxed">
+                    Enforces 76-character max lines with soft breaks (<code className="text-slate-300">=\r\n</code>), preventing intermediate MTAs from force-wrapping lines exceeding the 998-octet limit.
+                  </p>
+                </div>
+              </div>
+            </div>
+
             {/* Test Status Indicator */}
             {formData.last_tested_at && (
               <div className={`p-4 rounded-2xl border flex items-center justify-between ${
@@ -526,7 +672,7 @@ export const PropertySmtpConfig: React.FC<PropertySmtpConfigProps> = ({
       {/* Test Modal */}
       {showTestModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-[2.5rem] border border-slate-200 p-8 max-w-md w-full shadow-2xl space-y-6 animate-in zoom-in-95 duration-200">
+          <div className="bg-white rounded-[2.5rem] border border-slate-200 p-8 max-w-lg w-full shadow-2xl space-y-6 animate-in zoom-in-95 duration-200">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-2xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
                 <Send className="w-6 h-6" />
@@ -540,7 +686,7 @@ export const PropertySmtpConfig: React.FC<PropertySmtpConfigProps> = ({
             </div>
 
             <p className="text-xs text-slate-600 leading-relaxed font-medium">
-              We will execute an authentic SMTP handshake with <strong>{formData.host || 'your host'}</strong> on port <strong>{formData.port}</strong> and dispatch a verification message.
+              We will execute an authentic SMTP handshake with <strong>{formData.host || 'your host'}</strong> on port <strong>{formData.port}</strong> and dispatch a verification message with full RFC 6376 canonicalization.
             </p>
 
             <div className="space-y-2">
@@ -557,12 +703,65 @@ export const PropertySmtpConfig: React.FC<PropertySmtpConfigProps> = ({
               />
             </div>
 
+            {/* DKIM Body Integrity Diagnostics Toggle */}
+            <div className="rounded-2xl bg-slate-900 text-white p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                  <span className="text-xs font-bold text-slate-200 uppercase tracking-wider">
+                    DKIM Body Hash &amp; Canonicalization Inspector
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowDkimInspector(!showDkimInspector)}
+                  className="text-[11px] font-bold text-indigo-400 hover:text-indigo-300 underline cursor-pointer"
+                >
+                  {showDkimInspector ? 'Hide Details' : 'View Diagnostics'}
+                </button>
+              </div>
+
+              {showDkimInspector && (
+                <div className="space-y-2.5 pt-2 border-t border-slate-800 text-xs animate-in fade-in duration-200">
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-[11px] text-slate-400">
+                      <span>Canonical Body Hash (bh=)</span>
+                      <span className="text-emerald-400 font-mono font-bold">SHA-256 Base64</span>
+                    </div>
+                    <div className="p-2 rounded-lg bg-slate-950 font-mono text-[11px] text-emerald-400 break-all border border-slate-800">
+                      {dkimDiagnostics?.bodyHash || 'Calculating...'}
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-[11px]">
+                    <div className="p-2 rounded-lg bg-slate-950/70 border border-slate-800">
+                      <span className="text-slate-400 block text-[10px] uppercase">Body Length (l=)</span>
+                      <span className="font-mono text-slate-200 font-bold">{dkimDiagnostics?.bodyLength ?? 0} octets</span>
+                    </div>
+                    <div className="p-2 rounded-lg bg-slate-950/70 border border-slate-800">
+                      <span className="text-slate-400 block text-[10px] uppercase">SES Anti-Tracking</span>
+                      <span className="text-emerald-400 font-bold">Enforced (ses:no-track)</span>
+                    </div>
+                  </div>
+
+                  <div className="p-2 rounded-lg bg-slate-950/70 border border-slate-800 space-y-1 text-[10px] font-mono text-slate-300">
+                    <div>MIME-Version: 1.0</div>
+                    <div>Content-Transfer-Encoding: quoted-printable</div>
+                    <div>X-SES-MESSAGE-TAGS: ses:no-track=true</div>
+                    {formData.ses_configuration_set && (
+                      <div>X-SES-CONFIGURATION-SET: {formData.ses_configuration_set}</div>
+                    )}
+                  </div>
+                </div>
+              )}
+            </div>
+
             <div className="flex items-center justify-end gap-3 pt-2">
               <button
                 type="button"
                 onClick={() => setShowTestModal(false)}
                 disabled={isTesting}
-                className="px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-black uppercase tracking-wider transition-all"
+                className="px-5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 text-xs font-black uppercase tracking-wider transition-all cursor-pointer"
               >
                 Cancel
               </button>
@@ -570,7 +769,7 @@ export const PropertySmtpConfig: React.FC<PropertySmtpConfigProps> = ({
                 type="button"
                 onClick={handleTestConnection}
                 disabled={isTesting || !testEmailInput}
-                className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black uppercase tracking-wider shadow-lg shadow-indigo-600/20 transition-all flex items-center gap-2 disabled:opacity-50"
+                className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black uppercase tracking-wider shadow-lg shadow-indigo-600/20 transition-all flex items-center gap-2 disabled:opacity-50 cursor-pointer"
               >
                 {isTesting ? (
                   <>

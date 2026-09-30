@@ -144,6 +144,7 @@ export interface PropertySmtpSettings {
   from_email: string;
   from_name: string;
   is_enabled: boolean;
+  ses_configuration_set?: string;
   last_tested_at?: string;
   last_test_status?: 'success' | 'failed';
   last_test_error?: string;

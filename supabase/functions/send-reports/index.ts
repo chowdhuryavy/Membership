@@ -11,6 +11,48 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
 }
 
+// ---------------------------------------------------------------------------
+// DKIM Body Canonicalization & Anti-Modification Engine (RFC 6376 & RFC 5322)
+// ---------------------------------------------------------------------------
+function canonicalizeHtml(html: string): string {
+  if (!html) return '<!DOCTYPE html>\r\n<html><head><meta charset="utf-8"/></head><body></body></html>\r\n';
+  // 1. Suppress AWS SES click tracking by injecting ses:no-track="true" on all <a> links
+  let result = html.replace(/<a\b(?![^>]*\bses:no-track\b)([^>]*)>/gi, '<a$1 ses:no-track="true">');
+  // 2. Normalize line endings to strict CRLF (\r\n) as mandated by RFC 5322
+  result = result.replace(/\r\n/g, '\n').replace(/\r/g, '\n').replace(/\n/g, '\r\n');
+  // 3. Strip trailing whitespace before CRLF (RFC 6376 §3.4.4 relaxed canonicalization)
+  result = result.replace(/[ \t]+(?=\r\n)/g, '');
+  // 4. Ensure deterministic single trailing CRLF
+  result = result.replace(/(?:\r\n)+$/, '') + '\r\n';
+  return result;
+}
+
+function canonicalizeText(text: string): string {
+  if (!text) return '\r\n';
+  let t = text;
+  if (t.includes('<') && t.includes('>')) {
+    t = t
+      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+      .replace(/<tr[^>]*>/gi, '\n')
+      .replace(/<td[^>]*>/gi, '  ')
+      .replace(/<p[^>]*>/gi, '\n\n')
+      .replace(/<br\s*\/?>/gi, '\n')
+      .replace(/<[^>]+>/g, '')
+      .replace(/&bull;/g, '•')
+      .replace(/&nbsp;/g, ' ')
+      .replace(/&amp;/g, '&')
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/\n\s*\n\s*\n/g, '\n\n')
+      .trim();
+  }
+  let result = t.replace(/\r\n/g, '\n').replace(/\r/g, '\n').replace(/\n/g, '\r\n');
+  result = result.replace(/[ \t]+(?=\r\n)/g, '');
+  result = result.replace(/(?:\r\n)+$/, '') + '\r\n';
+  return result;
+}
+
 serve(async (req) => {
   console.log(`DEBUG: Received ${req.method} request to send-reports`);
   const authHeader = req.headers.get('Authorization');
@@ -108,29 +150,23 @@ serve(async (req) => {
       let emailError: any;
 
       // Clean plain-text fallback generator to prevent Microsoft Outlook SCL spam classification
-      const textContent = body.directEmail.text || html
-        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-        .replace(/<tr[^>]*>/gi, '\n')
-        .replace(/<td[^>]*>/gi, '  ')
-        .replace(/<p[^>]*>/gi, '\n\n')
-        .replace(/<br\s*\/?>/gi, '\n')
-        .replace(/<[^>]+>/g, '')
-        .replace(/&bull;/g, '•')
-        .replace(/&nbsp;/g, ' ')
-        .replace(/&amp;/g, '&')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/\n\s*\n\s*\n/g, '\n\n')
-        .trim();
+      const canonicalHtml = canonicalizeHtml(html);
+      const canonicalText = canonicalizeText(body.directEmail.text || html);
 
       const resendResult = await resend.emails.send({
         from: `${appName} <${fromEmail}>`,
         reply_to: fromEmail,
         to: emails,
         subject,
-        html,
-        text: textContent,
+        html: canonicalHtml,
+        text: canonicalText,
+        headers: {
+          'MIME-Version': '1.0',
+          'X-SES-MESSAGE-TAGS': 'ses:no-track=true',
+          'X-Auto-Response-Suppress': 'OOF, AutoReply',
+          'X-Mailer': 'Health Club Management (RFC 6376 Compliant)',
+          ...(body.directEmail.headers || {})
+        },
         attachments: attachments || []
       });
 
@@ -709,13 +745,22 @@ serve(async (req) => {
               .replace(/\n\s*\n\s*\n/g, "\n\n")
               .trim();
 
+            const canonicalReportHtml = canonicalizeHtml(emailHtml);
+            const canonicalReportText = canonicalizeText(reportText);
+
             const { data: emailRes, error: emailError } = await resend.emails.send({
               from: `${appName} <${fromEmail}>`,
               reply_to: fromEmail,
               to: emails,
               subject: `${reportTitle} - ${appName} - ${params.date.toLocaleDateString()}`,
-              html: emailHtml,
-              text: reportText,
+              html: canonicalReportHtml,
+              text: canonicalReportText,
+              headers: {
+                'MIME-Version': '1.0',
+                'X-SES-MESSAGE-TAGS': 'ses:no-track=true',
+                'X-Auto-Response-Suppress': 'OOF, AutoReply',
+                'X-Mailer': 'Health Club Management (RFC 6376 Compliant)'
+              },
               attachments: [
                 {
                   filename: `${recipient.report_type}_report_${params.date.toISOString().split("T")[0]}.pdf`,

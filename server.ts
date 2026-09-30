@@ -4,6 +4,7 @@ import crypto from 'crypto';
 import { createServer as createViteServer } from 'vite';
 import jwt from 'jsonwebtoken';
 import { JWT } from 'google-auth-library';
+import { canonicalizeHtmlBody, canonicalizePlainText, getAwsSesProtectionHeaders } from './services/emailCanonicalizer';
 
 function formatPrivateKey(rawKey: string): string {
   if (!rawKey) return '';
@@ -449,7 +450,7 @@ async function startServer() {
   // Resend Direct Email Endpoint
   app.post('/api/send-email', async (req, res) => {
     try {
-      const { to, subject, html, attachments } = req.body;
+      const { to, subject, html, text, attachments, headers: customHeaders } = req.body;
       const resendApiKey = process.env.RESEND_API_KEY || process.env.VITE_RESEND_API_KEY;
 
       if (!resendApiKey) {
@@ -475,21 +476,8 @@ async function startServer() {
       const fromEmail = process.env.EMAIL_FROM || 'noreply@perfection.my';
       const appName = 'Health Club Management';
 
-      const text = (html || '')
-        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-        .replace(/<tr[^>]*>/gi, '\n')
-        .replace(/<td[^>]*>/gi, '  ')
-        .replace(/<p[^>]*>/gi, '\n\n')
-        .replace(/<br\s*\/?>/gi, '\n')
-        .replace(/<[^>]+>/g, '')
-        .replace(/&bull;/g, '•')
-        .replace(/&nbsp;/g, ' ')
-        .replace(/&amp;/g, '&')
-        .replace(/&lt;/g, '<')
-        .replace(/&gt;/g, '>')
-        .replace(/\n\s*\n\s*\n/g, '\n\n')
-        .trim();
+      const canonicalHtml = canonicalizeHtmlBody(html || '');
+      const canonicalText = canonicalizePlainText(text || html || '');
 
       console.log(`[Express /api/send-email] Dispatching email to ${emails.join(', ')} (from: ${fromEmail})...`);
 
@@ -518,8 +506,13 @@ async function startServer() {
               reply_to: fromEmail,
               to: [recipientEmail],
               subject,
-              html,
-              text,
+              html: canonicalHtml,
+              text: canonicalText,
+              headers: {
+                ...getAwsSesProtectionHeaders(),
+                'X-SES-MESSAGE-TAGS': 'ses:no-track=true',
+                ...(customHeaders || {})
+              },
               attachments: formattedAttachments.length > 0 ? formattedAttachments : undefined
             })
           });

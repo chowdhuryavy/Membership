@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS public.property_smtp_settings (
     from_email TEXT NOT NULL DEFAULT '',
     from_name TEXT NOT NULL DEFAULT '',
     is_enabled BOOLEAN NOT NULL DEFAULT false,
+    ses_configuration_set TEXT DEFAULT '',
     last_tested_at TIMESTAMPTZ,
     last_test_status VARCHAR(20), -- 'success' | 'failed'
     last_test_error TEXT,
@@ -76,6 +77,7 @@ SELECT
     from_email,
     from_name,
     is_enabled,
+    ses_configuration_set,
     (encrypted_password IS NOT NULL AND length(encrypted_password) > 0) AS has_password_configured,
     last_tested_at,
     last_test_status,
@@ -89,3 +91,7 @@ GRANT ALL ON public.property_smtp_settings TO authenticated;
 GRANT ALL ON public.property_smtp_settings TO service_role;
 GRANT SELECT ON public.property_smtp_settings_safe TO authenticated;
 GRANT SELECT ON public.property_smtp_settings_safe TO service_role;
+
+-- Idempotent schema migration for existing databases
+ALTER TABLE public.property_smtp_settings ADD COLUMN IF NOT EXISTS ses_configuration_set TEXT DEFAULT '';
+

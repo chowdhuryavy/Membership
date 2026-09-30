@@ -31,6 +31,7 @@ export class PropertySmtpService {
             from_email: viewData.from_email || '',
             from_name: viewData.from_name || '',
             is_enabled: !!viewData.is_enabled,
+            ses_configuration_set: viewData.ses_configuration_set || '',
             has_password_configured: !!viewData.has_password_configured,
             last_tested_at: viewData.last_tested_at,
             last_test_status: viewData.last_test_status,
@@ -43,6 +44,15 @@ export class PropertySmtpService {
         }
 
         // Fallback: query table directly selecting safe columns
+        let cachedSesConfig = '';
+        try {
+          const cachedRaw = localStorage.getItem(`${CACHE_PREFIX}${propertyId}`);
+          if (cachedRaw) {
+            const parsed = JSON.parse(cachedRaw);
+            cachedSesConfig = parsed.ses_configuration_set || '';
+          }
+        } catch (e) {}
+
         const { data: tableData, error: tableError } = await supabase
           .from('property_smtp_settings')
           .select('id, property_id, host, port, username, secure_connection, from_email, from_name, is_enabled, last_tested_at, last_test_status, last_test_error, created_at, updated_at, encrypted_password')
@@ -60,6 +70,7 @@ export class PropertySmtpService {
             from_email: tableData.from_email || '',
             from_name: tableData.from_name || '',
             is_enabled: !!tableData.is_enabled,
+            ses_configuration_set: (tableData as any).ses_configuration_set || cachedSesConfig || '',
             has_password_configured: !!(tableData.encrypted_password && tableData.encrypted_password.length > 0),
             last_tested_at: tableData.last_tested_at,
             last_test_status: tableData.last_test_status,
@@ -122,6 +133,7 @@ export class PropertySmtpService {
               from_email: settings.from_email,
               from_name: settings.from_name,
               is_enabled: !!settings.is_enabled,
+              ses_configuration_set: settings.ses_configuration_set || '',
               new_password: newPassword || undefined
             }
           }
@@ -278,6 +290,7 @@ export class PropertySmtpService {
     propertyId?: string;
     outletId?: string;
     attachments?: any[];
+    headers?: Record<string, string>;
   }): Promise<{ success: boolean; method: 'smtp' | 'resend'; messageId?: string; error?: string }> {
     try {
       if (supabase) {
@@ -290,7 +303,8 @@ export class PropertySmtpService {
             text: payload.text,
             property_id: payload.propertyId,
             outlet_id: payload.outletId,
-            attachments: payload.attachments
+            attachments: payload.attachments,
+            headers: payload.headers
           }
         });
 

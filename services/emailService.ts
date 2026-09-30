@@ -4,6 +4,7 @@ import { PropertySmtpService } from './propertySmtpService';
 import { format, parseISO, differenceInCalendarDays, startOfDay } from 'date-fns';
 import { generateMemberAgreementPdfBase64 } from './memberAgreementPdfService';
 import { Member, MemberStatus, ExpirationReminderConfig, ExpirationReminderOutletConfig, ExpirationReminderLog } from '../types';
+import { prepareEmailForTransit, canonicalizeHtmlBody, canonicalizePlainText } from './emailCanonicalizer';
 
 const recentlySentMembersSet = new Set<string>();
 
@@ -131,7 +132,7 @@ export function buildBoxedEmailHtml(params: {
 
   const timeStr = params.timestamp || '00:00:00 01/01/2000'; // Static timestamp to ensure body consistency
 
-  return `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+  return canonicalizeHtmlBody(`<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
   <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
@@ -209,14 +210,14 @@ export function buildBoxedEmailHtml(params: {
     </tr>
   </table>
 </body>
-</html>`;
+</html>`);
 }
 
 export function buildAdminLoginOtpEmailHtml(params: {
   userName: string;
   otpCode: string;
 }): string {
-  return `<!DOCTYPE html>
+  return canonicalizeHtmlBody(`<!DOCTYPE html>
 <html>
 <head><title>Admin Login Verification</title></head>
 <body style="font-family: Arial, sans-serif; background-color: #f4f4f4; padding: 20px;">
@@ -231,7 +232,7 @@ export function buildAdminLoginOtpEmailHtml(params: {
     <p>Best regards,<br/>The Perfection Management Team</p>
   </div>
 </body>
-</html>`;
+</html>`);
 }
 
 export function buildGuestExpirationReminderEmailHtml(params: {
@@ -295,7 +296,7 @@ export function buildGuestExpirationReminderEmailHtml(params: {
     </div>
   ` : '';
 
-  return `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+  return canonicalizeHtmlBody(`<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
   <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
@@ -486,7 +487,7 @@ export function buildGuestExpirationReminderEmailHtml(params: {
     </tr>
   </table>
 </body>
-</html>`;
+</html>`);
 }
 
 export function buildUserCredentialsEmailHtml(params: {
@@ -518,7 +519,7 @@ export function buildUserCredentialsEmailHtml(params: {
     </div>
   ` : '';
 
-  return `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+  return canonicalizeHtmlBody(`<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
   <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
@@ -711,7 +712,7 @@ export function buildUserCredentialsEmailHtml(params: {
     </tr>
   </table>
 </body>
-</html>`;
+</html>`);
 }
 
 export const emailService = {
@@ -726,26 +727,21 @@ export const emailService = {
     const targetStr = Array.isArray(to) ? to.join(', ') : to;
     console.log(`[Email Service] Dispatching email to: ${targetStr}`);
     
-    // Force multipart/mixed for all dispatches to maintain consistent body 
-    // structure and avoid security gateway re-scanning/rewriting.
-    const contentType = 'multipart/mixed';
-    
-    // Generate plain-text alternative if not supplied to ensure high deliverability
-    const plainText = (text || html)
-      .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
-      .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
-      .replace(/<tr[^>]*>/gi, '\n')
-      .replace(/<td[^>]*>/gi, '  ')
-      .replace(/<p[^>]*>/gi, '\n\n')
-      .replace(/<br\s*\/?>/gi, '\n')
-      .replace(/<[^>]+>/g, '')
-      .replace(/&bull;/g, '•')
-      .replace(/&nbsp;/g, ' ')
-      .replace(/&amp;/g, '&')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/\n\s*\n\s*\n/g, '\n\n')
-      .trim();
+    // DKIM CANONICALIZATION & INTEGRITY FIX (RFC 6376, RFC 5322, RFC 2045)
+    // 1. Enforces strict CRLF (\r\n) line endings across all body parts.
+    // 2. Strips trailing whitespace before line breaks (RFC 6376 §3.4.4 relaxed canonicalization).
+    // 3. Normalizes trailing empty lines to deterministic boundary termination.
+    // 4. Injects ses:no-track="true" on all <a> tags to prevent AWS SES from modifying URLs in transit.
+    // 5. Computes diagnostic DKIM body hash (bh=) and length (l=).
+    const { 
+      canonicalHtml, 
+      canonicalText, 
+      bodyHash, 
+      bodyLength, 
+      headers: sesProtectionHeaders 
+    } = await prepareEmailForTransit({ html, text });
+
+    console.log(`[Email Service] DKIM canonicalization complete: bh=${bodyHash}, l=${bodyLength} octets`);
 
     // Resolve Property ID
     let propertyId = options?.propertyId;
@@ -818,11 +814,12 @@ export const emailService = {
         const smtpResult = await PropertySmtpService.dispatchEmail({
           to,
           subject,
-          html,
-          text: plainText,
+          html: canonicalHtml,
+          text: canonicalText,
           propertyId,
           outletId: options?.outletId,
-          attachments
+          attachments,
+          headers: sesProtectionHeaders
         });
 
         if (smtpResult.success && smtpResult.method === 'smtp') {
@@ -871,9 +868,10 @@ export const emailService = {
             directEmail: {
               to,
               subject,
-              html,
-              text: plainText,
-              attachments
+              html: canonicalHtml,
+              text: canonicalText,
+              attachments,
+              headers: sesProtectionHeaders
             }
           }
         });
@@ -916,7 +914,14 @@ export const emailService = {
       const res = await fetch('/api/send-email', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ to, subject, html, text: plainText, attachments })
+        body: JSON.stringify({ 
+          to, 
+          subject, 
+          html: canonicalHtml, 
+          text: canonicalText, 
+          attachments,
+          headers: sesProtectionHeaders 
+        })
       });
 
       const data = await res.json().catch(() => ({}));
@@ -1015,7 +1020,7 @@ export const emailService = {
     const subject = `${reportTitle} - ${propertyName} (${outletName}) - ${dateStr}`;
     const filename = `${reportTitle.replace(/[^a-zA-Z0-9]/g, '_')}_${format(new Date(), 'yyyyMMdd')}.pdf`;
 
-    const html = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+    const html = canonicalizeHtmlBody(`<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
   <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
@@ -1079,7 +1084,7 @@ export const emailService = {
     </tr>
   </table>
 </body>
-</html>`;
+</html>`);
 
     let lastResult: any = { success: false, error: 'No emails sent' };
     for (const recipient of toList) {

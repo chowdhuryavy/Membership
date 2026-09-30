@@ -84,6 +84,30 @@ async function decryptPassword(encryptedPayload: string): Promise<string> {
 }
 
 // ---------------------------------------------------------------------------
+// DKIM Body Canonicalization & Anti-Modification Engine (RFC 6376 & RFC 5322)
+// ---------------------------------------------------------------------------
+function canonicalizeHtml(html: string): string {
+  if (!html) return '<!DOCTYPE html>\r\n<html><head><meta charset="utf-8"/></head><body></body></html>\r\n';
+  // 1. Suppress AWS SES click tracking by injecting ses:no-track="true" on all <a> links
+  let result = html.replace(/<a\b(?![^>]*\bses:no-track\b)([^>]*)>/gi, '<a$1 ses:no-track="true">');
+  // 2. Normalize line endings to strict CRLF (\r\n) as mandated by RFC 5322
+  result = result.replace(/\r\n/g, '\n').replace(/\r/g, '\n').replace(/\n/g, '\r\n');
+  // 3. Strip trailing whitespace before CRLF (RFC 6376 §3.4.4 relaxed canonicalization)
+  result = result.replace(/[ \t]+(?=\r\n)/g, '');
+  // 4. Ensure deterministic single trailing CRLF
+  result = result.replace(/(?:\r\n)+$/, '') + '\r\n';
+  return result;
+}
+
+function canonicalizeText(text: string): string {
+  if (!text) return '\r\n';
+  let result = text.replace(/\r\n/g, '\n').replace(/\r/g, '\n').replace(/\n/g, '\r\n');
+  result = result.replace(/[ \t]+(?=\r\n)/g, '');
+  result = result.replace(/(?:\r\n)+$/, '') + '\r\n';
+  return result;
+}
+
+// ---------------------------------------------------------------------------
 // Main Service Router
 // ---------------------------------------------------------------------------
 serve(async (req) => {
@@ -205,6 +229,8 @@ serve(async (req) => {
           rejectUnauthorized: false
         },
         connectionTimeout: 10000,
+        newline: 'windows',
+        normalizeHeaderKey: false
       });
 
       try {
@@ -213,12 +239,7 @@ serve(async (req) => {
 
         // Send real verification email
         const sender = `"${config.from_name || propertyName}" <${config.from_email || config.username}>`;
-        await transporter.sendMail({
-          from: sender,
-          to: recipient_email,
-          subject: `[Verified] SMTP Dispatch Test • ${propertyName}`,
-          text: `Congratulations!\n\nYour custom SMTP relay for ${propertyName} has been successfully verified.\nHost: ${config.host}\nPort: ${config.port}\nUsername: ${config.username}\nSecurity: ${config.secure_connection.toUpperCase()}\n\nAll operational messages for this property will now be delivered via your dedicated server.`,
-          html: `
+        const testHtml = `
             <div style="font-family: sans-serif; padding: 24px; color: #1e293b; max-width: 550px; margin: 0 auto; border: 1px solid #e2e8f0; rounded: 16px;">
               <h2 style="color: #4f46e5; margin-top: 0;">SMTP Dispatch Verified</h2>
               <p>Your property-level outbound mail relay for <strong>${propertyName}</strong> is operational.</p>
@@ -230,7 +251,22 @@ serve(async (req) => {
               </table>
               <p style="font-size: 11px; color: #94a3b8; margin-top: 24px;">Generated automatically by Health Club Management System.</p>
             </div>
-          `
+        `;
+        const testText = `Congratulations!\n\nYour custom SMTP relay for ${propertyName} has been successfully verified.\nHost: ${config.host}\nPort: ${config.port}\nUsername: ${config.username}\nSecurity: ${config.secure_connection.toUpperCase()}\n\nAll operational messages for this property will now be delivered via your dedicated server.`;
+
+        await transporter.sendMail({
+          from: sender,
+          to: recipient_email,
+          subject: `[Verified] SMTP Dispatch Test • ${propertyName}`,
+          text: canonicalizeText(testText),
+          html: canonicalizeHtml(testHtml),
+          textEncoding: 'quoted-printable',
+          headers: {
+            'MIME-Version': '1.0',
+            'X-SES-MESSAGE-TAGS': 'ses:no-track=true',
+            'X-Auto-Response-Suppress': 'OOF, AutoReply',
+            'X-Mailer': 'Health Club Management (RFC 6376 Compliant)'
+          }
         });
 
         // Update database with success timestamp
@@ -277,7 +313,7 @@ serve(async (req) => {
     // ACTION: UNIFIED SEND_EMAIL (SMTP with automatic Resend Fallback)
     // -----------------------------------------------------------------------
     if (action === 'send_email') {
-      const { to, subject, html, text, property_id, outlet_id, attachments } = body;
+      const { to, subject, html, text, property_id, outlet_id, attachments, headers } = body;
 
       let effectivePropertyId = property_id;
       if (!effectivePropertyId && outlet_id) {
@@ -316,7 +352,9 @@ serve(async (req) => {
               tls: {
                 rejectUnauthorized: false
               },
-              connectionTimeout: 10000
+              connectionTimeout: 10000,
+              newline: 'windows', // Mandates RFC 5322 CRLF line endings for SMTP
+              normalizeHeaderKey: false
             });
 
             const fromHeader = smtpConfig.from_name 
@@ -327,9 +365,21 @@ serve(async (req) => {
               from: fromHeader,
               to: Array.isArray(to) ? to.join(', ') : to,
               subject,
-              html,
-              text: text || ''
+              html: canonicalizeHtml(html),
+              text: canonicalizeText(text || ''),
+              textEncoding: 'quoted-printable', // Enforce RFC 2045 quoted-printable with 76-char max line length
+              headers: {
+                'MIME-Version': '1.0',
+                'X-SES-MESSAGE-TAGS': 'ses:no-track=true', // Suppresses open/click tracking injection in AWS SES
+                'X-Auto-Response-Suppress': 'OOF, AutoReply',
+                'X-Mailer': 'Health Club Management (RFC 6376 Compliant)',
+                ...(headers || {})
+              }
             };
+
+            if (smtpConfig.ses_configuration_set) {
+              mailOptions.headers['X-SES-CONFIGURATION-SET'] = smtpConfig.ses_configuration_set;
+            }
 
             if (attachments && Array.isArray(attachments)) {
               mailOptions.attachments = attachments.map((att: any) => ({
