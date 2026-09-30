@@ -119,6 +119,7 @@ export interface Role {
   name: string;
   permissions: Permission[];
   is_system?: boolean;
+  requires_2fa?: boolean;
 }
 
 export interface Property {
@@ -299,6 +300,8 @@ export interface UserProfile {
   locked_at?: string | null;
   unlocked_at?: string | null;
   unlocked_by?: string | null;
+  otp_code?: string;
+  otp_expires_at?: string;
 }
 
 export type LogModule = 

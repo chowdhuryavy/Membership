@@ -23,43 +23,42 @@ const Login = () => {
   const [passwordsMatch, setPasswordsMatch] = useState(false);
   const [sessionExpiredNotice, setSessionExpiredNotice] = useState<string | null>(null);
 
-  const { login, changePassword } = useAuth();
+  const { login, verifyOtp } = useAuth();
   const { settings } = useSettings();
   const navigate = useNavigate();
 
-  useEffect(() => {
-    const expiredReason = sessionStorage.getItem('session_expired_reason');
-    if (expiredReason) {
-      setSessionExpiredNotice(expiredReason);
-      sessionStorage.removeItem('session_expired_reason');
-    }
-  }, []);
-
-  const isLengthValid = newPassword.length >= 6;
-  const isMatchValid = newPassword !== '' && newPassword === confirmPassword;
-  const isForcePasswordValid = isLengthValid && isMatchValid;
-
-  useEffect(() => {
-      setPasswordsMatch(newPassword !== '' && newPassword === confirmPassword);
-  }, [newPassword, confirmPassword]);
+  const [otp, setOtp] = useState('');
+  const [requiresOtp, setRequiresOtp] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
     setError('');
     
-    const { error: err, requiresPasswordChange } = await login(email, password);
-    setLoading(false);
-    
-    if (err) {
-      setError(err);
-    } else if (requiresPasswordChange) {
-      setMustChangePassword(true);
+    if (requiresOtp) {
+       const res = await verifyOtp(email, otp);
+       setLoading(false);
+       if (res.error) {
+         setError(res.error);
+       } else {
+         navigate('/');
+       }
     } else {
-      const sessionStr = getDeviceSessionItem('membership_session');
-      const session = sessionStr ? JSON.parse(sessionStr) : {};
-      db.logAction('AUTH_LOGIN', `User session authenticated for: ${session.name || email} (${email.toLowerCase()}) at ${new Date().toLocaleString()}`);
-      navigate('/');
+      const { error: err, requiresPasswordChange, requiresOtp: reqOtp } = await login(email, password);
+      setLoading(false);
+      
+      if (err) {
+        setError(err);
+      } else if (reqOtp) {
+        setRequiresOtp(true);
+      } else if (requiresPasswordChange) {
+        setMustChangePassword(true);
+      } else {
+        const sessionStr = getDeviceSessionItem('membership_session');
+        const session = sessionStr ? JSON.parse(sessionStr) : {};
+        db.logAction('AUTH_LOGIN', `User session authenticated for: ${session.name || email} (${email.toLowerCase()}) at ${new Date().toLocaleString()}`);
+        navigate('/');
+      }
     }
   };
 

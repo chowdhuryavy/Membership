@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { db } from '../services/mockSupabase';
 import { useSettings } from '../contexts/SettingsContext';
 import { LogIn, ShieldAlert, UserCircle2, ArrowRight, Sparkles, Lock, Eye, EyeOff, ShieldCheck, Scan } from 'lucide-react';
-import { Button, Input } from '../components/ui';
+import { Button } from '../components/ui';
 import { getDeviceSessionItem, setDeviceSessionItem, removeDeviceSessionItem } from '../services/deviceStorage';
 import { biometricAuth } from '../services/biometricAuth';
 import { BiometricEnableModal } from '../components/BiometricEnableModal';
@@ -12,6 +12,8 @@ import toast from 'react-hot-toast';
 const StaffLogin = () => {
   const [employeeNumber, setEmployeeNumber] = useState('');
   const [password, setPassword] = useState('');
+  const [otp, setOtp] = useState('');
+  const [requiresOtp, setRequiresOtp] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -67,21 +69,36 @@ const StaffLogin = () => {
     setLoading(true);
 
     try {
-      const staff = await db.loginStaff(employeeNumber, password);
-      if (staff) {
-        // Store staff session
-        setDeviceSessionItem('staff_session', JSON.stringify(staff));
-
-        if (isMobile && !biometricAuth.hasRegisteredBiometric('staff', staff.employee_number)) {
-          setPendingStaff({ empId: staff.employee_number, name: staff.name });
-          setShowBiometricModal(true);
-          setLoading(false);
-          return;
-        }
-
-        navigate('/staff-schedule');
+      if (requiresOtp) {
+         const res = await staffAuth.verifyOtp(employeeNumber, otp);
+         if (res.staff) {
+            setDeviceSessionItem('staff_session', JSON.stringify(res.staff));
+            navigate('/staff-schedule');
+         } else {
+            setError(res.error || 'OTP verification failed.');
+         }
       } else {
-        setError('Invalid employee number or password, or access denied.');
+         const res = await staffAuth.initiateLogin(employeeNumber, password);
+         if (res.requiresOtp) {
+            setRequiresOtp(true);
+            setLoading(false);
+            return;
+         }
+         if (res.staff) {
+            setDeviceSessionItem('staff_session', JSON.stringify(res.staff));
+            
+            // Re-apply biometric logic if needed
+            if (isMobile && !biometricAuth.hasRegisteredBiometric('staff', res.staff.employee_number)) {
+              setPendingStaff({ empId: res.staff.employee_number, name: res.staff.name });
+              setShowBiometricModal(true);
+              setLoading(false);
+              return;
+            }
+
+            navigate('/staff-schedule');
+         } else {
+            setError(res.error || 'Invalid credentials.');
+         }
       }
     } catch (err: any) {
       setError(err.message || 'An error occurred during login.');
@@ -117,24 +134,14 @@ const StaffLogin = () => {
     }
   }, [navigate]);
 
-  const handleAdminPortalClick = () => {
-    navigate('/login');
-  };
-
-  const handleGuestPortalClick = () => {
-    navigate('/guest-login');
-  };
-
   return (
     <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden bg-[#fcfdfe] selection:bg-indigo-100">
-      
       <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
         <div className="absolute top-[-20%] left-[-10%] w-[700px] h-[700px] bg-emerald-50/50 rounded-full blur-[120px]"></div>
         <div className="absolute bottom-[-10%] right-[-10%] w-[500px] h-[500px] bg-teal-50/30 rounded-full blur-[100px]"></div>
       </div>
 
       <div className="w-full max-w-5xl z-10 grid grid-cols-1 lg:grid-cols-2 bg-white rounded-[3rem] shadow-[0_100px_200px_-50px_rgba(0,0,0,0.1)] border border-slate-100/50 overflow-hidden animate-in fade-in zoom-in-95 duration-700">
-        
         <div className="hidden lg:flex flex-col justify-between p-12 bg-slate-900 text-white relative overflow-hidden">
           <div className="absolute inset-0 z-0">
              <img 
@@ -169,8 +176,6 @@ const StaffLogin = () => {
         </div>
 
         <div className="p-8 sm:p-12 lg:p-16 flex flex-col justify-start pt-10 md:pt-16 bg-white relative">
-          {/* Admin Portal Link Icon */}
-          
           <div className="mb-6 flex flex-col items-center text-center">
             {settings?.logo_url ? (
               <img 
@@ -190,7 +195,7 @@ const StaffLogin = () => {
             <div className="flex items-center justify-center gap-3">
               <div className="h-px w-8 bg-slate-200"></div>
               <p className="text-slate-400 text-[9px] font-black uppercase tracking-[0.3em] whitespace-nowrap">
-                Staff Authentication Portal
+                {requiresOtp ? '2FA Verification Required' : 'Staff Authentication Portal'}
               </p>
               <div className="h-px w-8 bg-slate-200"></div>
             </div>
@@ -205,46 +210,68 @@ const StaffLogin = () => {
             )}
             
             <div className="space-y-4">
-              <div className="space-y-1.5">
-                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Employee Number</label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <UserCircle2 className="w-5 h-5 text-slate-300" />
+              {!requiresOtp ? (
+                <>
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Employee Number</label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <UserCircle2 className="w-5 h-5 text-slate-300" />
+                      </div>
+                      <input 
+                        type="text" 
+                        value={employeeNumber} 
+                        onChange={e => setEmployeeNumber(e.target.value)} 
+                        required 
+                        className="w-full h-14 pl-12 pr-4 rounded-2xl bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 hover:bg-white transition-all text-sm font-bold shadow-sm"
+                        placeholder="e.g. EMP001"
+                      />
+                    </div>
                   </div>
-                  <input 
-                    type="text" 
-                    value={employeeNumber} 
-                    onChange={e => setEmployeeNumber(e.target.value)} 
-                    required 
-                    className="w-full h-14 pl-12 pr-4 rounded-2xl bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 hover:bg-white transition-all text-sm font-bold shadow-sm"
-                    placeholder="e.g. EMP001"
-                  />
-                </div>
-              </div>
 
-              <div className="space-y-1.5">
-                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Password</label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <Lock className="w-5 h-5 text-slate-300" />
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Password</label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <Lock className="w-5 h-5 text-slate-300" />
+                      </div>
+                      <input 
+                        type={showPassword ? "text" : "password"}
+                        value={password} 
+                        onChange={e => setPassword(e.target.value)} 
+                        required 
+                        className="w-full h-14 pl-12 pr-12 rounded-2xl bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 hover:bg-white transition-all text-sm font-bold shadow-sm"
+                        placeholder="••••••••"
+                      />
+                      <button 
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-slate-600 transition-colors"
+                      >
+                        {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                      </button>
+                    </div>
                   </div>
-                  <input 
-                    type={showPassword ? "text" : "password"}
-                    value={password} 
-                    onChange={e => setPassword(e.target.value)} 
-                    required 
-                    className="w-full h-14 pl-12 pr-12 rounded-2xl bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 hover:bg-white transition-all text-sm font-bold shadow-sm"
-                    placeholder="••••••••"
-                  />
-                  <button 
-                    type="button"
-                    onClick={() => setShowPassword(!showPassword)}
-                    className="absolute inset-y-0 right-0 pr-4 flex items-center text-slate-400 hover:text-slate-600 transition-colors"
-                  >
-                    {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                  </button>
+                </>
+              ) : (
+                <div className="space-y-1.5">
+                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">6-Digit Verification Code</label>
+                    <div className="relative">
+                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <ShieldCheck className="w-5 h-5 text-indigo-300" />
+                      </div>
+                      <input 
+                        type="text" 
+                        value={otp} 
+                        onChange={e => setOtp(e.target.value)} 
+                        required 
+                        maxLength={6}
+                        className="w-full h-14 pl-12 pr-4 rounded-2xl bg-indigo-50 border border-indigo-200 text-indigo-900 placeholder:text-indigo-400 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 hover:bg-white transition-all text-xl font-bold tracking-[0.5em] text-center shadow-sm"
+                        placeholder="000000"
+                      />
+                    </div>
                 </div>
-              </div>
+              )}
             </div>
 
             <div className="pt-2 space-y-2.5">
@@ -254,12 +281,12 @@ const StaffLogin = () => {
                 isLoading={loading}
               >
                 <span className="flex items-center justify-center gap-2">
-                  Authenticate <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                  {requiresOtp ? 'Verify OTP' : 'Authenticate'} <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </span>
               </Button>
 
               {/* Mobile Biometric Sign-In Button */}
-              {isMobile && (
+              {isMobile && !requiresOtp && (
                 <button
                   type="button"
                   onClick={handleBiometricLogin}

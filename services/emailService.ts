@@ -212,6 +212,28 @@ export function buildBoxedEmailHtml(params: {
 </html>`;
 }
 
+export function buildAdminLoginOtpEmailHtml(params: {
+  userName: string;
+  otpCode: string;
+}): string {
+  return `<!DOCTYPE html>
+<html>
+<head><title>Admin Login Verification</title></head>
+<body style="font-family: Arial, sans-serif; background-color: #f4f4f4; padding: 20px;">
+  <div style="max-width: 600px; margin: 0 auto; background: #ffffff; padding: 20px; border-radius: 10px;">
+    <h2 style="color: #333;">Admin Login Verification</h2>
+    <p>Dear ${params.userName},</p>
+    <p>Please use the following 6-digit code to complete your admin portal login:</p>
+    <div style="font-size: 24px; font-weight: bold; color: #4f46e5; text-align: center; margin: 20px 0; padding: 10px; background: #eef2ff; border-radius: 5px;">
+      ${params.otpCode}
+    </div>
+    <p>This code will expire in 15 minutes.</p>
+    <p>Best regards,<br/>The Perfection Management Team</p>
+  </div>
+</body>
+</html>`;
+}
+
 export function buildGuestExpirationReminderEmailHtml(params: {
   guestName: string;
   memberNumber: string;
@@ -1485,6 +1507,14 @@ export const emailService = {
     }
   },
 
+  async sendAdminLoginOtpEmail(params: {
+    userName: string;
+    userEmail: string;
+    otpCode: string;
+  }) {
+    const html = buildAdminLoginOtpEmailHtml(params);
+    await this.sendEmail(params.userEmail, 'Admin Login Verification', html);
+  },
   async sendGuestWelcomeCredentialsEmail(params: {
     guestName: string;
     guestEmail: string;

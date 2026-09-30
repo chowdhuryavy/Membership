@@ -614,6 +614,21 @@ class DatabaseService {
     }, null);
   }
 
+  async verifyOtp(email: string, otp: string): Promise<{ user: UserProfile | null, error: string | null }> {
+    if (!this.isSupabase()) return { user: null, error: "Authentication server unreachable." };
+    return this.safeCall(async () => {
+      const { data: profile, error: profileError } = await supabase.from('profiles').select('*').eq('email', email.trim().toLowerCase()).maybeSingle();
+      if (profileError || !profile) return { user: null, error: "Account not found." };
+      
+      if (profile.otp_code !== otp) return { user: null, error: "Invalid OTP." };
+      if (profile.otp_expires_at && new Date(profile.otp_expires_at) < new Date()) return { user: null, error: "OTP expired." };
+      
+      await supabase.from('profiles').update({ otp_code: null, otp_expires_at: null }).eq('id', profile.id);
+      
+      return { user: profile as UserProfile, error: null };
+    }, { user: null, error: "Network error during verification." });
+  }
+
   async signUp(email: string, passwordAttempt: string, name: string): Promise<{ user: UserProfile | null, error: string | null }> {
     if (!this.isSupabase()) return { user: null, error: "Authentication server unreachable." };
     return this.safeCall(async () => {
@@ -672,6 +687,21 @@ class DatabaseService {
               error: `Your account has been locked due unsuccessful login attempts. Please contact your Administrator to unlock your account.`, 
               requiresPasswordChange: false 
             };
+          }
+          
+          const role = await this.getRole(profile.role_id);
+          if (role?.requires_2fa) {
+             const otp = Math.floor(100000 + Math.random() * 900000).toString();
+             const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+             await supabase.from('profiles').update({ otp_code: otp, otp_expires_at: expiresAt }).eq('id', profile.id);
+             
+             await emailService.sendAdminLoginOtpEmail({
+               userName: profile.name,
+               userEmail: profile.email,
+               otpCode: otp
+             });
+             
+             return { user: null, error: null, requiresPasswordChange: false, requiresOtp: true };
           }
         }
 
@@ -1158,6 +1188,11 @@ class DatabaseService {
       }, null);
     }
     return null;
+  }
+
+  async getStaffByEmployeeNumber(employeeNumber: string): Promise<Staff | null> {
+    const staff = await this.getStaff();
+    return staff.find(s => s.employee_number === employeeNumber) || null;
   }
 
   async getStaff(scopeId?: string, isProperty: boolean = false, limitToOutletIds?: string[], date?: string): Promise<Staff[]> {
@@ -2676,6 +2711,11 @@ class DatabaseService {
       }, []);
     }
     return [];
+  }
+
+  async getRole(id: string): Promise<Role | undefined> {
+    const roles = await this.getRoles();
+    return roles.find(r => r.id === id);
   }
 
   async addRole(role: Omit<Role, 'id'>) {

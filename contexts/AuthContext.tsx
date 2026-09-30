@@ -28,7 +28,9 @@ export const isSuperAdmin = (user: UserProfile | null) => {
 
 interface AuthContextType {
   user: UserProfile | null;
-  login: (email: string, password: string) => Promise<{ error: string | null, requiresPasswordChange: boolean }>;
+  login: (email: string, password: string) => Promise<{ error: string | null, requiresPasswordChange: boolean, requiresOtp?: boolean }>;
+  initiateOtpLogin: (email: string, password: string) => Promise<{ error: string | null, requiresOtp: boolean }>;
+  verifyOtp: (email: string, otp: string) => Promise<{ error: string | null }>;
   register: (email: string, password: string, name: string) => Promise<string | null>;
   changePassword: (currentPass: string, newPass: string) => Promise<void>;
   updateProfile: (updates: Partial<UserProfile>) => Promise<void>;
@@ -274,7 +276,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [user, sessionTimeoutMinutes, logout]);
 
   const login = async (email: string, password: string) => {
-    const { user: foundUser, error, requiresPasswordChange } = await db.login(email, password);
+    const { user: foundUser, error, requiresPasswordChange, requiresOtp } = await db.login(email, password);
+    if (requiresOtp) {
+        return { error: null, requiresPasswordChange: false, requiresOtp: true };
+    }
     if (foundUser) {
       setUser(foundUser);
       saveSession(foundUser);
@@ -287,6 +292,22 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return { error: null, requiresPasswordChange };
     }
     return { error: error || 'Authentication failed.', requiresPasswordChange: false };
+  };
+
+  const initiateOtpLogin = async (email: string, password: string) => {
+     // Trigger the same login flow which now handles OTP triggering
+     const res = await login(email, password);
+     return { error: res.error, requiresOtp: !!res.requiresOtp };
+  };
+
+  const verifyOtp = async (email: string, otp: string) => {
+      const { user: foundUser, error } = await db.verifyOtp(email, otp);
+      if (foundUser) {
+        setUser(foundUser);
+        saveSession(foundUser);
+        return { error: null };
+      }
+      return { error: error || 'OTP verification failed.' };
   };
 
   const register = async (email: string, password: string, name: string) => {
@@ -320,6 +341,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const authContextValue = useMemo(() => ({ 
     user, 
     login, 
+    initiateOtpLogin,
+    verifyOtp,
     register, 
     changePassword, 
     updateProfile, 
@@ -336,7 +359,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     dismissInactivityWarning
   }), [
     user, 
-    login, 
+    login,
+    initiateOtpLogin,
+    verifyOtp,
     register, 
     changePassword, 
     updateProfile, 
