@@ -116,37 +116,23 @@ class BiometricAuthService {
         displayName: name || cleanId,
       },
       pubKeyCredParams: [
-        { alg: -7, type: 'public-key' }, // ES256
-        { alg: -257, type: 'public-key' }, // RS256
+        { alg: -7, type: 'public-key' },
       ],
       authenticatorSelection: {
-        authenticatorAttachment: 'platform', // Enforce native Face ID / Touch ID / Fingerprint
-        userVerification: 'preferred',
-        requireResidentKey: false,
+        authenticatorAttachment: 'platform',
+        userVerification: 'required', // Changed from preferred to required
+        residentKey: 'preferred', // Modern equivalent for discoverable credentials
       },
       timeout: 60000,
       attestation: 'none',
     };
 
     try {
-      let credentialId = `bio_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+      const credential = await navigator.credentials.create({
+        publicKey: publicKeyCredentialCreationOptions,
+      });
 
-      if (navigator.credentials && navigator.credentials.create) {
-        try {
-          const credential: any = await navigator.credentials.create({
-            publicKey: publicKeyCredentialCreationOptions,
-          });
-          if (credential && credential.id) {
-            credentialId = credential.id;
-          }
-        } catch (e: any) {
-          // If user cancelled or WebAuthn fallback in iframe preview
-          if (e.name === 'NotAllowedError' || e.name === 'AbortError') {
-            return { success: false, error: 'Biometric setup cancelled by user.' };
-          }
-          console.warn('[BiometricAuth] WebAuthn create notice:', e?.message || e);
-        }
-      }
+      const credentialId = (credential as PublicKeyCredential).id;
 
       const record: BiometricRecord = {
         id: credentialId,
@@ -162,6 +148,9 @@ class BiometricAuthService {
 
       return { success: true };
     } catch (err: any) {
+      if (err.name === 'NotAllowedError' || err.name === 'AbortError') {
+        return { success: false, error: 'Biometric setup cancelled by user.' };
+      }
       console.error('[BiometricAuth] Error registering biometric:', err);
       return { success: false, error: err?.message || 'Failed to register biometric lock.' };
     }
@@ -199,26 +188,20 @@ class BiometricAuthService {
     const publicKeyCredentialRequestOptions: PublicKeyCredentialRequestOptions = {
       challenge: challenge,
       timeout: 60000,
-      userVerification: 'preferred',
+      userVerification: 'required', // Changed from preferred to required
       rpId: typeof window !== 'undefined' ? window.location.hostname : 'perfection.my',
     };
 
     try {
-      if (navigator.credentials && navigator.credentials.get) {
-        try {
-          await navigator.credentials.get({
-            publicKey: publicKeyCredentialRequestOptions,
-          });
-        } catch (e: any) {
-          if (e.name === 'NotAllowedError' || e.name === 'AbortError') {
-            return { success: false, error: 'Biometric verification cancelled.' };
-          }
-          console.warn('[BiometricAuth] WebAuthn get notice:', e?.message || e);
-        }
-      }
+      await navigator.credentials.get({
+        publicKey: publicKeyCredentialRequestOptions,
+      });
 
       return { success: true, identifier: record.identifier };
     } catch (err: any) {
+      if (err.name === 'NotAllowedError' || err.name === 'AbortError') {
+        return { success: false, error: 'Biometric verification cancelled.' };
+      }
       console.error('[BiometricAuth] Error verifying biometric:', err);
       return { success: false, error: err?.message || 'Biometric authentication failed.' };
     }
