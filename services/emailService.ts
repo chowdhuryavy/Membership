@@ -1618,62 +1618,33 @@ export function buildGuestCredentialsEmailHtml(params: {
     </div>
   ` : '';
 
-  return `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml">
-<head>
-  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-</head>
-<body style="margin: 0; padding: 0; background-color: #f4f4f4; font-family: Arial, sans-serif;">
-  <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #f4f4f4; padding: 20px 10px;">
-    <tr>
-      <td align="center">
-        <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width: 580px; background-color: #ffffff; border-radius: 8px; overflow: hidden; border: 1px solid #e0e0e0;">
-          <!-- HEADER -->
-          <tr>
-            <td bgcolor="#333333" style="padding: 20px; text-align: left;">
-              <div style="font-size: 12px; font-weight: bold; color: #ffffff; text-transform: uppercase; letter-spacing: 1px;">
-                MEMBER PORTAL ACCESS
-              </div>
-            </td>
-          </tr>
+  return `<!DOCTYPE html>
+<html>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <h2 style="color: #000;">Welcome, ${params.guestName}</h2>
+  
+  <p>Your account for <strong>${params.propertyName}</strong>${params.outletName ? ' (' + params.outletName + ')' : ''} is now active.</p>
 
-          <!-- CONTENT -->
-          <tr>
-            <td style="padding: 30px;">
-              ${logoHtml}
-              <h1 style="font-size: 22px; color: #333333; margin-bottom: 15px;">Welcome, ${params.guestName}</h1>
-              <p style="font-size: 14px; color: #555555; line-height: 1.5; margin-bottom: 20px;">
-                Your account for <strong>${params.propertyName}</strong>${params.outletName ? ' (' + params.outletName + ')' : ''} is active.
-              </p>
+  <p>Please use the following details to log in to your portal:</p>
 
-              <!-- CREDENTIALS -->
-              <div style="background-color: #f8f8f8; border: 1px solid #eeeeee; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
-                <p style="font-size: 12px; font-weight: bold; color: #777; margin: 0 0 10px 0; text-transform: uppercase;">Login Details</p>
-                
-                <p style="font-size: 12px; color: #555; margin: 0 0 5px 0;"><strong>Username:</strong></p>
-                <div style="background: #ffffff; padding: 10px; border: 1px solid #dddddd; margin-bottom: 15px; font-family: monospace; font-size: 14px; border-radius: 4px;">${params.guestEmail}</div>
+  <div style="background: #f4f4f4; padding: 15px; border-radius: 5px; margin: 20px 0;">
+    <p style="margin: 5px 0;"><strong>Portal URL:</strong><br>
+    https://hcm-guest.perfection.my/#/guest-login</p>
+    
+    <p style="margin: 15px 0 5px 0;"><strong>Username:</strong><br>
+    ${params.guestEmail}</p>
+    
+    <p style="margin: 15px 0 5px 0;"><strong>Temporary Password:</strong><br>
+    ${params.temporaryPassword}</p>
+  </div>
 
-                <p style="font-size: 12px; color: #555; margin: 0 0 5px 0;"><strong>Password:</strong></p>
-                <div style="background: #ffffff; padding: 10px; border: 1px solid #dddddd; margin-bottom: 15px; font-family: monospace; font-size: 16px; border-radius: 4px;">${params.temporaryPassword}</div>
-              </div>
+  <p>You will be required to change your temporary password to a permanent one upon your first login for security purposes.</p>
 
-              <!-- BUTTON -->
-              <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0">
-                <tr>
-                  <td align="center">
-                    <a href="${params.loginUrl}" target="_blank" style="display: inline-block; background-color: #4f46e5; color: #ffffff; text-decoration: none; padding: 15px 25px; border-radius: 5px; font-weight: bold; font-size: 14px;">
-                      Launch Member Portal
-                    </a>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
+  <p>To access your account, please copy the URL below and paste it into your browser:<br>
+  <strong>hcm-guest.perfection.my/#/guest-login</strong></p>
+
+  <p>Best regards,<br>
+  The ${params.propertyName} Team</p>
 </body>
 </html>`;
 }
