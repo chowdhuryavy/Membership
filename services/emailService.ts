@@ -1613,171 +1613,61 @@ export function buildGuestCredentialsEmailHtml(params: {
   logoUrl?: string;
 }): string {
   const logoHtml = params.logoUrl ? `
-    <div style="margin-bottom: 22px;">
-      <img src="${params.logoUrl}" width="150" style="max-width: 150px; max-height: 80px; object-fit: contain; display: block;" alt="${params.propertyName}" />
+    <div style="margin-bottom: 20px;">
+      <img src="${params.logoUrl}" width="150" style="max-width: 150px; object-fit: contain; display: block;" alt="${params.propertyName}" />
     </div>
   ` : '';
-
-  const facilityBadge = params.outletName
-    ? `<span style="color: #cbd5e1;"> &bull; </span><span style="color: #38bdf8;">${params.outletName}</span>`
-    : '';
 
   return `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head>
   <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Welcome to Your Member Portal - ${params.propertyName}</title>
 </head>
-<body style="margin: 0; padding: 0; background-color: #0b0f19; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
-  <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #0b0f19; table-layout: fixed; padding: 36px 12px;">
+<body style="margin: 0; padding: 0; background-color: #f4f4f4; font-family: Arial, sans-serif;">
+  <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #f4f4f4; padding: 20px 10px;">
     <tr>
       <td align="center">
-        <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width: 580px; margin: 0 auto; background-color: #ffffff; border-radius: 24px; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.4);">
-          <!-- HEADER STRIP -->
+        <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width: 580px; background-color: #ffffff; border-radius: 8px; overflow: hidden; border: 1px solid #e0e0e0;">
+          <!-- HEADER -->
           <tr>
-            <td bgcolor="#0f172a" style="background-color: #0f172a; padding: 16px 28px; text-align: left; border-bottom: 3px solid #6366f1;">
-              <div style="font-family: Arial, Helvetica, sans-serif; font-size: 11px; font-weight: 800; color: #a5b4fc; text-transform: uppercase; letter-spacing: 0.15em;">
-                OFFICIAL MEMBER PRIVILEGE ACCESS ${facilityBadge}
+            <td bgcolor="#333333" style="padding: 20px; text-align: left;">
+              <div style="font-size: 12px; font-weight: bold; color: #ffffff; text-transform: uppercase; letter-spacing: 1px;">
+                MEMBER PORTAL ACCESS
               </div>
             </td>
           </tr>
 
-          <!-- HERO SECTION -->
+          <!-- CONTENT -->
           <tr>
-            <td style="padding: 36px 32px 24px 32px; background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);">
+            <td style="padding: 30px;">
               ${logoHtml}
-              <div style="font-size: 11px; font-weight: 800; color: #6366f1; text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 6px;">
-                MEMBER MOBILE PORTAL
-              </div>
-              <h1 style="margin: 0 0 10px 0; font-size: 26px; font-weight: 900; color: #0f172a; letter-spacing: -0.03em; line-height: 1.2;">
-                Welcome, ${params.guestName}
-              </h1>
-              <p style="margin: 0; font-size: 14px; color: #475569; line-height: 1.6;">
-                Your personal digital guest account for <strong>${params.propertyName}</strong>${params.outletName ? ' (' + params.outletName + ')' : ''} is now active. Access your touchless digital membership pass, track fitness &amp; PT packages, view spa appointments, and manage day passes right from your mobile device.
+              <h1 style="font-size: 22px; color: #333333; margin-bottom: 15px;">Welcome, ${params.guestName}</h1>
+              <p style="font-size: 14px; color: #555555; line-height: 1.5; margin-bottom: 20px;">
+                Your account for <strong>${params.propertyName}</strong>${params.outletName ? ' (' + params.outletName + ')' : ''} is active.
               </p>
-            </td>
-          </tr>
 
-          <!-- CREDENTIALS BOX -->
-          <tr>
-            <td style="padding: 0 32px 28px 32px;">
-              <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #0f172a; border-radius: 20px; overflow: hidden; box-shadow: inset 0 2px 4px rgba(0,0,0,0.3);">
-                <tr>
-                  <td style="padding: 24px 24px 22px 24px;">
-                    <div style="font-size: 10px; font-weight: 800; color: #fbbf24; text-transform: uppercase; letter-spacing: 0.15em; margin-bottom: 18px;">
-                      &bull; YOUR SECURE LOGIN CREDENTIALS
-                    </div>
+              <!-- CREDENTIALS -->
+              <div style="background-color: #f8f8f8; border: 1px solid #eeeeee; padding: 20px; border-radius: 8px; margin-bottom: 20px;">
+                <p style="font-size: 12px; font-weight: bold; color: #777; margin: 0 0 10px 0; text-transform: uppercase;">Login Details</p>
+                
+                <p style="font-size: 12px; color: #555; margin: 0 0 5px 0;"><strong>Username:</strong></p>
+                <div style="background: #ffffff; padding: 10px; border: 1px solid #dddddd; margin-bottom: 15px; font-family: monospace; font-size: 14px; border-radius: 4px;">${params.guestEmail}</div>
 
-                    <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0">
-                      <!-- LOCATION DETAILS -->
-                      <tr>
-                        <td style="padding-bottom: 14px;">
-                          <div style="font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px;">Resort Property &amp; Facility</div>
-                          <div style="font-size: 14px; font-weight: 800; color: #ffffff;">
-                            ${params.propertyName}${params.outletName ? ' &mdash; <span style="color: #38bdf8;">' + params.outletName + '</span>' : ''}
-                          </div>
-                        </td>
-                      </tr>
-
-                      <!-- PORTAL URL -->
-                      <tr>
-                        <td style="padding-bottom: 16px;">
-                          <div style="font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px;">Portal Web Address</div>
-                          <div style="font-size: 14px; font-weight: 800; color: #38bdf8; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;">
-                            https://hcm-guest.perfection.my
-                          </div>
-                        </td>
-                      </tr>
-
-                      <!-- REGISTERED EMAIL -->
-                      <tr>
-                        <td style="padding-bottom: 16px;">
-                          <div style="font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px;">Registered Email / Username</div>
-                          <div style="background-color: #1e293b; border: 1px solid #334155; padding: 12px 16px; border-radius: 10px; font-size: 15px; font-weight: 800; color: #ffffff; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; letter-spacing: 0.02em; user-select: all; -webkit-user-select: all; word-break: break-all;">
-                            ${params.guestEmail}
-                          </div>
-                        </td>
-                      </tr>
-
-                      <!-- TEMPORARY PASSWORD -->
-                      <tr>
-                        <td style="padding-bottom: 10px;">
-                          <div style="font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px;">Temporary Access Password</div>
-                          <div style="background-color: #1e293b; border: 1px solid #334155; padding: 12px 16px; border-radius: 10px; font-size: 20px; font-weight: 900; color: #fbbf24; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; letter-spacing: 0.1em; user-select: all; -webkit-user-select: all; word-break: break-all;">
-                            ${params.temporaryPassword}
-                          </div>
-                        </td>
-                      </tr>
-                    </table>
-
-                    <!-- SELECTION & COPY TIP -->
-                    <div style="margin-top: 14px; padding: 10px 14px; background-color: #1e293b; border-radius: 8px; font-size: 11px; color: #94a3b8; font-weight: 600; line-height: 1.4;">
-                      💡 <strong>Quick Copy Tip:</strong> Double-click or press &amp; hold either box above to instantly select and copy to your clipboard.
-                    </div>
-                  </td>
-                </tr>
-              </table>
-
-              <!-- NOTICE: MANDATORY CHANGE -->
-              <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="margin-top: 16px; background-color: #fffbeb; border: 1px solid #fde68a; border-radius: 12px;">
-                <tr>
-                  <td style="padding: 14px 18px;">
-                    <div style="font-size: 12px; font-weight: 700; color: #92400e; line-height: 1.5;">
-                      <strong>Mandatory First-Time Security Step:</strong> You will be prompted to replace this temporary password with your permanent private password upon your first sign in.
-                    </div>
-                  </td>
-                </tr>
-              </table>
+                <p style="font-size: 12px; color: #555; margin: 0 0 5px 0;"><strong>Password:</strong></p>
+                <div style="background: #ffffff; padding: 10px; border: 1px solid #dddddd; margin-bottom: 15px; font-family: monospace; font-size: 16px; border-radius: 4px;">${params.temporaryPassword}</div>
+              </div>
 
               <!-- BUTTON -->
-              <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="margin-top: 24px;">
+              <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0">
                 <tr>
                   <td align="center">
-                    <a href="${params.loginUrl}" target="_blank" style="display: inline-block; background: linear-gradient(135deg, #4f46e5 0%, #3b82f6 100%); color: #ffffff; text-decoration: none; padding: 16px 36px; border-radius: 14px; font-size: 13px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.08em; box-shadow: 0 10px 20px -5px rgba(79, 70, 229, 0.4);">
-                      Launch Guest Mobile Portal &rarr;
+                    <a href="${params.loginUrl}" target="_blank" style="display: inline-block; background-color: #4f46e5; color: #ffffff; text-decoration: none; padding: 15px 25px; border-radius: 5px; font-weight: bold; font-size: 14px;">
+                      Launch Member Portal
                     </a>
                   </td>
                 </tr>
               </table>
-            </td>
-          </tr>
-
-          <!-- HIGHLIGHTED FEATURES -->
-          <tr>
-            <td style="padding: 24px 32px 28px 32px; background-color: #f8fafc; border-top: 1px solid #e2e8f0;">
-              <div style="font-size: 10px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 12px;">
-                AVAILABLE FROM YOUR PHONE
-              </div>
-              <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0">
-                <tr>
-                  <td style="padding: 6px 0; font-size: 12px; color: #334155; font-weight: 600;">
-                    &bull; <strong>Touchless Check-In QR:</strong> Instant facility check-in at front desk
-                  </td>
-                </tr>
-                <tr>
-                  <td style="padding: 6px 0; font-size: 12px; color: #334155; font-weight: 600;">
-                    &bull; <strong>Personal Training Sessions:</strong> Track remaining sessions &amp; trainer notes
-                  </td>
-                </tr>
-                <tr>
-                  <td style="padding: 6px 0; font-size: 12px; color: #334155; font-weight: 600;">
-                    &bull; <strong>Spa &amp; Treatments:</strong> View upcoming therapy &amp; book appointments
-                  </td>
-                </tr>
-                <tr>
-                  <td style="padding: 6px 0; font-size: 12px; color: #334155; font-weight: 600;">
-                    &bull; <strong>Day Passes &amp; Waivers:</strong> Instant access to signed passes &amp; receipts
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-
-          <!-- FOOTER -->
-          <tr>
-            <td bgcolor="#0f172a" style="padding: 20px 32px; text-align: center; background-color: #0f172a; color: #64748b; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em;">
-              &copy; ${new Date().getFullYear()} ${params.propertyName} &bull; Powered by Perfection
             </td>
           </tr>
         </table>
