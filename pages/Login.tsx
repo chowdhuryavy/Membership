@@ -181,46 +181,81 @@ const Login = () => {
 
           {!mustChangePassword ? (
             <form onSubmit={handleSubmit} className="space-y-4 max-w-sm mx-auto w-full">
-              <div className="space-y-1.5">
-                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Identity Access Email</label>
-                <div className={`relative transition-all duration-300 ${isFocused === 'email' ? 'translate-x-1' : ''}`}>
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <Mail className={`w-4 h-4 transition-colors ${isFocused === 'email' ? 'text-indigo-600' : 'text-slate-300'}`} />
+              {!requiresOtp ? (
+                <>
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Identity Access Email</label>
+                    <div className={`relative transition-all duration-300 ${isFocused === 'email' ? 'translate-x-1' : ''}`}>
+                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <Mail className={`w-4 h-4 transition-colors ${isFocused === 'email' ? 'text-indigo-600' : 'text-slate-300'}`} />
+                      </div>
+                      <input 
+                        type="email" 
+                        value={email} 
+                        onFocus={() => setIsFocused('email')}
+                        onBlur={() => setIsFocused(null)}
+                        onChange={(e) => setEmail(e.target.value)} 
+                        placeholder="name@enterprise.com"
+                        className="w-full h-12 pl-11 pr-4 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 hover:bg-white transition-all text-sm font-bold shadow-sm"
+                        required
+                      />
+                    </div>
                   </div>
-                  <input 
-                    type="email" 
-                    value={email} 
-                    onFocus={() => setIsFocused('email')}
-                    onBlur={() => setIsFocused(null)}
-                    onChange={(e) => setEmail(e.target.value)} 
-                    placeholder="name@enterprise.com"
-                    className="w-full h-12 pl-11 pr-4 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 hover:bg-white transition-all text-sm font-bold shadow-sm"
-                    required
-                  />
-                </div>
-              </div>
 
-              <div className="space-y-1.5">
-                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Secret Access Key</label>
-                <div className={`relative transition-all duration-300 ${isFocused === 'password' ? 'translate-x-1' : ''}`}>
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <Lock className={`w-4 h-4 transition-colors ${isFocused === 'password' ? 'text-indigo-600' : 'text-slate-300'}`} />
+                  <div className="space-y-1.5">
+                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Secret Access Key</label>
+                    <div className={`relative transition-all duration-300 ${isFocused === 'password' ? 'translate-x-1' : ''}`}>
+                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                        <Lock className={`w-4 h-4 transition-colors ${isFocused === 'password' ? 'text-indigo-600' : 'text-slate-300'}`} />
+                      </div>
+                      <input 
+                        type={showPassword ? "text" : "password"} 
+                        value={password} 
+                        onFocus={() => setIsFocused('password')}
+                        onBlur={() => setIsFocused(null)}
+                        onChange={(e) => setPassword(e.target.value)} 
+                        placeholder="••••••••"
+                        className="w-full h-12 pl-11 pr-11 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 hover:bg-white transition-all text-sm font-bold shadow-sm"
+                        required
+                      />
+                      <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors">
+                        {showPassword ? <EyeOff className="w-4 h-4"/> : <Eye className="w-4 h-4"/>}
+                      </button>
+                    </div>
                   </div>
-                  <input 
-                    type={showPassword ? "text" : "password"} 
-                    value={password} 
-                    onFocus={() => setIsFocused('password')}
-                    onBlur={() => setIsFocused(null)}
-                    onChange={(e) => setPassword(e.target.value)} 
-                    placeholder="••••••••"
-                    className="w-full h-12 pl-11 pr-11 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 hover:bg-white transition-all text-sm font-bold shadow-sm"
-                    required
-                  />
-                  <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors">
-                    {showPassword ? <EyeOff className="w-4 h-4"/> : <Eye className="w-4 h-4"/>}
+                </>
+              ) : (
+                <div className="space-y-1.5 animate-in slide-in-from-right-10 duration-500">
+                  <div className="bg-indigo-50 border border-indigo-100 p-4 rounded-xl mb-4">
+                    <p className="text-indigo-800 text-xs font-bold leading-relaxed">
+                      Two-Factor Authentication Required. We've sent a 6-digit verification code to your registered email address.
+                    </p>
+                  </div>
+                  <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Verification Code (OTP)</label>
+                  <div className={`relative transition-all duration-300 ${isFocused === 'confirm_password' ? 'translate-x-1' : ''}`}>
+                    <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
+                      <ShieldCheck className={`w-4 h-4 transition-colors ${isFocused === 'confirm_password' ? 'text-indigo-600' : 'text-slate-300'}`} />
+                    </div>
+                    <input 
+                      type="text" 
+                      value={otp} 
+                      onFocus={() => setIsFocused('confirm_password')}
+                      onBlur={() => setIsFocused(null)}
+                      onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))} 
+                      placeholder="000000"
+                      className="w-full h-12 pl-11 pr-4 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 hover:bg-white transition-all text-center text-xl font-black tracking-[0.5em] shadow-sm"
+                      required
+                    />
+                  </div>
+                  <button 
+                    type="button" 
+                    onClick={() => setRequiresOtp(false)} 
+                    className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mt-2 ml-1 hover:text-indigo-800 transition-colors"
+                  >
+                    &larr; Back to Login
                   </button>
                 </div>
-              </div>
+              )}
 
               {sessionExpiredNotice && (
                 <div className="bg-amber-50 border border-amber-200 text-amber-800 text-xs font-bold p-3.5 rounded-xl flex items-start gap-3 animate-in fade-in duration-300">
@@ -246,7 +281,7 @@ const Login = () => {
                   isLoading={loading}
                 >
                   <span className="flex items-center justify-center gap-2">
-                    Authenticate <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
+                    {requiresOtp ? 'Verify OTP Code' : 'Authenticate'} <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                   </span>
                 </Button>
               </div>

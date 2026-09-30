@@ -663,7 +663,7 @@ class DatabaseService {
     }
   }
 
-  async login(email: string, passwordAttempt: string): Promise<{ user: UserProfile | null, error: string | null, requiresPasswordChange: boolean }> {
+  async login(email: string, passwordAttempt: string): Promise<{ user: UserProfile | null, error: string | null, requiresPasswordChange: boolean, requiresOtp?: boolean }> {
     const cleanEmail = email.trim().toLowerCase();
     const isMasterEmail = cleanEmail === 'chowdhuryavy@gmail.com';
 

@@ -629,7 +629,7 @@ const SettingsPage = () => {
     backup_enabled: false,
     whatsapp_enabled: true
   });
-  const [roleForm, setRoleForm] = useState<Omit<Role, 'id'>>({ name: '', permissions: [] });
+  const [roleForm, setRoleForm] = useState<Omit<Role, 'id'>>({ name: '', permissions: [], requires_2fa: false });
   const [currencyForm, setCurrencyForm] = useState<Omit<Currency, 'id'>>({ code: '', symbol: '', rate: 1, is_default: false, property_id: currentProperty?.id });
   const [incentiveForm, setIncentiveForm] = useState<Omit<IncentiveRule, 'id'>>({
       name: '', scope: 'Global', scope_id: 'global', applies_to: 'Massage', target_id: 'all', distribution_type: 'Individual', calculation_type: 'Percentage', referral_payee: 'Staff', value: 0, min_price: 0, max_price: 99999, min_duration_minutes: 0, max_duration_minutes: 999, apply_discount_percentage: true, disable_shared_incentive: false, is_active: true
@@ -1614,11 +1614,11 @@ const SettingsPage = () => {
                   <Card className="rounded-[3.5rem] border-slate-200/60 shadow-xl overflow-hidden bg-white">
                       <CardHeader className="bg-slate-50 p-8 border-b border-slate-100 flex items-center justify-between">
                           <div className="flex items-center gap-5"><Shield className="w-8 h-8 text-indigo-600" /><CardTitle className="text-2xl font-black text-slate-900 uppercase tracking-tighter">Roles & Permissions</CardTitle></div>
-                          <Button onClick={() => { setEditingId(null); setRoleForm({name:'', permissions:[]}); setShowForm(true); }} className="h-14 px-8 rounded-2xl font-black text-xs uppercase"><Plus className="w-4 h-4 mr-2" /> Define Role</Button>
+                          <Button onClick={() => { setEditingId(null); setRoleForm({name:'', permissions:[], requires_2fa: false}); setShowForm(true); }} className="h-14 px-8 rounded-2xl font-black text-xs uppercase"><Plus className="w-4 h-4 mr-2" /> Define Role</Button>
                       </CardHeader>
                       <CardContent className="p-0">
                           <table className="w-full text-left">
-                              <thead className="bg-slate-50 border-b"><tr><th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Role Name</th><th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Permissions Count</th><th className="px-10 py-6 text-right text-[10px] font-black text-slate-400 uppercase tracking-widest">Operations</th></tr></thead>
+                              <thead className="bg-slate-50 border-b"><tr><th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Role Name</th><th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Permissions Count</th><th className="px-10 py-6 text-[10px] font-black text-slate-400 uppercase tracking-widest">Security</th><th className="px-10 py-6 text-right text-[10px] font-black text-slate-400 uppercase tracking-widest">Operations</th></tr></thead>
                               <tbody className="divide-y divide-slate-100">{roles.filter(r => {
                                   const isSuperUser = isSuperAdmin;
                                   // Hide System Administrator role (usually id='admin' or name='System Administrator') from non-super users
@@ -1630,6 +1630,16 @@ const SettingsPage = () => {
                                   <tr key={r.id} className="hover:bg-indigo-50/20 group">
                                       <td className="px-10 py-8"><div className="font-black text-slate-900 text-lg uppercase flex items-center gap-3">{r.name} {r.is_system && <ShieldCheck className="w-4 h-4 text-emerald-500"/>}</div></td>
                                       <td className="px-10 py-8"><span className="bg-slate-100 px-3 py-1 rounded-lg text-[10px] font-black uppercase text-slate-500">{r.permissions.length} Privileges</span></td>
+                                      <td className="px-10 py-8">
+                                          {r.requires_2fa ? (
+                                              <div className="flex items-center gap-2 text-indigo-600 font-black text-[10px] uppercase tracking-widest bg-indigo-50 px-3 py-1.5 rounded-xl border border-indigo-100 w-fit">
+                                                  <Smartphone className="w-3 h-3" />
+                                                  OTP Required
+                                              </div>
+                                          ) : (
+                                              <div className="text-slate-400 font-bold text-[10px] uppercase tracking-widest">Standard</div>
+                                          )}
+                                      </td>
                                       <td className="px-10 py-8 text-right"><div className="flex justify-end gap-2 opacity-100 transition-all"><button onClick={()=>{setEditingId(r.id); setRoleForm(r); setShowForm(true);}} className="p-2 text-slate-400 hover:text-indigo-600"><Edit2 className="w-4 h-4"/></button>{!r.is_system && <button onClick={()=>setItemToDelete({type:'role', id:r.id, name:r.name})} className="p-2 text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4"/></button>}</div></td>
                                   </tr>
                               ))}</tbody>
@@ -2879,6 +2889,28 @@ const SettingsPage = () => {
                       {activeTab === 'roles' && (
                           <div className="space-y-8">
                               <Input label="Role Name *" value={roleForm.name} onChange={e => setRoleForm({...roleForm, name: e.target.value})} className="h-14 rounded-xl font-black" />
+                              
+                              <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100 flex items-center justify-between">
+                                  <div className="flex items-center gap-3">
+                                      <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold ${roleForm.requires_2fa ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-500'}`}>
+                                          <Lock className="w-4 h-4 text-white" />
+                                      </div>
+                                      <div>
+                                          <h5 className="text-xs font-black text-slate-900 uppercase tracking-tight">Two-Factor Authentication</h5>
+                                          <p className="text-[10px] text-slate-500">Require OTP verification via email for every login for this role</p>
+                                      </div>
+                                  </div>
+                                  <button
+                                      type="button"
+                                      onClick={() => setRoleForm({ ...roleForm, requires_2fa: !roleForm.requires_2fa })}
+                                      className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors cursor-pointer ${
+                                          roleForm.requires_2fa ? 'bg-indigo-600 justify-end' : 'bg-slate-300 justify-start'
+                                      }`}
+                                  >
+                                      <div className="w-4 h-4 rounded-full bg-white shadow-md" />
+                                  </button>
+                              </div>
+
                               <div className="space-y-4">
                                 <div className="flex items-center gap-3 mb-2">
                                   <ShieldAlert className="w-5 h-5 text-indigo-600"/>
