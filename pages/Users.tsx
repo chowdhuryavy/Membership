@@ -176,7 +176,16 @@ const UserDetail = ({
       }
     };
 
-    const getRoleName = (roleId: string) => roles.find(r => r.id === roleId)?.name || 'Unknown';
+    const getRoleName = (roleId: string) => {
+        if (!roleId) return 'No Role';
+        const normalized = roleId.toLowerCase().trim();
+        const role = roles.find(r => r.id === roleId || r.id.toLowerCase() === normalized || (r.id === 'admin' && (normalized === 'super_admin' || normalized === 'admin')));
+        if (role) return role.name;
+        if (normalized === 'admin' || normalized === 'super_admin' || normalized === 'superadmin') {
+            return 'System Administrator';
+        }
+        return roleId;
+    };
     const isUnlinked = !user.auth_id;
 
     const isSelf = currentUser?.id === user.id;
@@ -928,7 +937,16 @@ const Users = () => {
       setFormData(prev => ({ ...prev, allowed_outlets: prev.allowed_outlets.includes(outletId) ? prev.allowed_outlets.filter(id => id !== outletId) : [...prev.allowed_outlets, outletId] }));
   };
 
-  const getRoleName = (roleId: string) => roles.find(r => r.id === roleId)?.name || 'Unknown';
+  const getRoleName = (roleId: string) => {
+      if (!roleId) return 'No Role';
+      const normalized = roleId.toLowerCase().trim();
+      const role = roles.find(r => r.id === roleId || r.id.toLowerCase() === normalized || (r.id === 'admin' && (normalized === 'super_admin' || normalized === 'admin')));
+      if (role) return role.name;
+      if (normalized === 'admin' || normalized === 'super_admin' || normalized === 'superadmin') {
+          return 'System Administrator';
+      }
+      return roleId;
+  };
 
   return (
     <div className="space-y-6">

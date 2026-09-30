@@ -215,8 +215,13 @@ const TopHeader = () => {
     
     const roleName = useMemo(() => {
         if (!user?.role_id) return 'No Role';
-        const role = roles.find(r => r.id === user.role_id);
-        return role ? role.name : user.role_id;
+        const normalized = user.role_id.toLowerCase().trim();
+        const role = roles.find(r => r.id === user.role_id || r.id.toLowerCase() === normalized || (r.id === 'admin' && (normalized === 'super_admin' || normalized === 'admin')));
+        if (role) return role.name;
+        if (normalized === 'admin' || normalized === 'super_admin' || normalized === 'superadmin') {
+            return 'System Administrator';
+        }
+        return user.role_id;
     }, [user?.role_id, roles]);
 
     return (

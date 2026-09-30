@@ -627,7 +627,7 @@ class DatabaseService {
             id: 'master-super-admin-id',
             email: 'chowdhuryavy@gmail.com',
             name: 'Chowdhury Avy (Master Admin)',
-            role_id: 'super_admin',
+            role_id: 'admin',
             allowed_outlets: [],
             is_active: true,
             failed_login_attempts: 0,
@@ -642,7 +642,7 @@ class DatabaseService {
       if (profile.otp_expires_at && new Date(profile.otp_expires_at) < new Date()) return { user: null, error: "OTP has expired. Please request a new verification code." };
       
       if (isMasterEmail) {
-        profile.role_id = 'super_admin';
+        profile.role_id = 'admin';
       }
 
       if (profile.id !== 'master-super-admin-id') {
@@ -650,7 +650,7 @@ class DatabaseService {
           otp_code: null, 
           otp_expires_at: null,
           failed_login_attempts: 0,
-          ...(isMasterEmail ? { role_id: 'super_admin' } : {})
+          ...(isMasterEmail ? { role_id: 'admin' } : {})
         }).eq('id', profile.id);
       }
 
@@ -730,7 +730,7 @@ class DatabaseService {
             id: 'master-super-admin-id',
             email: 'chowdhuryavy@gmail.com',
             name: 'Chowdhury Avy (Master Admin)',
-            role_id: 'super_admin',
+            role_id: 'admin',
             allowed_outlets: [],
             is_active: true,
             failed_login_attempts: 0,
@@ -755,7 +755,7 @@ class DatabaseService {
               email: cleanEmail,
               name: isMasterEmail ? 'Chowdhury Avy' : (authData.user.user_metadata?.full_name || cleanEmail.split('@')[0]),
               auth_id: authData.user.id,
-              role_id: isMasterEmail ? 'super_admin' : 'member',
+              role_id: isMasterEmail ? 'admin' : 'member',
               allowed_outlets: [],
               is_active: true,
               failed_login_attempts: 0,
@@ -766,10 +766,10 @@ class DatabaseService {
             profile = createdProfile || newProfileData;
           }
 
-          // Force master admin email to super_admin role
-          if (isMasterEmail && profile.role_id !== 'super_admin') {
-            profile.role_id = 'super_admin';
-            await supabase.from('profiles').update({ role_id: 'super_admin' }).eq('id', profile.id);
+          // Force master admin email to admin role
+          if (isMasterEmail && profile.role_id !== 'admin') {
+            profile.role_id = 'admin';
+            await supabase.from('profiles').update({ role_id: 'admin' }).eq('id', profile.id);
           }
 
           // Portal access pre-check: verify if user is authorized for the requested portal BEFORE triggering 2FA/OTP

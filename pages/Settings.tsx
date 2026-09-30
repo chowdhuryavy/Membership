@@ -297,7 +297,7 @@ const SignatoryConfig = ({
 
 const SettingsPage = () => {
   // Fix: Destructured currentOutlet, currentProperty, and setCurrentOutlet from useSettings
-  const { settings, currencies, roles, outlets, properties, refreshSettings, hasPermission, formatMoney, permissionRegistry, currentOutlet, currentProperty, setCurrentOutlet } = useSettings();
+  const { settings, currencies, roles, outlets, properties, refreshSettings, hasPermission, formatMoney, permissionRegistry, fullPermissionRegistry, currentOutlet, currentProperty, setCurrentOutlet } = useSettings();
   const { user, isSuperAdmin } = useAuth();
   const availableTabs = useMemo(() => {
     const isSuper = isSuperAdmin || isSuperAdminRole(user?.role_id);
@@ -1825,7 +1825,7 @@ const SettingsPage = () => {
                                   {
                                       id: 'phonebook_module',
                                        label: 'Phone Book & Guest Directory',
-                                       permissions: permissionRegistry.find(g => g.id === 'phonebook')?.permissions || [
+                                       permissions: fullPermissionRegistry.find(g => g.id === 'phonebook')?.permissions || [
                                            { key: 'phonebook:view', label: 'Access Phone Book', description: 'View unified guest directory and contacts.' },
                                            { key: 'phonebook:create', label: 'Create Contacts', description: 'Add new contacts to the directory.' },
                                            { key: 'phonebook:edit', label: 'Edit Contacts', description: 'Modify contact details and notes.' },
@@ -1836,7 +1836,7 @@ const SettingsPage = () => {
                                    {
                                        id: 'whatsapp_module',
                                       label: 'WhatsApp Automation & Guest Engagement',
-                                      permissions: permissionRegistry.find(g => g.id === 'whatsapp')?.permissions || [
+                                      permissions: fullPermissionRegistry.find(g => g.id === 'whatsapp')?.permissions || [
                                           { key: 'whatsapp:view', label: 'Access WhatsApp Module', description: 'View WhatsApp inbox, conversation list, and metrics.' },
                                           { key: 'whatsapp:send', label: 'Reply & Send Messages', description: 'Compose and dispatch direct WhatsApp replies to guests.' },
                                           { key: 'whatsapp:manage', label: 'Manage Conversations', description: 'Change status, assign agents, and edit guest tags.' },
@@ -1874,7 +1874,7 @@ const SettingsPage = () => {
                                   {
                                       id: 'security_governance',
                                       label: 'Security & Governance Functions',
-                                      permissions: permissionRegistry.find(g => g.id === 'security')?.permissions || []
+                                      permissions: fullPermissionRegistry.find(g => g.id === 'security')?.permissions || []
                                   }
                               ]} 
                               selectedPermissions={(settings?.restricted_permissions || []) as Permission[]} 

@@ -23,6 +23,7 @@ interface SettingsContextType {
   pageLoading: boolean;
   setPageLoading: (loading: boolean) => void;
   permissionRegistry: PermissionGroup[];
+  fullPermissionRegistry: PermissionGroup[];
 }
 
 const SettingsContext = createContext<SettingsContextType | undefined>(undefined);
@@ -58,7 +59,17 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         : outlets.filter(o => user.allowed_outlets?.includes(o.id));
   }, [user, outlets, isSuperAdmin]);
 
-  const permissionRegistry = useMemo(() => db.getPermissionRegistry(), []);
+  const fullPermissionRegistry = useMemo(() => db.getPermissionRegistry(), []);
+
+  const permissionRegistry = useMemo(() => {
+    const restricted = settings?.restricted_permissions || [];
+    if (restricted.length === 0) return fullPermissionRegistry;
+
+    return fullPermissionRegistry.map(group => {
+      const validPerms = group.permissions.filter(p => !restricted.includes(p.key));
+      return { ...group, permissions: validPerms };
+    }).filter(group => group.permissions.length > 0);
+  }, [fullPermissionRegistry, settings?.restricted_permissions]);
 
   const bcRef = useRef<BroadcastChannel | null>(null);
 
@@ -300,8 +311,9 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     isLoading,
     pageLoading,
     setPageLoading,
-    permissionRegistry
-  }), [settings, currency, roles, currencies, outlets, userAllowedOutlets, properties, currentOutlet, currentProperty, setCurrentOutlet, refreshSettings, formatMoney, hasPermission, checkShortcut, isLoading, pageLoading, setPageLoading, permissionRegistry]);
+    permissionRegistry,
+    fullPermissionRegistry
+  }), [settings, currency, roles, currencies, outlets, userAllowedOutlets, properties, currentOutlet, currentProperty, setCurrentOutlet, refreshSettings, formatMoney, hasPermission, checkShortcut, isLoading, pageLoading, setPageLoading, permissionRegistry, fullPermissionRegistry]);
 
   return (
     <SettingsContext.Provider value={settingsContextValue}>
