@@ -640,17 +640,12 @@ class DatabaseService {
       
       if (profile.otp_code !== otp) return { user: null, error: "Invalid OTP code. Please check and try again." };
       if (profile.otp_expires_at && new Date(profile.otp_expires_at) < new Date()) return { user: null, error: "OTP has expired. Please request a new verification code." };
-      
-      if (isMasterEmail) {
-        profile.role_id = 'admin';
-      }
 
       if (profile.id !== 'master-super-admin-id') {
         await supabase.from('profiles').update({ 
           otp_code: null, 
           otp_expires_at: null,
-          failed_login_attempts: 0,
-          ...(isMasterEmail ? { role_id: 'admin' } : {})
+          failed_login_attempts: 0
         }).eq('id', profile.id);
       }
 
@@ -764,12 +759,6 @@ class DatabaseService {
             };
             const { data: createdProfile } = await supabase.from('profiles').upsert([newProfileData], { onConflict: 'email' }).select().single();
             profile = createdProfile || newProfileData;
-          }
-
-          // Force master admin email to admin role
-          if (isMasterEmail && profile.role_id !== 'admin') {
-            profile.role_id = 'admin';
-            await supabase.from('profiles').update({ role_id: 'admin' }).eq('id', profile.id);
           }
 
           // Portal access pre-check: verify if user is authorized for the requested portal BEFORE triggering 2FA/OTP

@@ -179,12 +179,8 @@ const UserDetail = ({
     const getRoleName = (roleId: string) => {
         if (!roleId) return 'No Role';
         const normalized = roleId.toLowerCase().trim();
-        const role = roles.find(r => r.id === roleId || r.id.toLowerCase() === normalized || (r.id === 'admin' && (normalized === 'super_admin' || normalized === 'admin')));
-        if (role) return role.name;
-        if (normalized === 'admin' || normalized === 'super_admin' || normalized === 'superadmin') {
-            return 'System Administrator';
-        }
-        return roleId;
+        const role = roles.find(r => r.id === roleId || r.id.toLowerCase() === normalized);
+        return role ? role.name : roleId;
     };
     const isUnlinked = !user.auth_id;
 
@@ -940,12 +936,8 @@ const Users = () => {
   const getRoleName = (roleId: string) => {
       if (!roleId) return 'No Role';
       const normalized = roleId.toLowerCase().trim();
-      const role = roles.find(r => r.id === roleId || r.id.toLowerCase() === normalized || (r.id === 'admin' && (normalized === 'super_admin' || normalized === 'admin')));
-      if (role) return role.name;
-      if (normalized === 'admin' || normalized === 'super_admin' || normalized === 'superadmin') {
-          return 'System Administrator';
-      }
-      return roleId;
+      const role = roles.find(r => r.id === roleId || r.id.toLowerCase() === normalized);
+      return role ? role.name : roleId;
   };
 
   return (
