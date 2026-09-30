@@ -173,12 +173,16 @@ class BiometricAuthService {
     }
 
     const key = this.getStorageKey(type, identifier);
+    console.log('[BiometricAuth] Looking up record with key:', key);
     const rawRecord = localStorage.getItem(key);
+    
     if (!rawRecord) {
+      console.error('[BiometricAuth] No record found in localStorage for key:', key);
       return { success: false, error: 'Biometric registration not found for this account on this phone.' };
     }
 
     const record: BiometricRecord = JSON.parse(rawRecord);
+    console.log('[BiometricAuth] Found record:', record);
 
     const challenge = new Uint8Array(32);
     if (typeof window !== 'undefined' && window.crypto) {
@@ -186,23 +190,25 @@ class BiometricAuthService {
     }
 
     const publicKeyCredentialRequestOptions: PublicKeyCredentialRequestOptions = {
-      challenge: challenge,
+      challenge: challenge.buffer,
       timeout: 60000,
-      userVerification: 'required', // Changed from preferred to required
-      rpId: typeof window !== 'undefined' ? window.location.hostname : 'perfection.my',
+      userVerification: 'required',
+      rpId: window.location.hostname,
     };
 
+    console.log('[BiometricAuth] Initiating navigator.credentials.get with:', publicKeyCredentialRequestOptions);
     try {
       await navigator.credentials.get({
         publicKey: publicKeyCredentialRequestOptions,
       });
+      console.log('[BiometricAuth] Credentials get successful');
 
       return { success: true, identifier: record.identifier };
     } catch (err: any) {
+      console.error('[BiometricAuth] Error verifying biometric:', err);
       if (err.name === 'NotAllowedError' || err.name === 'AbortError') {
         return { success: false, error: 'Biometric verification cancelled.' };
       }
-      console.error('[BiometricAuth] Error verifying biometric:', err);
       return { success: false, error: err?.message || 'Biometric authentication failed.' };
     }
   }
