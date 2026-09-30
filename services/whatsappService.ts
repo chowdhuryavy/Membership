@@ -17,7 +17,7 @@ const CACHE_TEMPLATES_PREFIX = 'hcm_whatsapp_templates_';
 export const DEFAULT_COMPANIES: Company[] = [
   {
     id: 'comp_hcm_global',
-    name: 'Health Club Management & Hospitality',
+    name: 'Health Club Management ',
     code: 'HCM',
     logo_url: 'https://i.imgur.com/oZVRrvo.png',
     description: 'Primary Corporate Hotel & Wellness Group'
@@ -1101,7 +1101,7 @@ export class WhatsAppService {
         name: 'member_welcome_card',
         category: 'UTILITY',
         language: 'en_US',
-        header_text: 'Welcome to Perfection Hospitality',
+        header_text: 'Welcome to Perfection',
         body_text: 'Dear {{1}},\n\nWelcome to {{3}}! Your membership is active. Your Membership ID is #{{2}}.\n\nClick the button below to view your digital pass.',
         footer_text: 'Health Club & Spa Concierge',
         buttons: [

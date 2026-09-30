@@ -1297,11 +1297,6 @@ export const emailService = {
 
     try {
       const config = await db.getExpirationReminderConfig();
-      if (!config.global_enabled && !options?.isManualTrigger) {
-        results.details.push('Automated expiration reminders are globally disabled in settings.');
-        return results;
-      }
-
       const members = await db.getMembers();
       const outlets = await db.getOutlets();
       const properties = await db.getProperties();
@@ -1356,7 +1351,7 @@ export const emailService = {
         const outletConfig = config.outlets?.[outletId];
         const isOutletAllowed = outletConfig ? outletConfig.enabled : false;
         
-        if (!isOutletAllowed && !options?.forceOutletId) {
+        if (!isOutletAllowed) {
           results.skipped++;
           continue;
         }
@@ -1505,15 +1500,32 @@ export const emailService = {
         db.getOutlets().catch(() => [])
       ]);
 
-      const primaryProp = params.propertyId
-        ? properties.find(p => p.id === params.propertyId)
-        : (properties[0] || null);
-
       const primaryOutlet = params.outletId
         ? outlets.find(o => o.id === params.outletId)
-        : (outlets[0] || null);
+        : (params.propertyId ? outlets.find(o => o.property_id === params.propertyId) : (outlets[0] || null));
 
-      const propertyName = params.propertyName || primaryProp?.name || settings?.name || 'Health Club & Spa';
+      const primaryProp = params.propertyId
+        ? properties.find(p => p.id === params.propertyId)
+        : (primaryOutlet ? properties.find(p => p.id === primaryOutlet.property_id) : (properties[0] || null));
+
+      // Resolve true property name (ignore "test" or generic test placeholders)
+      let resolvedPropName = params.propertyName;
+      if (!resolvedPropName || resolvedPropName.toLowerCase() === 'test') {
+        if (primaryProp?.name && primaryProp.name.toLowerCase() !== 'test') {
+          resolvedPropName = primaryProp.name;
+        } else if (settings?.name) {
+          resolvedPropName = settings.name;
+        } else {
+          resolvedPropName = 'Health Club & Spa Resort';
+        }
+      }
+
+      // Resolve true outlet / facility name
+      let resolvedOutletName = params.outletName;
+      if (!resolvedOutletName && primaryOutlet?.name) {
+        resolvedOutletName = primaryOutlet.name;
+      }
+
       const logoUrl = resolveLogoUrl(primaryOutlet, primaryProp, settings);
 
       let portalUrl = 'https://hcm-guest.perfection.my/#/guest-login';
@@ -1524,14 +1536,14 @@ export const emailService = {
         }
       }
 
-      const subject = `Welcome to Your Member Portal - ${propertyName}`;
+      const subject = `Welcome to Your Member Portal - ${resolvedPropName}`;
 
       const html = buildGuestCredentialsEmailHtml({
         guestName: params.guestName,
         guestEmail: params.guestEmail,
         temporaryPassword: params.temporaryPassword,
-        propertyName: propertyName,
-        outletName: params.outletName || primaryOutlet?.name,
+        propertyName: resolvedPropName,
+        outletName: resolvedOutletName,
         loginUrl: portalUrl,
         logoUrl: logoUrl
       });
@@ -1602,148 +1614,37 @@ export function buildGuestCredentialsEmailHtml(params: {
 }): string {
   const logoHtml = params.logoUrl ? `
     <div style="margin-bottom: 20px;">
-      <img src="${params.logoUrl}" width="140" style="max-width: 140px; max-height: 70px; object-fit: contain; display: block;" alt="${params.propertyName}" />
+      <img src="${params.logoUrl}" width="150" style="max-width: 150px; object-fit: contain; display: block;" alt="${params.propertyName}" />
     </div>
   ` : '';
 
-  return `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
-<html xmlns="http://www.w3.org/1999/xhtml">
-<head>
-  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Welcome to Your Member Portal - ${params.propertyName}</title>
-</head>
-<body style="margin: 0; padding: 0; background-color: #0b0f19; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;">
-  <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #0b0f19; table-layout: fixed; padding: 36px 12px;">
-    <tr>
-      <td align="center">
-        <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width: 580px; margin: 0 auto; background-color: #ffffff; border-radius: 24px; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.4);">
-          <!-- HEADER STRIP -->
-          <tr>
-            <td bgcolor="#0f172a" style="background-color: #0f172a; padding: 14px 28px; text-align: left; border-bottom: 3px solid #6366f1;">
-              <span style="font-family: Arial, Helvetica, sans-serif; font-size: 11px; font-weight: 800; color: #a5b4fc; text-transform: uppercase; letter-spacing: 0.15em;">
-                OFFICIAL MEMBER PRIVILEGE ACCESS &bull; ${params.propertyName.toUpperCase()}
-              </span>
-            </td>
-          </tr>
+  return `<!DOCTYPE html>
+<html>
+<body style="font-family: Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+  <h2 style="color: #000;">Welcome, ${params.guestName}</h2>
+  
+  <p>Your account for <strong>${params.propertyName}</strong>${params.outletName ? ' (' + params.outletName + ')' : ''} is now active.</p>
 
-          <!-- HERO SECTION -->
-          <tr>
-            <td style="padding: 36px 32px 24px 32px; background: linear-gradient(180deg, #f8fafc 0%, #ffffff 100%);">
-              ${logoHtml}
-              <div style="font-size: 11px; font-weight: 800; color: #6366f1; text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 6px;">
-                MEMBER MOBILE PORTAL
-              </div>
-              <h1 style="margin: 0 0 10px 0; font-size: 26px; font-weight: 900; color: #0f172a; letter-spacing: -0.03em; line-height: 1.2;">
-                Welcome, ${params.guestName}
-              </h1>
-              <p style="margin: 0; font-size: 14px; color: #475569; line-height: 1.6;">
-                Your personal digital guest account for <strong>${params.propertyName}</strong> is now active. Access your touchless digital membership card, track fitness &amp; PT packages, view spa appointments, and manage day passes right from your mobile device.
-              </p>
-            </td>
-          </tr>
+  <p>Please use the following details to log in to your portal:</p>
 
-          <!-- CREDENTIALS BOX -->
-          <tr>
-            <td style="padding: 0 32px 28px 32px;">
-              <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #0f172a; border-radius: 16px; overflow: hidden;">
-                <tr>
-                  <td style="padding: 24px 24px 20px 24px;">
-                    <div style="font-size: 10px; font-weight: 800; color: #fbbf24; text-transform: uppercase; letter-spacing: 0.15em; margin-bottom: 16px;">
-                      &bull; YOUR SECURE LOGIN CREDENTIALS
-                    </div>
+  <div style="background: #f4f4f4; padding: 15px; border-radius: 5px; margin: 20px 0;">
+    <p style="margin: 5px 0;"><strong>Portal URL:</strong><br>
+    https://hcm-guest.perfection.my/#/guest-login</p>
+    
+    <p style="margin: 15px 0 5px 0;"><strong>Username:</strong><br>
+    ${params.guestEmail}</p>
+    
+    <p style="margin: 15px 0 5px 0;"><strong>Temporary Password:</strong><br>
+    ${params.temporaryPassword}</p>
+  </div>
 
-                    <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0">
-                      <tr>
-                        <td style="padding-bottom: 12px;">
-                          <div style="font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px;">Portal URL</div>
-                          <div style="font-size: 13px; font-weight: 700; color: #38bdf8;">hcm-guest.perfection.my</div>
-                        </td>
-                      </tr>
-                      <tr>
-                        <td style="padding-bottom: 12px;">
-                          <div style="font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px;">Registered Email / Username</div>
-                          <div style="font-size: 14px; font-weight: 800; color: #ffffff; font-family: monospace;">${params.guestEmail}</div>
-                        </td>
-                      </tr>
-                      <tr>
-                        <td style="padding-bottom: 6px;">
-                          <div style="font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px;">Temporary Access Password</div>
-                          <div style="display: inline-block; background-color: #1e293b; border: 1px solid #334155; padding: 8px 16px; border-radius: 8px; font-size: 18px; font-weight: 900; color: #fbbf24; font-family: monospace; letter-spacing: 0.08em;">
-                            ${params.temporaryPassword}
-                          </div>
-                        </td>
-                      </tr>
-                    </table>
-                  </td>
-                </tr>
-              </table>
+  <p>You will be required to change your temporary password to a permanent one upon your first login for security purposes.</p>
 
-              <!-- NOTICE: MANDATORY CHANGE -->
-              <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="margin-top: 16px; background-color: #fffbeb; border: 1px solid #fde68a; border-radius: 12px;">
-                <tr>
-                  <td style="padding: 14px 18px;">
-                    <div style="font-size: 12px; font-weight: 700; color: #92400e; line-height: 1.5;">
-                      <strong>Mandatory First-Time Security Step:</strong> You will be prompted to replace this temporary password with your permanent private password upon your first sign in.
-                    </div>
-                  </td>
-                </tr>
-              </table>
+  <p>To access your account, please copy the URL below and paste it into your browser:<br>
+  <strong>hcm-guest.perfection.my/#/guest-login</strong></p>
 
-              <!-- BUTTON -->
-              <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="margin-top: 24px;">
-                <tr>
-                  <td align="center">
-                    <a href="${params.loginUrl}" target="_blank" style="display: inline-block; background: linear-gradient(135deg, #4f46e5 0%, #3b82f6 100%); color: #ffffff; text-decoration: none; padding: 16px 36px; border-radius: 14px; font-size: 13px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.08em; box-shadow: 0 10px 20px -5px rgba(79, 70, 229, 0.4);">
-                      Launch Guest Mobile Portal &rarr;
-                    </a>
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-
-          <!-- HIGHLIGHTED FEATURES -->
-          <tr>
-            <td style="padding: 24px 32px 28px 32px; background-color: #f8fafc; border-top: 1px solid #e2e8f0;">
-              <div style="font-size: 10px; font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.12em; margin-bottom: 12px;">
-                AVAILABLE FROM YOUR PHONE
-              </div>
-              <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0">
-                <tr>
-                  <td style="padding: 6px 0; font-size: 12px; color: #334155; font-weight: 600;">
-                    &bull; <strong>Touchless Check-In QR:</strong> Instant facility check-in at front desk
-                  </td>
-                </tr>
-                <tr>
-                  <td style="padding: 6px 0; font-size: 12px; color: #334155; font-weight: 600;">
-                    &bull; <strong>Personal Training Sessions:</strong> Track remaining sessions &amp; trainer notes
-                  </td>
-                </tr>
-                <tr>
-                  <td style="padding: 6px 0; font-size: 12px; color: #334155; font-weight: 600;">
-                    &bull; <strong>Spa &amp; Treatments:</strong> View upcoming therapy &amp; book appointments
-                  </td>
-                </tr>
-                <tr>
-                  <td style="padding: 6px 0; font-size: 12px; color: #334155; font-weight: 600;">
-                    &bull; <strong>Day Passes &amp; Waivers:</strong> Instant access to signed passes &amp; receipts
-                  </td>
-                </tr>
-              </table>
-            </td>
-          </tr>
-
-          <!-- FOOTER -->
-          <tr>
-            <td bgcolor="#0f172a" style="padding: 20px 32px; text-align: center; background-color: #0f172a; color: #64748b; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.1em;">
-              &copy; ${new Date().getFullYear()} ${params.propertyName} &bull; Powered by Perfection
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
+  <p>Best regards,<br>
+  The ${params.propertyName} Team</p>
 </body>
 </html>`;
 }
