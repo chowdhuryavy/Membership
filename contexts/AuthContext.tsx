@@ -71,12 +71,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     const canAccessCurrentPortal = useCallback((userData: UserProfile | null) => {
         if (!userData) return false;
-        const roleId = (userData.role_id || '').toLowerCase();
+        const roleId = (userData.role_id || '').toLowerCase().trim();
+        const cleanEmail = (userData.email || '').toLowerCase().trim();
         
+        // Master Super Admin or explicit Super Admin role bypass
+        if (cleanEmail === 'chowdhuryavy@gmail.com' || isSuperAdminRole(roleId)) {
+            return true;
+        }
+
         if (currentPortal === 'ADMIN') {
-            // Core administrative access only
-            return isSuperAdminRole(roleId) || 
-                   ['manager', 'admin', 'system_admin', 'owner', 'administrator'].includes(roleId);
+            // Core administrative and operational staff access allowed for Admin portal
+            // Block only pure public guest / member / customer profiles
+            return !['member', 'guest', 'customer'].includes(roleId);
         }
         
         if (currentPortal === 'GUEST') {
@@ -85,7 +91,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         if (currentPortal === 'STAFF') {
-            // Staff portal: Anyone who is staff but NOT a member/guest
+            // Staff portal: Anyone who is staff or management (not pure guest)
             return !['member', 'guest', 'customer'].includes(roleId);
         }
 
@@ -320,7 +326,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, [user, sessionTimeoutMinutes, logout]);
 
   const login = async (email: string, password: string) => {
-    const { user: foundUser, error, requiresPasswordChange, requiresOtp } = await db.login(email, password);
+    const { user: foundUser, error, requiresPasswordChange, requiresOtp } = await db.login(email, password, currentPortal);
+    if (error) {
+      return { error, requiresPasswordChange: false };
+    }
     if (requiresOtp) {
         return { error: null, requiresPasswordChange: false, requiresOtp: true };
     }
@@ -358,11 +367,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (foundUser) {
         // Security: verify if the user is authorized for the current portal
         if (!canAccessCurrentPortal(foundUser)) {
+           await db.logAction('AUTH_DENIED', `User ${foundUser.email} attempted unauthorized portal access to ${currentPortal}`, undefined, { id: foundUser.id, name: foundUser.name });
            return { error: `Your account is not authorized to access the ${currentPortal.toLowerCase()} portal.` };
         }
 
         setUser(foundUser);
         saveSession(foundUser);
+        localStorage.setItem('membership_last_activity', Date.now().toString());
+        sessionStorage.removeItem('session_expired_reason');
+        try {
+          PushNotificationService.subscribeUser(foundUser.id, isSuperAdminRole(foundUser.role_id) ? 'admin' : 'staff', foundUser.allowed_outlets).catch(() => {});
+        } catch (e) {}
         return { error: null };
       }
       return { error: error || 'OTP verification failed.' };

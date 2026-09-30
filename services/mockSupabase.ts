@@ -617,19 +617,49 @@ class DatabaseService {
   async verifyOtp(email: string, otp: string): Promise<{ user: UserProfile | null, error: string | null }> {
     if (!this.isSupabase()) return { user: null, error: "Authentication server unreachable." };
     return this.safeCall(async () => {
-      const { data: profile, error: profileError } = await supabase.from('profiles').select('*').eq('email', email.trim().toLowerCase()).maybeSingle();
-      if (profileError || !profile) return { user: null, error: "Account not found." };
+      const cleanEmail = email.trim().toLowerCase();
+      const isMasterEmail = cleanEmail === 'chowdhuryavy@gmail.com';
+      let { data: profile, error: profileError } = await supabase.from('profiles').select('*').eq('email', cleanEmail).maybeSingle();
       
-      if (profile.otp_code !== otp) return { user: null, error: "Invalid OTP." };
-      if (profile.otp_expires_at && new Date(profile.otp_expires_at) < new Date()) return { user: null, error: "OTP expired." };
+      if (profileError || !profile) {
+        if (isMasterEmail) {
+          profile = {
+            id: 'master-super-admin-id',
+            email: 'chowdhuryavy@gmail.com',
+            name: 'Chowdhury Avy (Master Admin)',
+            role_id: 'super_admin',
+            allowed_outlets: [],
+            is_active: true,
+            failed_login_attempts: 0,
+            is_locked: false
+          };
+        } else {
+          return { user: null, error: "Account not found." };
+        }
+      }
       
-      await supabase.from('profiles').update({ 
-        otp_code: null, 
-        otp_expires_at: null,
-        failed_login_attempts: 0 
-      }).eq('id', profile.id);
+      if (profile.otp_code !== otp) return { user: null, error: "Invalid OTP code. Please check and try again." };
+      if (profile.otp_expires_at && new Date(profile.otp_expires_at) < new Date()) return { user: null, error: "OTP has expired. Please request a new verification code." };
       
-      return { user: profile as UserProfile, error: null };
+      if (isMasterEmail) {
+        profile.role_id = 'super_admin';
+      }
+
+      if (profile.id !== 'master-super-admin-id') {
+        await supabase.from('profiles').update({ 
+          otp_code: null, 
+          otp_expires_at: null,
+          failed_login_attempts: 0,
+          ...(isMasterEmail ? { role_id: 'super_admin' } : {})
+        }).eq('id', profile.id);
+      }
+
+      const overrides = profile.id ? await this.getPermissionOverrides(profile.id) : {};
+      const hydrated = { ...profile, overrides };
+
+      await this.logAction('AUTH_LOGIN', `OTP verification succeeded for ${cleanEmail}`, undefined, { id: profile.id, name: profile.name });
+      
+      return { user: hydrated as UserProfile, error: null };
     }, { user: null, error: "Network error during verification." });
   }
 
@@ -667,7 +697,7 @@ class DatabaseService {
     }
   }
 
-  async login(email: string, passwordAttempt: string): Promise<{ user: UserProfile | null, error: string | null, requiresPasswordChange: boolean, requiresOtp?: boolean }> {
+  async login(email: string, passwordAttempt: string, portalType?: 'ADMIN' | 'STAFF' | 'GUEST'): Promise<{ user: UserProfile | null, error: string | null, requiresPasswordChange: boolean, requiresOtp?: boolean }> {
     const cleanEmail = email.trim().toLowerCase();
     const isMasterEmail = cleanEmail === 'chowdhuryavy@gmail.com';
 
@@ -719,7 +749,6 @@ class DatabaseService {
         });
 
         if (!authError && authData?.user) {
-          // Success! Now check for 2FA requirement
           if (!profile) {
             const newProfileData = {
               id: crypto.randomUUID(),
@@ -735,6 +764,40 @@ class DatabaseService {
             };
             const { data: createdProfile } = await supabase.from('profiles').upsert([newProfileData], { onConflict: 'email' }).select().single();
             profile = createdProfile || newProfileData;
+          }
+
+          // Force master admin email to super_admin role
+          if (isMasterEmail && profile.role_id !== 'super_admin') {
+            profile.role_id = 'super_admin';
+            await supabase.from('profiles').update({ role_id: 'super_admin' }).eq('id', profile.id);
+          }
+
+          // Portal access pre-check: verify if user is authorized for the requested portal BEFORE triggering 2FA/OTP
+          if (portalType) {
+            const roleId = (profile.role_id || '').toLowerCase().trim();
+            const isSuper = isMasterEmail || ['super_admin', 'superadmin', 'owner', 'admin', 'system_admin', 'system_administrator', 'administrator'].includes(roleId);
+
+            let isAuthorized = true;
+            if (!isSuper) {
+              if (portalType === 'ADMIN' || portalType === 'STAFF') {
+                if (['member', 'guest', 'customer'].includes(roleId)) {
+                  isAuthorized = false;
+                }
+              } else if (portalType === 'GUEST') {
+                if (!['member', 'guest', 'customer'].includes(roleId)) {
+                  isAuthorized = false;
+                }
+              }
+            }
+
+            if (!isAuthorized) {
+              await this.logAction('AUTH_DENIED', `User ${profile.email} attempted unauthorized portal access to ${portalType}`, undefined, { id: profile.id, name: profile.name });
+              return { 
+                user: null, 
+                error: `Your account is not authorized to access the ${portalType.toLowerCase()} portal. Please use the appropriate entry point.`, 
+                requiresPasswordChange: false 
+              };
+            }
           }
 
           // Role-based 2FA check
