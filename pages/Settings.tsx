@@ -69,6 +69,7 @@ import { WhatsAppTemplatesTab } from '../components/whatsapp/WhatsAppTemplatesTa
 import { WhatsAppSettingsTab } from '../components/whatsapp/WhatsAppSettingsTab';
 import { WhatsAppService, DEFAULT_COMPANIES } from '../services/whatsappService';
 import { WhatsAppConfig, WhatsAppAutomationRule, WhatsAppTemplate } from '../types';
+import { motion, AnimatePresence } from 'motion/react';
 
 const PermissionMatrix = ({ 
   registry, 
@@ -1352,7 +1353,7 @@ const SettingsPage = () => {
       )}
 
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
-          <div className={`${showForm ? 'lg:col-span-6' : 'lg:col-span-12'} space-y-6 transition-all duration-500`}>
+          <div className={`${(showForm && activeTab !== 'roles') ? 'lg:col-span-6' : 'lg:col-span-12'} space-y-6 transition-all duration-500`}>
               
               {activeTab === 'massage_rooms' && (
             <div className="space-y-6">
@@ -2651,7 +2652,7 @@ const SettingsPage = () => {
               )}
           </div>
 
-          <div className={`${showForm ? 'lg:col-span-6' : 'hidden'} animate-in slide-in-from-right-10 duration-500`}>
+          <div className={`${(showForm && activeTab !== 'roles') ? 'lg:col-span-6' : 'hidden'} animate-in slide-in-from-right-10 duration-500`}>
               <Card className="rounded-[3.5rem] border-slate-200/60 shadow-2xl sticky top-24 overflow-hidden bg-white">
                   <CardHeader className="bg-indigo-600 text-white p-10 flex flex-col gap-1">
                       <CardTitle className="text-xl font-black uppercase tracking-widest flex items-center gap-3">
@@ -2886,45 +2887,7 @@ const SettingsPage = () => {
                             <Button onClick={handleOutletSubmit} className="w-full h-16 rounded-2xl font-black uppercase shadow-xl">Save Outlet</Button>
                         </div>
                       )}
-                      {activeTab === 'roles' && (
-                          <div className="space-y-8">
-                              <Input label="Role Name *" value={roleForm.name} onChange={e => setRoleForm({...roleForm, name: e.target.value})} className="h-14 rounded-xl font-black" />
-                              
-                              <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100 flex items-center justify-between">
-                                  <div className="flex items-center gap-3">
-                                      <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-bold ${roleForm.requires_2fa ? 'bg-indigo-600 text-white' : 'bg-slate-200 text-slate-500'}`}>
-                                          <Lock className="w-4 h-4 text-white" />
-                                      </div>
-                                      <div>
-                                          <h5 className="text-xs font-black text-slate-900 uppercase tracking-tight">Two-Factor Authentication</h5>
-                                          <p className="text-[10px] text-slate-500">Require OTP verification via email for every login for this role</p>
-                                      </div>
-                                  </div>
-                                  <button
-                                      type="button"
-                                      onClick={() => setRoleForm({ ...roleForm, requires_2fa: !roleForm.requires_2fa })}
-                                      className={`w-11 h-6 flex items-center rounded-full p-1 transition-colors cursor-pointer ${
-                                          roleForm.requires_2fa ? 'bg-indigo-600 justify-end' : 'bg-slate-300 justify-start'
-                                      }`}
-                                  >
-                                      <div className="w-4 h-4 rounded-full bg-white shadow-md" />
-                                  </button>
-                              </div>
-
-                              <div className="space-y-4">
-                                <div className="flex items-center gap-3 mb-2">
-                                  <ShieldAlert className="w-5 h-5 text-indigo-600"/>
-                                  <h4 className="text-xs font-black text-slate-900 uppercase tracking-widest">Permissions</h4>
-                                </div>
-                                <PermissionMatrix 
-                                  registry={permissionRegistry} 
-                                  selectedPermissions={roleForm.permissions} 
-                                  onChange={(perms) => setRoleForm({ ...roleForm, permissions: perms })} 
-                                />
-                              </div>
-                              <Button onClick={handleRoleSubmit} className="w-full h-16 rounded-2xl font-black uppercase tracking-widest bg-indigo-600 shadow-xl shadow-indigo-100">Save Role</Button>
-                          </div>
-                      )}
+                      {activeTab === 'roles' && null}
                       {activeTab === 'currency' && (
                         <div className="space-y-6">
                             <Input label="ISO Currency Code *" value={currencyForm.code} onChange={e => setCurrencyForm({...currencyForm, code: e.target.value.toUpperCase()})} placeholder="e.g. USD" className="h-14 rounded-xl" />
@@ -3305,6 +3268,59 @@ const SettingsPage = () => {
       </div>
       
       <ConfirmationModal isOpen={!!itemToDelete} onClose={() => setItemToDelete(null)} onConfirm={handleDeleteConfirmed} title={`Terminal Reset`} description={`Permanently purge '${itemToDelete?.name}' from the registry?`} confirmText="Authorize Terminal Purge" isDestructive={true} />
+      
+      {/* Roles & Permissions Modal */}
+      <Modal 
+        isOpen={showForm && activeTab === 'roles'} 
+        onClose={() => setShowForm(false)} 
+        title={editingId ? 'Edit Role Configuration' : 'Define New Security Role'}
+      >
+        <div className="space-y-8 p-4">
+            <Input label="Role Name *" value={roleForm.name} onChange={e => setRoleForm({...roleForm, name: e.target.value})} className="h-14 rounded-xl font-black" />
+            
+            <div className="p-6 bg-indigo-50 rounded-3xl border border-indigo-100 flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                    <div className={`w-12 h-12 rounded-2xl flex items-center justify-center font-bold ${roleForm.requires_2fa ? 'bg-indigo-600 text-white shadow-lg' : 'bg-slate-200 text-slate-500'}`}>
+                        <Lock className="w-6 h-6" />
+                    </div>
+                    <div>
+                        <h5 className="text-sm font-black text-slate-900 uppercase tracking-tight">Two-Factor Authentication</h5>
+                        <p className="text-[11px] text-slate-500 font-medium">Require mandatory OTP verification via email for every login session</p>
+                    </div>
+                </div>
+                <button
+                    type="button"
+                    onClick={() => setRoleForm({ ...roleForm, requires_2fa: !roleForm.requires_2fa })}
+                    className={`w-14 h-8 flex items-center rounded-full p-1.5 transition-all duration-300 cursor-pointer ${
+                        roleForm.requires_2fa ? 'bg-indigo-600 justify-end shadow-inner' : 'bg-slate-300 justify-start'
+                    }`}
+                >
+                    <motion.div layout className="w-5 h-5 rounded-full bg-white shadow-xl" />
+                </button>
+            </div>
+
+            <div className="space-y-6">
+              <div className="flex items-center gap-3 bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                <ShieldAlert className="w-6 h-6 text-indigo-600"/>
+                <div>
+                    <h4 className="text-sm font-black text-slate-900 uppercase tracking-widest">Authority Matrix</h4>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mt-0.5">Select modules and privileges authorized for this identity</p>
+                </div>
+              </div>
+              <PermissionMatrix 
+                registry={permissionRegistry} 
+                selectedPermissions={roleForm.permissions} 
+                onChange={(perms) => setRoleForm({ ...roleForm, permissions: perms })} 
+              />
+            </div>
+            
+            <div className="pt-6 border-t border-slate-100 flex gap-4">
+                <Button variant="secondary" onClick={() => setShowForm(false)} className="flex-1 h-16 rounded-2xl font-black uppercase text-xs">Discard</Button>
+                <Button onClick={handleRoleSubmit} className="flex-[2] h-16 rounded-2xl font-black uppercase tracking-widest bg-indigo-600 shadow-2xl shadow-indigo-200">Save Role Identity</Button>
+            </div>
+        </div>
+      </Modal>
+
       <Modal isOpen={isCustomReportModalOpen} onClose={() => setIsCustomReportModalOpen(false)} title="Design New Report">
           <CustomReportBuilder 
             config={editingId ? customReports.find(r => r.id === editingId) : undefined}

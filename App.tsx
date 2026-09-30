@@ -248,7 +248,7 @@ const TopHeader = () => {
 };
 
 const ProtectedLayout = () => {
-  const { user, logout, isLoading: isAuthLoading } = useAuth();
+  const { user, logout, isLoading: isAuthLoading, currentPortal, canAccessCurrentPortal } = useAuth();
   const location = useLocation();
   const { checkShortcut, isLoading: isSettingsLoading, currentOutlet, outlets, pageLoading } = useSettings();
   const [showSplash, setShowSplash] = useState(true);
@@ -374,15 +374,27 @@ const ProtectedLayout = () => {
            h.includes('guest') || h.includes('staff') || h.includes('login') || h.includes('pass');
   }, [location.pathname, location.hash]);
 
-  if (!user && !combinedLoading) {
-    const host = window.location.hostname.toLowerCase();
-    // Use more specific domain matching to prevent false positives on dev/preview URLs
-    const isGuestDomain = host.startsWith('hcm-guest.') || host === 'hcm-guest.perfection.my';
-    const isStaffDomain = host.startsWith('hcm-staff.') || host === 'hcm-staff.perfection.my';
-    
-    if (isGuestDomain) return <Navigate to="/guest-login" replace />;
-    if (isStaffDomain) return <Navigate to="/staff-login" replace />;
-    return <Navigate to="/login" replace />;
+  // Cross-Portal Redirects (Domain-based)
+  if (!combinedLoading) {
+    if (!user) {
+        if (currentPortal === 'GUEST') return <Navigate to="/guest-login" replace />;
+        if (currentPortal === 'STAFF') return <Navigate to="/staff-login" replace />;
+        return <Navigate to="/login" replace />;
+    } else if (!canAccessCurrentPortal(user)) {
+        // Logged in user is on the wrong portal domain
+        if (currentPortal === 'GUEST') return <Navigate to="/guest-portal" replace />;
+        if (currentPortal === 'STAFF') return <Navigate to="/staff-schedule" replace />;
+        
+        // If they are a Guest trying to access Admin domain, redirect them to Guest Portal
+        const roleId = (user.role_id || '').toLowerCase();
+        if (roleId === 'member' || roleId === 'guest') {
+            return <Navigate to="/guest-portal" replace />;
+        }
+        
+        // Default fallback: sign out
+        logout('Unauthorized portal access.');
+        return <Navigate to="/login" replace />;
+    }
   }
   
   return (
@@ -850,7 +862,7 @@ const DynamicHead = () => {
         meta.content = content;
       };
 
-      const portalName = isStaff ? "HCM - Staff Portal" : isGuest ? "HCM - Guest Portal" : (settings.name || "HCM - Guest Portal");
+      const portalName = isStaff ? "HCM - Staff Portal" : isGuest ? "HCM - Guest Portal" : (settings?.name || "Health Club Managements");
       updateMeta('apple-mobile-web-app-title', portalName);
       updateMeta('application-name', portalName);
     };

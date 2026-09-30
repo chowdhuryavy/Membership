@@ -527,6 +527,10 @@ export class GuestAuthService {
     removeDeviceSessionItem(GUEST_SESSION_STORAGE_KEY);
   }
 
+  public setActiveSession(account: GuestAccount): void {
+    setDeviceSessionItem(GUEST_SESSION_STORAGE_KEY, JSON.stringify(account));
+  }
+
   // --- SUPER ADMIN MANAGEMENT ---
   public async toggleAccountActive(id: string): Promise<GuestAccount | null> {
     const accounts = await this.getAccounts();

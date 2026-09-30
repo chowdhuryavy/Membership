@@ -26,6 +26,21 @@ export const isSuperAdmin = (user: UserProfile | null) => {
     return isSuperAdminRole(user.role_id);
 };
 
+export type PortalType = 'ADMIN' | 'STAFF' | 'GUEST';
+
+export const getPortalType = (): PortalType => {
+    if (typeof window === 'undefined') return 'ADMIN';
+    const host = window.location.hostname.toLowerCase();
+    const hash = window.location.hash.toLowerCase();
+    const search = window.location.search.toLowerCase();
+    
+    // Strict priority: Hostname > Search Param > Hash
+    if (host.includes('hcm-staff.') || search.includes('portal=staff') || (hash.includes('staff') && !hash.includes('guest'))) return 'STAFF';
+    if (host.includes('hcm-guest.') || search.includes('portal=guest') || (hash.includes('guest') && !hash.includes('staff'))) return 'GUEST';
+    
+    return 'ADMIN';
+};
+
 interface AuthContextType {
   user: UserProfile | null;
   login: (email: string, password: string) => Promise<{ error: string | null, requiresPasswordChange: boolean, requiresOtp?: boolean }>;
@@ -45,11 +60,38 @@ interface AuthContextType {
   resetInactivityTimer: () => void;
   showInactivityWarning: boolean;
   dismissInactivityWarning: () => void;
+  currentPortal: PortalType;
+  canAccessCurrentPortal: (userData: UserProfile | null) => boolean;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const currentPortal = useMemo(() => getPortalType(), []);
+
+    const canAccessCurrentPortal = useCallback((userData: UserProfile | null) => {
+        if (!userData) return false;
+        const roleId = (userData.role_id || '').toLowerCase();
+        
+        if (currentPortal === 'ADMIN') {
+            // Core administrative access only
+            return isSuperAdminRole(roleId) || 
+                   ['manager', 'admin', 'system_admin', 'owner', 'administrator'].includes(roleId);
+        }
+        
+        if (currentPortal === 'GUEST') {
+            // Member/Guest portal access
+            return ['member', 'guest', 'customer'].includes(roleId);
+        }
+
+        if (currentPortal === 'STAFF') {
+            // Staff portal: Anyone who is staff but NOT a member/guest
+            return !['member', 'guest', 'customer'].includes(roleId);
+        }
+
+        return true;
+    }, [currentPortal]);
+
   const getStoredSessionStr = () => {
       return getDeviceSessionItem('membership_session');
   };
@@ -283,6 +325,15 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return { error: null, requiresPasswordChange: false, requiresOtp: true };
     }
     if (foundUser) {
+      // Security: verify if the user is authorized for the current portal
+      if (!canAccessCurrentPortal(foundUser)) {
+        await db.logAction('AUTH_DENIED', `User ${foundUser.email} attempted unauthorized portal access to ${currentPortal}`, undefined, { id: foundUser.id, name: foundUser.name });
+        return { 
+          error: `Your account is not authorized to access the ${currentPortal.toLowerCase()} portal. Please use the appropriate entry point.`, 
+          requiresPasswordChange: false 
+        };
+      }
+
       setUser(foundUser);
       saveSession(foundUser);
       localStorage.setItem('membership_last_activity', Date.now().toString());
@@ -305,6 +356,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const verifyOtp = async (email: string, otp: string) => {
       const { user: foundUser, error } = await db.verifyOtp(email, otp);
       if (foundUser) {
+        // Security: verify if the user is authorized for the current portal
+        if (!canAccessCurrentPortal(foundUser)) {
+           return { error: `Your account is not authorized to access the ${currentPortal.toLowerCase()} portal.` };
+        }
+
         setUser(foundUser);
         saveSession(foundUser);
         return { error: null };
@@ -340,45 +396,49 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       saveSession(updatedUser);
   };
 
-  const authContextValue = useMemo(() => ({ 
-    user, 
-    login, 
-    initiateOtpLogin,
-    verifyOtp,
-    register, 
-    changePassword, 
-    updateProfile, 
-    refreshUser, 
-    logout, 
-    isLoading, 
-    isSuperAdmin: isSuperAdminState,
-    isOwner: isOwnerState, 
-    checkIsSuperAdmin,
-    sessionTimeoutMinutes,
-    setSessionTimeoutMinutes,
-    resetInactivityTimer,
-    showInactivityWarning,
-    dismissInactivityWarning
-  }), [
-    user, 
-    login,
-    initiateOtpLogin,
-    verifyOtp,
-    register, 
-    changePassword, 
-    updateProfile, 
-    refreshUser, 
-    logout, 
-    isLoading, 
-    isSuperAdminState, 
-    isOwnerState, 
-    checkIsSuperAdmin,
-    sessionTimeoutMinutes,
-    setSessionTimeoutMinutes,
-    resetInactivityTimer,
-    showInactivityWarning,
-    dismissInactivityWarning
-  ]);
+    const authContextValue = useMemo(() => ({ 
+        user, 
+        login, 
+        initiateOtpLogin,
+        verifyOtp,
+        register, 
+        changePassword, 
+        updateProfile, 
+        refreshUser, 
+        logout, 
+        isLoading, 
+        isSuperAdmin: isSuperAdminState,
+        isOwner: isOwnerState, 
+        checkIsSuperAdmin,
+        sessionTimeoutMinutes,
+        setSessionTimeoutMinutes,
+        resetInactivityTimer,
+        showInactivityWarning,
+        dismissInactivityWarning,
+        currentPortal,
+        canAccessCurrentPortal
+    }), [
+        user, 
+        login,
+        initiateOtpLogin,
+        verifyOtp,
+        register, 
+        changePassword, 
+        updateProfile, 
+        refreshUser, 
+        logout, 
+        isLoading, 
+        isSuperAdminState, 
+        isOwnerState, 
+        checkIsSuperAdmin,
+        sessionTimeoutMinutes,
+        setSessionTimeoutMinutes,
+        resetInactivityTimer,
+        showInactivityWarning,
+        dismissInactivityWarning,
+        currentPortal,
+        canAccessCurrentPortal
+    ]);
 
   return (
     <AuthContext.Provider value={authContextValue}>

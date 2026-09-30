@@ -5,18 +5,18 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="light">
-    <title>Health Club Management</title>
+    <title>Health Club Managements</title>
     <meta name="description" content="Professional Health Club and Spa Management System" />
     
     <!-- Open Graph / Facebook -->
     <meta property="og:type" content="website" />
-    <meta property="og:title" content="Health Club Management" />
+    <meta property="og:title" content="Health Club Managements" />
     <meta property="og:description" content="Professional Health Club and Spa Management System" />
     <meta property="og:image" content="https://i.imgur.com/oZVRrvo.png" />
 
     <!-- Twitter -->
     <meta property="twitter:card" content="summary_large_image" />
-    <meta property="twitter:title" content="Health Club Management" />
+    <meta property="twitter:title" content="Health Club Managements" />
     <meta property="twitter:description" content="Professional Health Club and Spa Management System" />
     <meta property="twitter:image" content="https://i.imgur.com/oZVRrvo.png" />
 
@@ -56,13 +56,13 @@
     <meta name="theme-color" content="#4f46e5">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="HCM - Guest Portal">
+    <meta name="apple-mobile-web-app-title" content="Health Club Managements">
     <meta name="mobile-web-app-capable" content="yes">
-    <meta name="application-name" content="HCM - Guest Portal">
-    <title>HCM - Guest Portal</title>
+    <meta name="application-name" content="Health Club Managements">
+    <title>Health Club Managements</title>
     
     <!-- Web App Manifest -->
-    <link rel="manifest" id="pwa-manifest" href="/manifest-guest.json" />
+    <link rel="manifest" id="pwa-manifest" href="/manifest.json" />
     
     <script>
       // Immediately set dynamic manifest & title based on route/hostname
@@ -75,12 +75,14 @@
       if (manifestLink) {
         if (isStaff) {
           manifestLink.setAttribute('href', '/manifest-staff.json');
-        } else {
+        } else if (isGuest) {
           manifestLink.setAttribute('href', '/manifest-guest.json');
+        } else {
+          manifestLink.setAttribute('href', '/manifest.json');
         }
       }
 
-      const pwaTitle = isStaff ? "HCM - Staff Portal" : "HCM - Guest Portal";
+      const pwaTitle = isStaff ? "HCM - Staff Portal" : isGuest ? "HCM - Guest Portal" : "Health Club Managements";
       document.title = pwaTitle;
       
       const appTitleMeta = document.querySelector('meta[name="apple-mobile-web-app-title"]');

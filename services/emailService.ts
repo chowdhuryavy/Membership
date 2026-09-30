@@ -500,7 +500,7 @@ export function buildUserCredentialsEmailHtml(params: {
   logoUrl?: string;
   adminName?: string;
 }): string {
-  const propName = params.propertyName || 'Health Club Management';
+  const propName = params.propertyName || 'Health Club Managements';
   const outletsList = params.outletNames && params.outletNames.length > 0 
     ? params.outletNames.join(', ') 
     : 'All Authorized Outlets';
@@ -554,7 +554,7 @@ export function buildUserCredentialsEmailHtml(params: {
                 User Credentials &amp; Access Notice
               </h1>
               <div style="font-family: Arial, Helvetica, sans-serif; font-size: 12px; font-weight: 600; color: #64748b; margin-top: 4px;">
-                Health Club Management Portal Access Directive
+                Health Club Managements Portal Access Directive
               </div>
               <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="margin-top: 18px;">
                 <tr><td height="2" bgcolor="#e2e8f0" style="background-color: #e2e8f0; font-size: 1px; line-height: 1px;">&nbsp;</td></tr>
@@ -569,7 +569,7 @@ export function buildUserCredentialsEmailHtml(params: {
                 ${greeting}
               </p>
               <p style="margin: 0 0 18px 0; color: #475569; line-height: 1.6;">
-                An authorized operator profile has been configured for you on the Health Club Management platform for <strong>${propName}</strong>${params.adminName ? ` by ${params.adminName}` : ''}.
+                An authorized operator profile has been configured for you on the Health Club Managements platform for <strong>${propName}</strong>${params.adminName ? ` by ${params.adminName}` : ''}.
               </p>
               <p style="margin: 0 0 20px 0; color: #475569; line-height: 1.6;">
                 Your initial login credentials have been generated and are detailed below.
@@ -1476,7 +1476,7 @@ export const emailService = {
       const primaryOutlet = outlets.find(o => o.id === primaryOutletId);
       const primaryProp = properties.find(p => p.id === primaryOutlet?.property_id) || properties[0];
 
-      const propertyName = params.propertyName || primaryProp?.name || settings?.name || 'Health Club Management';
+      const propertyName = params.propertyName || primaryProp?.name || settings?.name || 'Health Club Managements';
       const logoUrl = resolveLogoUrl(primaryOutlet, primaryProp, settings);
 
       const loginUrl = params.loginUrl || (typeof window !== 'undefined' ? window.location.origin : '');
@@ -1559,6 +1559,8 @@ export const emailService = {
       }
 
       const logoUrl = resolveLogoUrl(primaryOutlet, primaryProp, settings);
+
+      const subject = `Welcome Credentials - ${resolvedPropName}`;
 
       let portalUrl = 'https://hcm-guest.perfection.my/#/guest-login';
       if (typeof window !== 'undefined' && window.location) {

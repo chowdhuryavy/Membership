@@ -23,6 +23,14 @@ const Login = () => {
   const [passwordsMatch, setPasswordsMatch] = useState(false);
   const [sessionExpiredNotice, setSessionExpiredNotice] = useState<string | null>(null);
 
+  const isLengthValid = newPassword.length >= 6;
+  const isMatchValid = newPassword !== '' && newPassword === confirmPassword;
+  const isForcePasswordValid = isLengthValid && isMatchValid;
+
+  useEffect(() => {
+    setPasswordsMatch(isMatchValid);
+  }, [isMatchValid]);
+
   const { login, verifyOtp, changePassword } = useAuth();
   const { settings } = useSettings();
   const navigate = useNavigate();
@@ -80,7 +88,7 @@ const Login = () => {
       }
   };
 
-  const companyName = settings?.name || 'Health Club Management';
+  const companyName = settings?.name || 'Health Club Managements';
 
   useEffect(() => {
     localStorage.setItem('preferred_portal', 'admin');
@@ -250,7 +258,7 @@ const Login = () => {
                   <button 
                     type="button" 
                     onClick={() => setRequiresOtp(false)} 
-                    className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mt-2 ml-1 hover:text-indigo-800 transition-colors"
+                    className="text-[10px] font-black text-indigo-600 uppercase tracking-widest mt-2 ml-1 hover:text-indigo-800 transition-colors cursor-pointer"
                   >
                     &larr; Back to Login
                   </button>

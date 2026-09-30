@@ -5,6 +5,7 @@ import { useSettings } from '../contexts/SettingsContext';
 import { LogIn, ShieldAlert, UserCircle2, ArrowRight, Sparkles, Lock, Eye, EyeOff, ShieldCheck, Scan } from 'lucide-react';
 import { Button } from '../components/ui';
 import { getDeviceSessionItem, setDeviceSessionItem, removeDeviceSessionItem } from '../services/deviceStorage';
+import { StaffAuthService, staffAuth } from '../services/staffAuthService';
 import { biometricAuth } from '../services/biometricAuth';
 import { BiometricEnableModal } from '../components/BiometricEnableModal';
 import toast from 'react-hot-toast';
@@ -107,7 +108,7 @@ const StaffLogin = () => {
     }
   };
 
-  const companyName = settings?.name || 'Health Club Management';
+  const companyName = settings?.name || 'Health Club Managements';
 
   useEffect(() => {
     localStorage.setItem('preferred_portal', 'staff');
