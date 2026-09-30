@@ -623,7 +623,11 @@ class DatabaseService {
       if (profile.otp_code !== otp) return { user: null, error: "Invalid OTP." };
       if (profile.otp_expires_at && new Date(profile.otp_expires_at) < new Date()) return { user: null, error: "OTP expired." };
       
-      await supabase.from('profiles').update({ otp_code: null, otp_expires_at: null }).eq('id', profile.id);
+      await supabase.from('profiles').update({ 
+        otp_code: null, 
+        otp_expires_at: null,
+        failed_login_attempts: 0 
+      }).eq('id', profile.id);
       
       return { user: profile as UserProfile, error: null };
     }, { user: null, error: "Network error during verification." });
@@ -672,7 +676,7 @@ class DatabaseService {
 
     if (this.isSupabase()) {
       try {
-        // Pre-check profile for status, lockout, and attempt tracking
+        // 1. Pre-check profile for status and existing lockout
         let { data: profile } = await supabase.from('profiles').select('*').eq('email', cleanEmail).maybeSingle();
 
         if (profile) {
@@ -684,108 +688,13 @@ class DatabaseService {
             await this.logAction('AUTH_BLOCKED', `Login blocked for locked user profile: ${cleanEmail}`, profile.allowed_outlets?.[0], { id: profile.id, name: profile.name });
             return { 
               user: null, 
-              error: `Your account has been locked due unsuccessful login attempts. Please contact your Administrator to unlock your account.`, 
-              requiresPasswordChange: false 
-            };
-          }
-          
-          const role = await this.getRole(profile.role_id);
-          if (role?.requires_2fa) {
-             const otp = Math.floor(100000 + Math.random() * 900000).toString();
-             const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
-             await supabase.from('profiles').update({ otp_code: otp, otp_expires_at: expiresAt }).eq('id', profile.id);
-             
-             await emailService.sendAdminLoginOtpEmail({
-               userName: profile.name,
-               userEmail: profile.email,
-               otpCode: otp
-             });
-             
-             return { user: null, error: null, requiresPasswordChange: false, requiresOtp: true };
-          }
-        }
-
-        // 1. Primary: Direct Supabase auth sign-in
-        const { data: authData, error: authError } = await (supabase.auth as any).signInWithPassword({ 
-          email: cleanEmail, 
-          password: passwordAttempt 
-        });
-
-        if (!authError && authData?.user) {
-          if (!profile) {
-            const newProfileData = {
-              id: crypto.randomUUID(),
-              email: cleanEmail,
-              name: isMasterEmail ? 'Chowdhury Avy' : (authData.user.user_metadata?.full_name || cleanEmail.split('@')[0]),
-              auth_id: authData.user.id,
-              role_id: isMasterEmail ? 'super_admin' : 'member',
-              allowed_outlets: [],
-              is_active: true,
-              failed_login_attempts: 0,
-              is_locked: false,
-              created_at: new Date().toISOString()
-            };
-            const { data: createdProfile } = await supabase.from('profiles').upsert([newProfileData], { onConflict: 'email' }).select().single();
-            profile = createdProfile || newProfileData;
-          }
-
-          if (profile && profile.is_active === false) {
-            await (supabase.auth as any).signOut();
-            return { user: null, error: "Account is inactive. Please contact administration.", requiresPasswordChange: false };
-          }
-
-          if (profile && profile.is_locked === true) {
-            await (supabase.auth as any).signOut();
-            return { 
-              user: null, 
               error: `Account has been locked due to 3 consecutive unsuccessful login attempts. Please contact your Property Administrator or Super Admin to unlock your account.`, 
               requiresPasswordChange: false 
             };
           }
-
-          if (profile) {
-            const updates: any = {};
-            if (!profile.auth_id || profile.auth_id !== authData.user.id) {
-              updates.auth_id = authData.user.id;
-            }
-            if ((profile.failed_login_attempts || 0) > 0) {
-              updates.failed_login_attempts = 0;
-            }
-            if (Object.keys(updates).length > 0) {
-              await supabase.from('profiles').update(updates).eq('id', profile.id);
-            }
-
-            await this.syncAuthMetadata(profile);
-            const overrides = await this.getPermissionOverrides(profile.id);
-            const hydrated = { ...profile, ...updates, overrides };
-            await this.logAction('AUTH_LOGIN', `Access authorized for ${profile.email}`, undefined, { id: profile.id, name: profile.name });
-            return { user: hydrated, error: null, requiresPasswordChange: !!profile.temp_password };
-          }
         }
 
-        // 2. Secondary: Check profile table for temp passwords or initial setups
-        if (profile && profile.temp_password && profile.temp_password === passwordAttempt) {
-          const { data: signUpData, error: signUpError } = await (supabase.auth as any).signUp({ 
-            email: cleanEmail, 
-            password: passwordAttempt, 
-            options: { data: { full_name: profile.name, display_name: profile.name, name: profile.name } } 
-          });
-          
-          if (signUpData?.user) {
-            await supabase.from('profiles').update({ auth_id: signUpData.user.id, failed_login_attempts: 0 }).eq('id', profile.id);
-            const { data: refreshed } = await supabase.from('profiles').select('*').eq('id', profile.id).single();
-            await this.logAction('AUTH_SIGNUP', `Identity provisioned for ${profile.email}`);
-            return { user: refreshed || profile, error: null, requiresPasswordChange: true };
-          }
-          if (signUpError) {
-            if ((profile.failed_login_attempts || 0) > 0) {
-              await supabase.from('profiles').update({ failed_login_attempts: 0 }).eq('id', profile.id);
-            }
-            return { user: profile, error: null, requiresPasswordChange: true };
-          }
-        }
-
-        // 3. Master email recovery check (strictly matching Admin@123 or admin123)
+        // 2. Master email recovery check (strictly matching Admin@123 or admin123)
         if (isMasterEmail && (passwordAttempt === 'Admin@123' || passwordAttempt === 'admin123')) {
           const masterProfile: UserProfile = profile || {
             id: 'master-super-admin-id',
@@ -803,7 +712,76 @@ class DatabaseService {
           return { user: masterProfile, error: null, requiresPasswordChange: false };
         }
 
-        // Failed password attempt: Process attempt counter & locking monitor
+        // 3. Primary: Direct Supabase auth sign-in
+        const { data: authData, error: authError } = await (supabase.auth as any).signInWithPassword({ 
+          email: cleanEmail, 
+          password: passwordAttempt 
+        });
+
+        if (!authError && authData?.user) {
+          // Success! Now check for 2FA requirement
+          if (!profile) {
+            const newProfileData = {
+              id: crypto.randomUUID(),
+              email: cleanEmail,
+              name: isMasterEmail ? 'Chowdhury Avy' : (authData.user.user_metadata?.full_name || cleanEmail.split('@')[0]),
+              auth_id: authData.user.id,
+              role_id: isMasterEmail ? 'super_admin' : 'member',
+              allowed_outlets: [],
+              is_active: true,
+              failed_login_attempts: 0,
+              is_locked: false,
+              created_at: new Date().toISOString()
+            };
+            const { data: createdProfile } = await supabase.from('profiles').upsert([newProfileData], { onConflict: 'email' }).select().single();
+            profile = createdProfile || newProfileData;
+          }
+
+          // Role-based 2FA check
+          const role = await this.getRole(profile.role_id);
+          if (role?.requires_2fa) {
+             const otp = Math.floor(100000 + Math.random() * 900000).toString();
+             const expiresAt = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+             await supabase.from('profiles').update({ otp_code: otp, otp_expires_at: expiresAt }).eq('id', profile.id);
+             
+             await emailService.sendAdminLoginOtpEmail({
+               userName: profile.name,
+               userEmail: profile.email,
+               otpCode: otp
+             });
+             
+             return { user: null, error: null, requiresPasswordChange: false, requiresOtp: true };
+          }
+
+          // Reset failed attempts on success
+          if (profile && (profile.failed_login_attempts || 0) > 0) {
+            await supabase.from('profiles').update({ failed_login_attempts: 0 }).eq('id', profile.id);
+          }
+
+          await this.syncAuthMetadata(profile);
+          const overrides = await this.getPermissionOverrides(profile.id);
+          const hydrated = { ...profile, overrides };
+          await this.logAction('AUTH_LOGIN', `Access authorized for ${profile.email}`, undefined, { id: profile.id, name: profile.name });
+          return { user: hydrated, error: null, requiresPasswordChange: !!profile.temp_password };
+        }
+
+        // 4. Secondary: Check profile table for temp passwords (legacy flow)
+        if (profile && profile.temp_password && profile.temp_password === passwordAttempt) {
+          const { data: signUpData, error: signUpError } = await (supabase.auth as any).signUp({ 
+            email: cleanEmail, 
+            password: passwordAttempt, 
+            options: { data: { full_name: profile.name, display_name: profile.name, name: profile.name } } 
+          });
+          
+          if (signUpData?.user) {
+            await supabase.from('profiles').update({ auth_id: signUpData.user.id, failed_login_attempts: 0 }).eq('id', profile.id);
+            const { data: refreshed } = await supabase.from('profiles').select('*').eq('id', profile.id).single();
+            await this.logAction('AUTH_SIGNUP', `Identity provisioned for ${profile.email}`);
+            return { user: refreshed || profile, error: null, requiresPasswordChange: true };
+          }
+        }
+
+        // 5. Failed password attempt: Process counter and locking
         if (!profile) {
           const shadowProfile = {
             id: crypto.randomUUID(),
@@ -851,7 +829,7 @@ class DatabaseService {
 
             return { 
               user: null, 
-              error: "Account has been locked due to 3 consecutive unsuccessful login attempts. Please contact your Property Administrator or Super Admin to unlock your account.", 
+              error: `Account has been locked due to 3 consecutive unsuccessful login attempts. Please contact your Property Administrator or Super Admin to unlock your account.`, 
               requiresPasswordChange: false 
             };
           } else {
