@@ -197,17 +197,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     };
 
     const init = async () => {
-        const stored = getStoredSessionStr();
-        if (stored) {
-            await refreshUser();
-            setIsLoading(false);
-        } else if (!isMobileDevice()) {
-            bc.postMessage({ type: 'SESSION_REQUEST' });
-            const timeout = setTimeout(() => {
-                setIsLoading(false);
-            }, 300);
-            return () => clearTimeout(timeout);
-        } else {
+        try {
+            const stored = getStoredSessionStr();
+            if (stored) {
+                await refreshUser();
+            } else if (typeof BroadcastChannel !== 'undefined' && !isMobileDevice()) {
+                // Request session from other tabs if not in storage
+                bc.postMessage({ type: 'SESSION_REQUEST' });
+                // Short wait for response before giving up
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
+        } catch (e) {
+            console.warn("Auth initialization error:", e);
+        } finally {
             setIsLoading(false);
         }
     };

@@ -23,7 +23,7 @@ const Login = () => {
   const [passwordsMatch, setPasswordsMatch] = useState(false);
   const [sessionExpiredNotice, setSessionExpiredNotice] = useState<string | null>(null);
 
-  const { login, verifyOtp } = useAuth();
+  const { login, verifyOtp, changePassword } = useAuth();
   const { settings } = useSettings();
   const navigate = useNavigate();
 

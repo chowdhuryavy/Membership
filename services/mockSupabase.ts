@@ -747,6 +747,8 @@ class DatabaseService {
              const { error: otpUpdateError } = await supabase.from('profiles').update({ otp_code: otp, otp_expires_at: expiresAt }).eq('id', profile.id);
              if (otpUpdateError) throw otpUpdateError;
              
+             // Use dynamic import to avoid circular dependency with emailService
+             const { emailService } = await import('./emailService');
              await emailService.sendAdminLoginOtpEmail({
                userName: profile.name,
                userEmail: profile.email,

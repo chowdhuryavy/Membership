@@ -376,8 +376,10 @@ const ProtectedLayout = () => {
 
   if (!user && !combinedLoading) {
     const host = window.location.hostname.toLowerCase();
-    const isGuestDomain = host.includes('hcm-guest');
-    const isStaffDomain = host.includes('hcm-staff');
+    // Use more specific domain matching to prevent false positives on dev/preview URLs
+    const isGuestDomain = host.startsWith('hcm-guest.') || host === 'hcm-guest.perfection.my';
+    const isStaffDomain = host.startsWith('hcm-staff.') || host === 'hcm-staff.perfection.my';
+    
     if (isGuestDomain) return <Navigate to="/guest-login" replace />;
     if (isStaffDomain) return <Navigate to="/staff-login" replace />;
     return <Navigate to="/login" replace />;

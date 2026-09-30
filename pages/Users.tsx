@@ -646,6 +646,20 @@ const Users = () => {
 
   useEffect(() => { loadUsers(); }, []);
 
+  // Real-time synchronization for profile updates (including lockouts)
+  useEffect(() => {
+    const channel = supabase
+      .channel('users_realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => {
+        loadUsers();
+      })
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, []);
+
   const loadUsers = async () => {
     setLoading(true);
     try {
