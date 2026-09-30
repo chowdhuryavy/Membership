@@ -3,7 +3,6 @@ import { format } from 'date-fns';
 import { Card, CardContent, CardHeader, CardTitle, Button, Input, Modal } from './ui';
 import { db } from '../services/mockSupabase';
 import { emailService } from '../services/emailService';
-import { useSettings } from '../contexts/SettingsContext';
 import { 
   Outlet, 
   Property, 
@@ -119,34 +118,22 @@ export const ExpirationRemindersSettings: React.FC<ExpirationRemindersSettingsPr
     }
   };
 
-  const { currentProperty, currentOutlet } = useSettings();
-
   useEffect(() => {
     loadConfigAndLogs();
   }, []);
 
   const filteredProperties = useMemo(() => {
-    if (currentOutlet?.property_id) {
-      return properties.filter(p => p.id === currentOutlet.property_id);
-    }
-    if (currentProperty?.id) {
-      return properties.filter(p => p.id === currentProperty.id);
-    }
-    // Filter out dummy test properties if genuine properties exist
-    const realProps = properties.filter(p => p.name && !p.name.toLowerCase().includes('test'));
-    if (realProps.length > 0) return realProps;
-    return properties;
-  }, [properties, currentProperty?.id, currentOutlet?.property_id]);
+    if (isSuperAdmin) return properties;
+    return properties.filter(p => 
+      outlets.some(o => o.property_id === p.id && user?.allowed_outlets?.includes(o.id))
+    );
+  }, [properties, outlets, user, isSuperAdmin]);
 
   useEffect(() => {
-    if (currentOutlet?.property_id) {
-      setActivePropertyId(currentOutlet.property_id);
-    } else if (currentProperty?.id) {
-      setActivePropertyId(currentProperty.id);
-    } else if (filteredProperties.length > 0 && (!activePropertyId || !filteredProperties.some(p => p.id === activePropertyId))) {
+    if (filteredProperties.length > 0 && (!activePropertyId || !filteredProperties.some(p => p.id === activePropertyId))) {
       setActivePropertyId(filteredProperties[0].id);
     }
-  }, [currentProperty?.id, currentOutlet?.property_id, filteredProperties, activePropertyId]);
+  }, [filteredProperties, activePropertyId]);
 
   const activeProperty = useMemo(() => {
     return properties.find(p => p.id === activePropertyId);
@@ -154,15 +141,10 @@ export const ExpirationRemindersSettings: React.FC<ExpirationRemindersSettingsPr
 
   const activePropertyOutlets = useMemo(() => {
     if (!activePropertyId) return [];
-    let propOutlets = outlets.filter(o => o.property_id === activePropertyId);
-    if (currentOutlet?.id) {
-      propOutlets = propOutlets.filter(o => o.id === currentOutlet.id);
-    }
-    // Filter out test outlets if real outlets exist in this property
-    const genuineOutlets = propOutlets.filter(o => o.name && !o.name.toLowerCase().includes('test'));
-    if (genuineOutlets.length > 0) return genuineOutlets;
-    return propOutlets;
-  }, [outlets, activePropertyId, currentOutlet?.id]);
+    const propOutlets = outlets.filter(o => o.property_id === activePropertyId);
+    if (isSuperAdmin) return propOutlets;
+    return propOutlets.filter(o => user?.allowed_outlets?.includes(o.id));
+  }, [outlets, activePropertyId, user, isSuperAdmin]);
 
   // Scoped Logs for selected property
   const propertyLogs = useMemo(() => {
@@ -407,8 +389,8 @@ export const ExpirationRemindersSettings: React.FC<ExpirationRemindersSettingsPr
                 <CardTitle className="text-2xl md:text-3xl font-black uppercase tracking-tight text-white">
                   Automated Expiration Reminders
                 </CardTitle>
-                <span className="px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">
-                  {currentOutlet ? currentOutlet.name : currentProperty ? currentProperty.name : 'Facility Scoped'}
+                <span className={`px-3 py-1 rounded-full text-[9px] font-black uppercase tracking-widest ${config.global_enabled ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/30' : 'bg-rose-500/20 text-rose-300 border border-rose-500/30'}`}>
+                  {config.global_enabled ? 'System Active' : 'System Paused'}
                 </span>
               </div>
               <p className="text-xs font-semibold text-slate-300 mt-1 max-w-2xl leading-relaxed">
@@ -448,6 +430,17 @@ export const ExpirationRemindersSettings: React.FC<ExpirationRemindersSettingsPr
             >
               <Play className="w-4 h-4" /> Run Scan Now
             </Button>
+            <button
+              onClick={handleToggleGlobal}
+              className={`h-12 px-5 rounded-2xl font-black text-xs uppercase tracking-wider transition-all border flex items-center gap-2 ${
+                config.global_enabled
+                  ? 'bg-emerald-600 text-white border-emerald-500 hover:bg-emerald-700'
+                  : 'bg-rose-600 text-white border-rose-500 hover:bg-rose-700'
+              }`}
+            >
+              <Zap className="w-4 h-4" />
+              {config.global_enabled ? 'Master: ON' : 'Master: OFF'}
+            </button>
           </div>
         </CardHeader>
 

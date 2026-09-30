@@ -56,40 +56,28 @@
     <meta name="theme-color" content="#4f46e5">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="apple-mobile-web-app-title" content="HCM - Guest Portal">
+    <meta name="apple-mobile-web-app-title" content="Health Club">
     <meta name="mobile-web-app-capable" content="yes">
-    <meta name="application-name" content="HCM - Guest Portal">
-    <title>HCM - Guest Portal</title>
+    <meta name="application-name" content="Health Club">
     
     <!-- Web App Manifest -->
-    <link rel="manifest" id="pwa-manifest" href="/manifest-guest.json" />
+    <link rel="manifest" id="pwa-manifest" href="/manifest.json" />
+    
     
     <script>
-      // Immediately set dynamic manifest & title based on route/hostname
-      const host = window.location.hostname.toLowerCase();
-      const urlParams = new URLSearchParams(window.location.search);
-      const isStaff = window.location.pathname.includes('/staff') || window.location.hash.includes('staff') || host.includes('hcm-staff') || urlParams.get('portal') === 'staff';
-      const isGuest = window.location.pathname.includes('/guest') || window.location.hash.includes('guest') || host.includes('hcm-guest') || urlParams.get('portal') === 'guest';
-      
-      const manifestLink = document.getElementById('pwa-manifest');
-      if (manifestLink) {
-        if (isStaff) {
-          manifestLink.setAttribute('href', '/manifest-staff.json');
-        } else {
-          manifestLink.setAttribute('href', '/manifest-guest.json');
-        }
-      }
-
-      const pwaTitle = isStaff ? "HCM - Staff Portal" : "HCM - Guest Portal";
-      document.title = pwaTitle;
-      
-      const appTitleMeta = document.querySelector('meta[name="apple-mobile-web-app-title"]');
-      if (appTitleMeta) appTitleMeta.setAttribute('content', pwaTitle);
-      const appNameMeta = document.querySelector('meta[name="application-name"]');
-      if (appNameMeta) appNameMeta.setAttribute('content', pwaTitle);
-
       // Handle clean URL redirect for staff-login
-      if ((isStaff && window.location.pathname === '/staff-login') || urlParams.get('portal') === 'staff') {
+      const urlParams = new URLSearchParams(window.location.search);
+      const isStaffPath = window.location.pathname === '/staff-login' || window.location.pathname.endsWith('/staff-login');
+      const isStaffPortalParam = urlParams.get('portal') === 'staff';
+      
+      if (isStaffPath || isStaffPortalParam) {
+        // Swap manifest for Staff Portal (Critical for iPhone)
+        const manifestLink = document.getElementById('pwa-manifest');
+        if (manifestLink) {
+          manifestLink.setAttribute('href', '/manifest-staff.json');
+        }
+        
+        // Only redirect if we are not already on the hash route
         if (!window.location.hash.includes('/staff-login')) {
           window.location.replace(window.location.origin + '/#/staff-login' + (window.location.search || ''));
         }

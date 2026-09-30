@@ -8,7 +8,6 @@ import { useAuth } from '../contexts/AuthContext';
 import { useSettings } from '../contexts/SettingsContext';
 import { getReportData } from '../src/shared/reportLogic';
 import { emailService } from '../services/emailService';
-import { generateDynamicTemporaryPassword } from '../services/guestAuthService';
 import toast from 'react-hot-toast';
 import { Trash2, Edit2, Shield, Store, AlertTriangle, Lock, Unlock, KeyRound, Eye, RefreshCcw, UserCheck, Plus, X, ArrowLeft, Building2, Command, Search, Filter, ShieldAlert, Check, ChevronRight, Award, TrendingUp, Sparkles, User as UserIcon, Calendar, ChevronDown, CheckCircle, MousePointer, ShieldCheck, UserCog, Mail } from 'lucide-react';
 import { format } from 'date-fns';
@@ -45,8 +44,10 @@ const UserDetail = ({
     const handleDispatchWelcomeEmail = async () => {
       setIsSendingEmail(true);
       try {
-        const tempPass = generateDynamicTemporaryPassword();
-        await db.updateUser(user.id, { temp_password: tempPass, password: tempPass } as any);
+        const tempPass = user.temp_password || `Temp@${Math.floor(100000 + Math.random() * 900000)}!`;
+        if (!user.temp_password) {
+          await db.updateUser(user.id, { temp_password: tempPass, password: tempPass } as any);
+        }
 
         const roleObj = roles.find(r => r.id === user.role_id);
         const assignedOutletNames = (user.allowed_outlets || [])

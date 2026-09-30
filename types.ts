@@ -372,8 +372,6 @@ export interface CompanySettings {
   conditions?: string;
   staff_portal_settings?: Record<string, any>;
   guest_portal_settings?: GuestPortalSettings;
-  guest_portal_settings_map?: Record<string, GuestPortalSettings>;
-  guest_accounts?: GuestAccount[];
   expiration_reminder_config?: ExpirationReminderConfig;
   session_timeout_minutes?: number;
   whatsapp_disabled_properties?: string[];

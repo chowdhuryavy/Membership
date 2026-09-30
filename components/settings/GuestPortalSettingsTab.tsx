@@ -1,6 +1,5 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect } from 'react';
 import { guestAuth, DEFAULT_GUEST_PORTAL_SETTINGS } from '../../services/guestAuthService';
-import { db } from '../../services/mockSupabase';
 import { GuestAccount, GuestPortalSettings } from '../../types';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useAuth } from '../../contexts/AuthContext';
@@ -28,49 +27,32 @@ import {
   Clock,
   Phone,
   Send,
-  Lock,
-  Trash2,
-  UserPlus,
-  Copy
+  Lock
 } from 'lucide-react';
 import { Button, Input, Card } from '../ui';
 import { format, parseISO } from 'date-fns';
 import toast from 'react-hot-toast';
 
 export const GuestPortalSettingsTab: React.FC = () => {
-  const { currentOutlet, currentProperty, settings, refreshSettings, outlets, properties } = useSettings();
+  const { currentProperty, settings } = useSettings();
   const { isSuperAdmin } = useAuth();
-
-  const activeScopeId = currentOutlet?.id || currentProperty?.id;
-  const activeScopeName = currentOutlet?.name || currentProperty?.name || settings?.name || 'All Facilities';
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [portalSettings, setPortalSettings] = useState<GuestPortalSettings>(DEFAULT_GUEST_PORTAL_SETTINGS);
   const [accounts, setAccounts] = useState<GuestAccount[]>([]);
-  const [members, setMembers] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
 
   const loadData = async () => {
     setLoading(true);
     try {
-      const [ps, accs, mems] = await Promise.all([
-        guestAuth.getPortalSettings(activeScopeId),
-        guestAuth.getAccounts(),
-        db.getMembers('').catch(() => [])
+      const [ps, accs] = await Promise.all([
+        guestAuth.getPortalSettings(),
+        guestAuth.getAccounts()
       ]);
-
-      if (!ps.support_phone) {
-        ps.support_phone = currentOutlet?.phone || currentProperty?.phone || settings?.phone || '+60 3-1234 5678';
-      }
-      if (!ps.support_email) {
-        ps.support_email = currentOutlet?.email || currentProperty?.email || settings?.email || 'support@perfection.my';
-      }
-
       setPortalSettings(ps);
       setAccounts(accs);
-      setMembers(mems || []);
     } catch (e) {
       console.error('Error loading guest portal settings:', e);
     } finally {
@@ -80,16 +62,15 @@ export const GuestPortalSettingsTab: React.FC = () => {
 
   useEffect(() => {
     loadData();
-  }, [currentOutlet?.id, currentProperty?.id]);
+  }, []);
 
   const handleToggleSetting = async (key: keyof GuestPortalSettings) => {
     const updated = { ...portalSettings, [key]: !portalSettings[key] };
     setPortalSettings(updated);
     setSaving(true);
     try {
-      await guestAuth.savePortalSettings(updated, activeScopeId);
-      await refreshSettings();
-      toast.success(`Guest portal settings updated for ${activeScopeName}.`);
+      await guestAuth.savePortalSettings(updated);
+      toast.success('Guest portal settings updated successfully.');
     } catch (e) {
       toast.error('Failed to save settings');
     } finally {
@@ -101,9 +82,8 @@ export const GuestPortalSettingsTab: React.FC = () => {
     e.preventDefault();
     setSaving(true);
     try {
-      await guestAuth.savePortalSettings(portalSettings, activeScopeId);
-      await refreshSettings();
-      toast.success(`Concierge preferences saved for ${activeScopeName}.`);
+      await guestAuth.savePortalSettings(portalSettings);
+      toast.success('Portal preferences saved successfully.');
     } catch (e) {
       toast.error('Failed to save preferences');
     } finally {
@@ -137,10 +117,7 @@ export const GuestPortalSettingsTab: React.FC = () => {
         outlet_id: account.outlet_id,
         forceResend: true
       });
-      toast.success(
-        `Credentials dispatched to ${account.email}. New Temporary Password: ${res.tempPassword || account.temp_password}`,
-        { duration: 8000 }
-      );
+      toast.success(`Credentials dispatched to ${account.email}`);
       await loadData();
     } catch (e: any) {
       toast.error(e?.message || 'Failed to dispatch credentials');
@@ -149,56 +126,14 @@ export const GuestPortalSettingsTab: React.FC = () => {
     }
   };
 
-  const handleDeleteAccount = async (id: string, name: string) => {
-    if (!window.confirm(`Are you sure you want to permanently delete guest portal credentials for ${name}?`)) return;
-    setActionLoadingId(id);
-    try {
-      await guestAuth.deleteGuestAccount(id);
-      setAccounts(prev => prev.filter(a => a.id !== id));
-      toast.success(`Guest portal access deleted for ${name}.`);
-    } catch (e) {
-      toast.error('Failed to delete guest account');
-    } finally {
-      setActionLoadingId(null);
-    }
-  };
-
-  const filteredAccounts = useMemo(() => {
-    return accounts.filter(a => {
-      // Find all matching members for this guest account
-      const guestMembers = members.filter(m => 
-        (a.member_id && m.id === a.member_id) ||
-        (m.email && m.email.toLowerCase() === (a.email || '').toLowerCase())
-      );
-
-      // 1. If an outlet is selected on top
-      if (currentOutlet?.id) {
-        const directMatch = a.outlet_id === currentOutlet.id;
-        const memberMatch = guestMembers.some(m => m.outlet_id === currentOutlet.id);
-        if (!directMatch && !memberMatch) return false;
-      }
-      // 2. If a property is selected on top (without a specific outlet)
-      else if (currentProperty?.id) {
-        const directMatch = a.property_id === currentProperty.id;
-        const directOutletMatch = a.outlet_id && outlets?.some(o => o.id === a.outlet_id && o.property_id === currentProperty.id);
-        const memberMatch = guestMembers.some(m => {
-          if (m.property_id === currentProperty.id) return true;
-          const o = outlets?.find(out => out.id === m.outlet_id);
-          return o?.property_id === currentProperty.id;
-        });
-        if (!directMatch && !directOutletMatch && !memberMatch) return false;
-      }
-
-      // 3. Search query filter
-      const q = searchTerm.trim().toLowerCase();
-      if (!q) return true;
-      return (
-        (a.name || '').toLowerCase().includes(q) ||
-        (a.email || '').toLowerCase().includes(q) ||
-        (a.phone && a.phone.includes(q))
-      );
-    });
-  }, [accounts, members, currentOutlet?.id, currentProperty?.id, outlets, searchTerm]);
+  const filteredAccounts = accounts.filter(a => {
+    const q = searchTerm.toLowerCase();
+    return (
+      a.name.toLowerCase().includes(q) ||
+      a.email.toLowerCase().includes(q) ||
+      (a.phone && a.phone.includes(q))
+    );
+  });
 
   const portalDomainUrl = 'https://hcm-guest.perfection.my/#/guest-login';
 
@@ -210,17 +145,11 @@ export const GuestPortalSettingsTab: React.FC = () => {
         
         <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-6">
           <div className="space-y-2 max-w-xl">
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-300 text-[10px] font-black uppercase tracking-widest border border-indigo-400/20">
-                <Smartphone className="w-3.5 h-3.5" /> Super Admin Control
-              </div>
-              <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 text-[10px] font-black uppercase tracking-widest border border-amber-400/30">
-                <span>Facility Scope:</span>
-                <span className="text-white font-bold">{activeScopeName}</span>
-              </div>
+            <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-indigo-500/20 text-indigo-300 text-[10px] font-black uppercase tracking-widest border border-indigo-400/20">
+              <Smartphone className="w-3.5 h-3.5" /> Super Admin Control
             </div>
             <h2 className="text-2xl sm:text-3xl font-black uppercase tracking-tight text-white">
-              Guest Portal Settings — {activeScopeName}
+              Guest Mobile Portal Management
             </h2>
             <p className="text-slate-300 text-xs sm:text-sm font-medium leading-relaxed">
               Configure guest visibility, touchless QR check-in, PT session tracking, spa booking requests, and manage authenticated guest accounts.
@@ -520,21 +449,16 @@ export const GuestPortalSettingsTab: React.FC = () => {
       <Card className="rounded-[2.5rem] border-slate-200/80 shadow-sm bg-white overflow-hidden">
         <div className="p-6 sm:p-8 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
           <div>
-            <div className="flex items-center gap-2 mb-1">
-              <h3 className="text-base font-black uppercase text-slate-900 tracking-tight">
-                Authenticated Guest Accounts ({filteredAccounts.length})
-              </h3>
-              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-200">
-                {currentOutlet ? currentOutlet.name : currentProperty ? currentProperty.name : 'All Facilities'}
-              </span>
-            </div>
+            <h3 className="text-base font-black uppercase text-slate-900 tracking-tight">
+              Authenticated Guest Accounts ({accounts.length})
+            </h3>
             <p className="text-xs text-slate-500 font-medium">
               Manage member credentials, resend temporary passwords, or suspend access
             </p>
           </div>
 
           <div className="flex items-center gap-3">
-            <div className="relative w-64 sm:w-72">
+            <div className="relative w-64">
               <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
@@ -546,7 +470,7 @@ export const GuestPortalSettingsTab: React.FC = () => {
             </div>
             <button
               onClick={loadData}
-              className="p-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 transition-colors"
+              className="p-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600"
               title="Refresh List"
             >
               <RefreshCw className="w-4 h-4" />
@@ -570,72 +494,25 @@ export const GuestPortalSettingsTab: React.FC = () => {
               {filteredAccounts.length === 0 ? (
                 <tr>
                   <td colSpan={6} className="px-6 py-12 text-center text-slate-400 font-medium">
-                    {accounts.length > 0 ? (
-                      <div className="space-y-2">
-                        <p className="text-slate-600 font-bold">
-                          No guest accounts found for {currentOutlet ? currentOutlet.name : currentProperty ? currentProperty.name : 'this view'}.
-                        </p>
-                        {searchTerm && (
-                          <button
-                            type="button"
-                            onClick={() => setSearchTerm('')}
-                            className="px-4 py-2 rounded-xl bg-indigo-600 text-white text-xs font-black uppercase tracking-wider shadow-md hover:bg-indigo-700 transition-all"
-                          >
-                            Clear Search Filter
-                          </button>
-                        )}
-                      </div>
-                    ) : (
-                      "No guest accounts found. New accounts are automatically provisioned when members or guests are created with an email address."
-                    )}
+                    No guest accounts found. New accounts are automatically provisioned when members or guests are created with an email address.
                   </td>
                 </tr>
               ) : (
-                filteredAccounts.map(acc => {
-                  const guestMember = members.find(m => 
-                    (currentOutlet && m.outlet_id === currentOutlet.id && (m.id === acc.member_id || m.email?.toLowerCase() === acc.email.toLowerCase())) ||
-                    (m.id === acc.member_id || m.email?.toLowerCase() === acc.email.toLowerCase())
-                  );
-                  const effectiveOutletId = (currentOutlet?.id) || acc.outlet_id || guestMember?.outlet_id;
-                  const matchedOutlet = outlets?.find(o => o.id === effectiveOutletId);
-                  const matchedProp = properties?.find(p => p.id === matchedOutlet?.property_id || p.id === acc.property_id || p.id === guestMember?.property_id);
-                  const facilityName = matchedOutlet?.name || matchedProp?.name;
-
-                  return (
-                    <tr key={acc.id} className="hover:bg-slate-50/60 transition-colors">
-                      <td className="px-6 py-4 font-bold text-slate-900">
-                        <div className="flex items-center gap-2">
-                          <div className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center font-black text-xs shrink-0">
-                            {acc.name ? acc.name.charAt(0).toUpperCase() : 'G'}
-                          </div>
-                          <div>
-                            <p>{acc.name}</p>
-                            <div className="flex items-center gap-2 text-[10px] text-slate-400 font-normal">
-                              {acc.phone && <span>{acc.phone}</span>}
-                              {facilityName && (
-                                <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 font-medium">
-                                  {facilityName}
-                                </span>
-                              )}
-                            </div>
-                          </div>
+                filteredAccounts.map(acc => (
+                  <tr key={acc.id} className="hover:bg-slate-50/60 transition-colors">
+                    <td className="px-6 py-4 font-bold text-slate-900">
+                      <div className="flex items-center gap-2">
+                        <div className="w-7 h-7 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center font-black text-xs">
+                          {acc.name.charAt(0).toUpperCase()}
                         </div>
-                      </td>
-                    <td className="px-6 py-4 font-mono text-slate-600">
-                      <div className="flex items-center gap-1.5">
-                        <span>{acc.email}</span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            navigator.clipboard.writeText(acc.email);
-                            toast.success(`Copied email: ${acc.email}`);
-                          }}
-                          className="p-1 rounded-lg border border-slate-200 bg-slate-50 hover:bg-indigo-50 text-slate-400 hover:text-indigo-600 transition-colors shrink-0"
-                          title="Copy Email"
-                        >
-                          <Copy className="w-3.5 h-3.5" />
-                        </button>
+                        <div>
+                          <p>{acc.name}</p>
+                          {acc.phone && <p className="text-[10px] text-slate-400 font-normal">{acc.phone}</p>}
+                        </div>
                       </div>
+                    </td>
+                    <td className="px-6 py-4 font-mono text-slate-600">
+                      {acc.email}
                     </td>
                     <td className="px-6 py-4">
                       <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-black uppercase tracking-wider ${
@@ -648,30 +525,9 @@ export const GuestPortalSettingsTab: React.FC = () => {
                     </td>
                     <td className="px-6 py-4">
                       {acc.must_change_password ? (
-                        <div className="flex flex-col items-start gap-1">
-                          <span className="text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md text-[9px] font-black uppercase">
-                            Temporary Pass
-                          </span>
-                          {acc.temp_password && (
-                            <div className="flex items-center gap-1.5 mt-0.5">
-                              <code className="text-[11px] font-mono font-black text-slate-800 bg-slate-100 border border-slate-200 px-2 py-1 rounded-lg select-all" title="Temporary Passcode">
-                                {acc.temp_password}
-                              </code>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  navigator.clipboard.writeText(acc.temp_password || '');
-                                  toast.success(`Copied temporary passcode: ${acc.temp_password}`);
-                                }}
-                                className="p-1.5 rounded-lg border border-amber-200 bg-amber-50 hover:bg-amber-100 text-amber-800 transition-colors shrink-0 flex items-center gap-1 font-bold text-[10px]"
-                                title="Copy Temporary Password"
-                              >
-                                <Copy className="w-3.5 h-3.5" />
-                                <span>Copy</span>
-                              </button>
-                            </div>
-                          )}
-                        </div>
+                        <span className="text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase">
+                          Temporary Pass
+                        </span>
                       ) : (
                         <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md text-[10px] font-bold uppercase">
                           Permanent Key
@@ -696,27 +552,18 @@ export const GuestPortalSettingsTab: React.FC = () => {
                           disabled={actionLoadingId === acc.id}
                           className={`px-3 py-1.5 rounded-lg text-[11px] font-bold transition-colors ${
                             acc.is_active
-                              ? 'bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200'
-                              : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200'
+                              ? 'bg-red-50 hover:bg-red-100 text-red-700'
+                              : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700'
                           }`}
                         >
                           {acc.is_active ? 'Suspend' : 'Activate'}
                         </button>
-                        <button
-                          onClick={() => handleDeleteAccount(acc.id, acc.name)}
-                          disabled={actionLoadingId === acc.id}
-                          className="px-2.5 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 text-[11px] font-bold flex items-center gap-1 transition-colors"
-                          title="Permanently delete guest account"
-                        >
-                          <Trash2 className="w-3 h-3" /> Delete
-                        </button>
                       </div>
                     </td>
                   </tr>
-                );
-              })
-            )}
-          </tbody>
+                ))
+              )}
+            </tbody>
           </table>
         </div>
       </Card>

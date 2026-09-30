@@ -1,8 +1,8 @@
 {
-  "name": "HCM - Guest Portal",
-  "short_name": "HCM - Guest Portal",
+  "name": "Health Club Management",
+  "short_name": "HCM",
   "description": "Health Club and Spa Management System",
-  "start_url": "/#/guest-login",
+  "start_url": "/",
   "display": "standalone",
   "background_color": "#ffffff",
   "theme_color": "#4f46e5",

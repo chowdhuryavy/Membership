@@ -22,31 +22,6 @@ export const DEFAULT_GUEST_PORTAL_SETTINGS: GuestPortalSettings = {
   support_email: 'support@perfection.my'
 };
 
-/**
- * Generates a unique, high-entropy, elegant temporary password for guests and members.
- * Never static or repetitive (e.g. 'Zen#7492!kX', 'Luxe$3816@qM', 'Opal*9521#wT').
- */
-export function generateDynamicTemporaryPassword(): string {
-  const prefixes = [
-    'Zen', 'Spa', 'Luxe', 'Aura', 'Opal', 'Jade', 'Silk', 'Flow',
-    'Pure', 'Vibe', 'Sage', 'Star', 'Nova', 'Echo', 'Vale', 'Peak',
-    'Fern', 'Dawn', 'Rose', 'Glow', 'Luna', 'Sol', 'Mira', 'Breeze'
-  ];
-  const symbols = ['!', '@', '#', '$', '%', '*', '&'];
-  
-  const prefix = prefixes[Math.floor(Math.random() * prefixes.length)];
-  const symbol1 = symbols[Math.floor(Math.random() * symbols.length)];
-  const digits = Math.floor(1000 + Math.random() * 9000); // 4 unique random digits
-  const symbol2 = symbols[Math.floor(Math.random() * symbols.length)];
-  
-  const uppers = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
-  const lowers = 'abcdefghijkmnopqrstuvwxyz';
-  const randUpper = uppers[Math.floor(Math.random() * uppers.length)];
-  const randLower = lowers[Math.floor(Math.random() * lowers.length)];
-  
-  return `${prefix}${symbol1}${digits}${symbol2}${randUpper}${randLower}`;
-}
-
 export class GuestAuthService {
   private static instance: GuestAuthService;
 
@@ -58,21 +33,15 @@ export class GuestAuthService {
   }
 
   // --- SETTINGS MANAGEMENT ---
-  public async getPortalSettings(scopeId?: string): Promise<GuestPortalSettings> {
-    const key = scopeId ? `${GUEST_PORTAL_SETTINGS_KEY}_${scopeId}` : GUEST_PORTAL_SETTINGS_KEY;
+  public async getPortalSettings(): Promise<GuestPortalSettings> {
     try {
       const companySettings = await db.getSettings().catch(() => null);
-      if (companySettings?.guest_portal_settings_map && scopeId && companySettings.guest_portal_settings_map[scopeId]) {
-        return { ...DEFAULT_GUEST_PORTAL_SETTINGS, ...companySettings.guest_portal_settings_map[scopeId] };
-      }
       if (companySettings?.guest_portal_settings) {
         return { ...DEFAULT_GUEST_PORTAL_SETTINGS, ...companySettings.guest_portal_settings };
       }
-      if (typeof localStorage !== 'undefined') {
-        const local = localStorage.getItem(key) || localStorage.getItem(GUEST_PORTAL_SETTINGS_KEY);
-        if (local) {
-          return { ...DEFAULT_GUEST_PORTAL_SETTINGS, ...JSON.parse(local) };
-        }
+      const local = localStorage.getItem(GUEST_PORTAL_SETTINGS_KEY);
+      if (local) {
+        return { ...DEFAULT_GUEST_PORTAL_SETTINGS, ...JSON.parse(local) };
       }
     } catch (e) {
       console.warn('[GuestAuth] Error reading portal settings, using defaults');
@@ -80,22 +49,16 @@ export class GuestAuthService {
     return DEFAULT_GUEST_PORTAL_SETTINGS;
   }
 
-  public async savePortalSettings(settings: Partial<GuestPortalSettings>, scopeId?: string): Promise<GuestPortalSettings> {
-    const current = await this.getPortalSettings(scopeId);
+  public async savePortalSettings(settings: Partial<GuestPortalSettings>): Promise<GuestPortalSettings> {
+    const current = await this.getPortalSettings();
     const updated = { ...current, ...settings };
-    const key = scopeId ? `${GUEST_PORTAL_SETTINGS_KEY}_${scopeId}` : GUEST_PORTAL_SETTINGS_KEY;
     try {
-      if (typeof localStorage !== 'undefined') {
-        localStorage.setItem(key, JSON.stringify(updated));
-      }
+      localStorage.setItem(GUEST_PORTAL_SETTINGS_KEY, JSON.stringify(updated));
       const companySettings = await db.getSettings().catch(() => null);
       if (companySettings) {
-        const existingMap = companySettings.guest_portal_settings_map || {};
-        const updatedMap = scopeId ? { ...existingMap, [scopeId]: updated } : existingMap;
         await db.updateSettings({
           ...companySettings,
-          guest_portal_settings: scopeId ? (companySettings.guest_portal_settings || updated) : updated,
-          guest_portal_settings_map: updatedMap
+          guest_portal_settings: updated
         });
       }
     } catch (e) {
@@ -107,139 +70,23 @@ export class GuestAuthService {
   // --- ACCOUNTS REGISTRY ---
   public async getAccounts(): Promise<GuestAccount[]> {
     try {
-      const companySettings = await db.getSettings().catch(() => null);
-      if (companySettings?.guest_accounts && Array.isArray(companySettings.guest_accounts)) {
-        if (typeof localStorage !== 'undefined') {
-          localStorage.setItem(GUEST_ACCOUNTS_STORAGE_KEY, JSON.stringify(companySettings.guest_accounts));
-        }
-        return companySettings.guest_accounts;
+      const raw = localStorage.getItem(GUEST_ACCOUNTS_STORAGE_KEY);
+      if (raw) {
+        return JSON.parse(raw) as GuestAccount[];
       }
-      if (typeof localStorage !== 'undefined') {
-        const raw = localStorage.getItem(GUEST_ACCOUNTS_STORAGE_KEY);
-        if (raw) {
-          return JSON.parse(raw) as GuestAccount[];
-        }
-      }
-    } catch (e) {
-      console.warn('[GuestAuth] Error reading guest accounts store:', e);
-    }
+    } catch (e) {}
     return [];
   }
 
   private async saveAccounts(accounts: GuestAccount[]): Promise<void> {
-    try {
-      if (typeof localStorage !== 'undefined') {
-        localStorage.setItem(GUEST_ACCOUNTS_STORAGE_KEY, JSON.stringify(accounts));
-      }
-      const companySettings = await db.getSettings().catch(() => null);
-      if (companySettings) {
-        await db.updateSettings({
-          ...companySettings,
-          guest_accounts: accounts
-        });
-      }
-    } catch (e) {
-      console.error('[GuestAuth] Error saving guest accounts:', e);
-    }
-  }
-
-  public async deleteGuestAccount(id: string): Promise<boolean> {
-    const accounts = await this.getAccounts();
-    const filtered = accounts.filter(a => a.id !== id);
-    if (filtered.length !== accounts.length) {
-      await this.saveAccounts(filtered);
-      return true;
-    }
-    return false;
-  }
-
-  public async deleteGuestAccountByMemberId(memberId: string): Promise<boolean> {
-    const accounts = await this.getAccounts();
-    const targetAcc = accounts.find(a => a.member_id === memberId || a.id === memberId);
-    if (!targetAcc) return false;
-
-    // Check if this guest still has other active memberships under their email
-    try {
-      const allMembers = await db.getMembers('').catch(() => []);
-      const remainingMembers = allMembers.filter(
-        (m: any) => m.id !== memberId && m.email && m.email.toLowerCase() === targetAcc.email.toLowerCase() && m.status !== 'Cancelled'
-      );
-
-      if (remainingMembers.length > 0) {
-        // Relink account to their most recent active membership!
-        remainingMembers.sort((a: any, b: any) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
-        const newPrimary = remainingMembers[0];
-        targetAcc.member_id = newPrimary.id;
-        targetAcc.outlet_id = newPrimary.outlet_id;
-        await this.saveAccounts(accounts);
-        return true;
-      }
-    } catch (e) {
-      console.warn('[GuestAuth] Error checking remaining memberships:', e);
-    }
-
-    const filtered = accounts.filter(a => a.member_id !== memberId && a.id !== memberId);
-    if (filtered.length !== accounts.length) {
-      await this.saveAccounts(filtered);
-      return true;
-    }
-    return false;
+    localStorage.setItem(GUEST_ACCOUNTS_STORAGE_KEY, JSON.stringify(accounts));
   }
 
   public async getAccountByEmail(email: string): Promise<GuestAccount | null> {
     const cleanEmail = (email || '').trim().toLowerCase();
     if (!cleanEmail) return null;
-    let accounts = await this.getAccounts();
-    let account = accounts.find(a => a.email.toLowerCase() === cleanEmail);
-
-    if (!account) {
-      try {
-        const [members, ptMembers, guests] = await Promise.all([
-          db.getMembers('').catch(() => []),
-          db.getPTMembers('').catch(() => []),
-          db.getGuests('').catch(() => [])
-        ]);
-
-        const matchedMember = members.find((m: any) => m.email && m.email.toLowerCase() === cleanEmail);
-        const matchedPT = ptMembers.find((p: any) => p.email && p.email.toLowerCase() === cleanEmail);
-        const matchedGuest = guests.find((g: any) => g.email && g.email.toLowerCase() === cleanEmail);
-
-        if (matchedMember) {
-          const res = await this.provisionGuestAccount({
-            email: matchedMember.email,
-            name: matchedMember.guest_name,
-            phone: matchedMember.phone,
-            property_id: matchedMember.property_id,
-            outlet_id: matchedMember.outlet_id,
-            member_id: matchedMember.id
-          });
-          return res.account;
-        } else if (matchedPT) {
-          const res = await this.provisionGuestAccount({
-            email: matchedPT.email,
-            name: matchedPT.guest_name,
-            phone: matchedPT.phone,
-            property_id: matchedPT.property_id,
-            outlet_id: matchedPT.outlet_id,
-            member_id: matchedPT.id
-          });
-          return res.account;
-        } else if (matchedGuest) {
-          const res = await this.provisionGuestAccount({
-            email: matchedGuest.email,
-            name: matchedGuest.name,
-            phone: matchedGuest.phone,
-            property_id: matchedGuest.property_id,
-            guest_id: matchedGuest.id
-          });
-          return res.account;
-        }
-      } catch (e) {
-        console.warn('[GuestAuth] Error auto-provisioning guest by email:', e);
-      }
-    }
-
-    return account || null;
+    const accounts = await this.getAccounts();
+    return accounts.find(a => a.email.toLowerCase() === cleanEmail) || null;
   }
 
   // --- PROVISIONING ON NEW GUEST CREATION ---
@@ -269,8 +116,9 @@ export class GuestAuthService {
 
     if (!account) {
       isNew = true;
-      // Generate unique, dynamic temporary password
-      tempPass = generateDynamicTemporaryPassword();
+      // Generate secure temporary password
+      const randomDigits = Math.floor(100000 + Math.random() * 900000);
+      tempPass = `Guest@${randomDigits}!`;
 
       account = {
         id: crypto.randomUUID ? crypto.randomUUID() : `ga_${Date.now()}`,
@@ -290,21 +138,13 @@ export class GuestAuthService {
 
       accounts.push(account);
       await this.saveAccounts(accounts);
-    } else if (params.forceResend || account.must_change_password || !account.temp_password || account.temp_password.includes('594510')) {
-      // Whenever resending, or if still on temporary password, or if stuck on old default, generate a fresh unique password!
-      tempPass = generateDynamicTemporaryPassword();
+    } else if (params.forceResend) {
+      const randomDigits = Math.floor(100000 + Math.random() * 900000);
+      tempPass = `Guest@${randomDigits}!`;
       account.temp_password = tempPass;
       account.password = tempPass;
       account.must_change_password = true;
-      if (params.name) account.name = params.name;
-      if (params.phone) account.phone = params.phone;
-      if (params.property_id) account.property_id = params.property_id;
-      if (params.outlet_id) account.outlet_id = params.outlet_id;
-      if (params.member_id) account.member_id = params.member_id;
-      if (params.guest_id) account.guest_id = params.guest_id;
       await this.saveAccounts(accounts);
-    } else {
-      tempPass = account.temp_password || '';
     }
 
     // Dispatch welcome email if new or explicitly requested
@@ -335,6 +175,11 @@ export class GuestAuthService {
       return { error: 'Please enter both your email address and password.' };
     }
 
+    const settings = await this.getPortalSettings();
+    if (!settings.is_enabled) {
+      return { error: 'The Guest Mobile Portal is currently undergoing scheduled maintenance. Please check back shortly.' };
+    }
+
     const account = await this.getAccountByEmail(cleanEmail);
     if (!account) {
       return { error: 'No guest account found with this email address. Please contact the front desk.' };
@@ -344,47 +189,7 @@ export class GuestAuthService {
       return { error: 'Your mobile portal access is currently suspended. Please contact front desk management.' };
     }
 
-    // Verify member existence if account is linked to a member record
-    if (account.member_id) {
-      try {
-        const members = await db.getMembers('').catch(() => []);
-        const matchedMember = members.find((m: any) => m.id === account.member_id);
-        if (!matchedMember || matchedMember.status === 'Cancelled') {
-          const anotherMember = members.find((m: any) => m.email && m.email.toLowerCase() === cleanEmail && m.status !== 'Cancelled');
-          if (anotherMember) {
-            account.member_id = anotherMember.id;
-            account.outlet_id = anotherMember.outlet_id;
-            const accounts = await this.getAccounts();
-            const idx = accounts.findIndex(a => a.id === account.id);
-            if (idx !== -1) {
-              accounts[idx] = account;
-              await this.saveAccounts(accounts);
-            }
-          } else {
-            account.is_active = false;
-            await this.deleteGuestAccountByMemberId(account.member_id);
-            return { error: 'Your membership account is no longer active. Please contact front desk management.' };
-          }
-        }
-      } catch (e) {
-        console.warn('[GuestAuth] Could not verify member status:', e);
-      }
-    }
-
-    // Facility-scoped portal settings check (per property / outlet)
-    const scopeId = account.outlet_id || account.property_id;
-    const facilitySettings = await this.getPortalSettings(scopeId);
-    if (!facilitySettings.is_enabled) {
-      return { error: 'Guest Mobile Portal access is currently disabled for this facility. Please contact front desk management.' };
-    }
-
-    const isPasswordValid = 
-      account.password === cleanPass || 
-      account.temp_password === cleanPass ||
-      (Boolean(account.password) && account.password!.trim() === cleanPass) ||
-      (Boolean(account.temp_password) && account.temp_password!.trim() === cleanPass);
-
-    if (!isPasswordValid) {
+    if (account.password !== cleanPass) {
       return { error: 'Incorrect email or password. Please verify and try again.' };
     }
 
@@ -544,7 +349,8 @@ export class GuestAuthService {
     const idx = accounts.findIndex(a => a.id === id);
     if (idx === -1) throw new Error('Account not found');
 
-    const newTemp = generateDynamicTemporaryPassword();
+    const randomDigits = Math.floor(100000 + Math.random() * 900000);
+    const newTemp = `Guest@${randomDigits}!`;
 
     accounts[idx].password = newTemp;
     accounts[idx].temp_password = newTemp;
@@ -561,47 +367,6 @@ export class GuestAuthService {
     }).catch(console.error);
 
     return newTemp;
-  }
-  // --- GUEST NOTIFICATIONS ---
-  public async getGuestNotifications(email: string): Promise<{ id: string; email: string; title: string; message: string; type?: 'info' | 'success' | 'warning' | 'error'; created_at: string; read: boolean }[]> {
-    const cleanEmail = (email || '').trim().toLowerCase();
-    if (!cleanEmail) return [];
-    try {
-      const all = JSON.parse(localStorage.getItem('hcm_guest_notifications_store') || '[]') as any[];
-      return all.filter(n => n.email.toLowerCase() === cleanEmail).sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-    } catch (e) {
-      return [];
-    }
-  }
-
-  public async addGuestNotification(email: string, title: string, message: string, type: 'info' | 'success' | 'warning' | 'error' = 'info'): Promise<void> {
-    const cleanEmail = (email || '').trim().toLowerCase();
-    if (!cleanEmail) return;
-    try {
-      const all = JSON.parse(localStorage.getItem('hcm_guest_notifications_store') || '[]') as any[];
-      all.unshift({
-        id: crypto.randomUUID(),
-        email: cleanEmail,
-        title,
-        message,
-        type,
-        created_at: new Date().toISOString(),
-        read: false
-      });
-      localStorage.setItem('hcm_guest_notifications_store', JSON.stringify(all));
-    } catch (e) {
-      console.error('[GuestAuth] Error adding guest notification:', e);
-    }
-  }
-
-  public async markGuestNotificationsRead(email: string): Promise<void> {
-    const cleanEmail = (email || '').trim().toLowerCase();
-    if (!cleanEmail) return;
-    try {
-      const all = JSON.parse(localStorage.getItem('hcm_guest_notifications_store') || '[]') as any[];
-      const updated = all.map(n => n.email.toLowerCase() === cleanEmail ? { ...n, read: true } : n);
-      localStorage.setItem('hcm_guest_notifications_store', JSON.stringify(updated));
-    } catch (e) {}
   }
 }
 

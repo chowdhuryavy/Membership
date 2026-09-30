@@ -90,7 +90,7 @@ export const GuestLoadingScreen: React.FC<GuestLoadingScreenProps> = ({
       {/* Footer Branding */}
       <div className="absolute bottom-8 text-center">
         <p className="text-[9px] font-black uppercase tracking-[0.3em] text-slate-500">
-          Powered by Perfection
+          Powered by Perfection Hospitality
         </p>
       </div>
     </motion.div>

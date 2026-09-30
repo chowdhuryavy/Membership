@@ -102,40 +102,6 @@
   50% { opacity: 0.7; transform: scale(0.95); }
 }
 
-@keyframes perfection-glow {
-  0%, 100% {
-    box-shadow: 0 0 10px rgba(245, 158, 11, 0.4), 0 0 20px rgba(245, 158, 11, 0.2);
-    transform: scale(1);
-  }
-  50% {
-    box-shadow: 0 0 18px rgba(245, 158, 11, 0.7), 0 0 30px rgba(245, 158, 11, 0.35);
-    transform: scale(1.04);
-  }
-}
-
-@keyframes perfection-shimmer {
-  0% { transform: translateX(-150%) skewX(-20deg); }
-  100% { transform: translateX(250%) skewX(-20deg); }
-}
-
-@keyframes perfection-ring-pulse {
-  0% { transform: scale(0.95); opacity: 0.8; }
-  50% { transform: scale(1.18); opacity: 0; }
-  100% { transform: scale(0.95); opacity: 0; }
-}
-
-.animate-perfection-glow {
-  animation: perfection-glow 2.5s ease-in-out infinite;
-}
-
-.animate-perfection-shimmer {
-  animation: perfection-shimmer 3s ease-in-out infinite;
-}
-
-.animate-perfection-ring {
-  animation: perfection-ring-pulse 2s cubic-bezier(0, 0, 0.2, 1) infinite;
-}
-
 .animate-pulse-soft {
   animation: pulse-soft 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
 }

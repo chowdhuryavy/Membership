@@ -2,12 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { db } from '../services/mockSupabase';
 import { useSettings } from '../contexts/SettingsContext';
-import { LogIn, ShieldAlert, UserCircle2, ArrowRight, Sparkles, Lock, Eye, EyeOff, ShieldCheck, Scan } from 'lucide-react';
+import { LogIn, ShieldAlert, UserCircle2, ArrowRight, Sparkles, Lock, Eye, EyeOff, ShieldCheck } from 'lucide-react';
 import { Button, Input } from '../components/ui';
 import { getDeviceSessionItem, setDeviceSessionItem, removeDeviceSessionItem } from '../services/deviceStorage';
-import { biometricAuth } from '../services/biometricAuth';
-import { BiometricEnableModal } from '../components/BiometricEnableModal';
-import toast from 'react-hot-toast';
 
 const StaffLogin = () => {
   const [employeeNumber, setEmployeeNumber] = useState('');
@@ -17,49 +14,6 @@ const StaffLogin = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const { settings } = useSettings();
-
-  // Mobile Biometric States
-  const [isMobile, setIsMobile] = useState(false);
-  const [showBiometricModal, setShowBiometricModal] = useState(false);
-  const [pendingStaff, setPendingStaff] = useState<{ empId: string; name: string } | null>(null);
-
-  useEffect(() => {
-    if (biometricAuth.isMobileDevice()) {
-      setIsMobile(true);
-      const bioEmp = biometricAuth.getRegisteredIdentifier('staff');
-      if (bioEmp && !employeeNumber) {
-        setEmployeeNumber(bioEmp);
-      }
-    }
-  }, []);
-
-  const handleBiometricLogin = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const res = await biometricAuth.authenticateBiometric('staff', employeeNumber || undefined);
-      if (res.success && res.identifier) {
-        const staffMembers = await db.getStaff().catch(() => []);
-        const matchedStaff = staffMembers.find((s: any) => s.employee_number.toLowerCase() === res.identifier?.toLowerCase());
-        if (matchedStaff && matchedStaff.status === 'Active') {
-          setDeviceSessionItem('staff_session', JSON.stringify(matchedStaff));
-          toast.success(`Biometric Login Verified! Welcome, ${matchedStaff.name}!`, { icon: '👤' });
-          navigate('/staff-schedule');
-          return;
-        } else if (matchedStaff && matchedStaff.status !== 'Active') {
-          setError('Your staff account is currently suspended.');
-        } else {
-          setError('Staff record not found for this biometric key.');
-        }
-      } else if (res.error && !res.error.includes('cancelled')) {
-        setError(res.error);
-      }
-    } catch (e: any) {
-      setError('Biometric verification failed.');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -71,14 +25,6 @@ const StaffLogin = () => {
       if (staff) {
         // Store staff session
         setDeviceSessionItem('staff_session', JSON.stringify(staff));
-
-        if (isMobile && !biometricAuth.hasRegisteredBiometric('staff', staff.employee_number)) {
-          setPendingStaff({ empId: staff.employee_number, name: staff.name });
-          setShowBiometricModal(true);
-          setLoading(false);
-          return;
-        }
-
         navigate('/staff-schedule');
       } else {
         setError('Invalid employee number or password, or access denied.');
@@ -96,8 +42,7 @@ const StaffLogin = () => {
     localStorage.setItem('preferred_portal', 'staff');
 
     const host = window.location.hostname.toLowerCase();
-    const isProd = host.includes('perfection.my');
-    if (isProd && host.includes('hcm.perfection.my') && !host.includes('hcm-staff')) {
+    if (host.includes('hcm.perfection.my') && !host.includes('hcm-staff')) {
       window.location.href = 'https://hcm-staff.perfection.my/#/staff-login';
       return;
     }
@@ -118,11 +63,21 @@ const StaffLogin = () => {
   }, [navigate]);
 
   const handleAdminPortalClick = () => {
-    navigate('/login');
+    const host = window.location.hostname.toLowerCase();
+    if (host.includes('perfection.my')) {
+      window.location.href = 'https://hcm.perfection.my/#/login';
+    } else {
+      navigate('/login');
+    }
   };
 
   const handleGuestPortalClick = () => {
-    navigate('/guest-login');
+    const host = window.location.hostname.toLowerCase();
+    if (host.includes('perfection.my')) {
+      window.location.href = 'https://hcm-guest.perfection.my/#/guest-login';
+    } else {
+      navigate('/guest-login');
+    }
   };
 
   return (
@@ -247,7 +202,7 @@ const StaffLogin = () => {
               </div>
             </div>
 
-            <div className="pt-2 space-y-2.5">
+            <div className="pt-2">
               <Button 
                 type="submit" 
                 className="w-full h-14 rounded-2xl bg-slate-900 hover:bg-slate-800 text-white font-black text-xs uppercase tracking-widest shadow-xl shadow-slate-200 transition-all active:scale-[0.98] group" 
@@ -257,39 +212,31 @@ const StaffLogin = () => {
                   Authenticate <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                 </span>
               </Button>
+            </div>
 
-              {/* Mobile Biometric Sign-In Button */}
-              {isMobile && (
+            <div className="pt-4 border-t border-slate-100 flex flex-col items-center gap-1.5 text-center">
+              <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+                Switch Portal
+              </p>
+              <div className="flex items-center gap-3">
                 <button
                   type="button"
-                  onClick={handleBiometricLogin}
-                  disabled={loading}
-                  className="w-full h-14 rounded-2xl bg-emerald-900 hover:bg-emerald-800 text-white font-black text-xs uppercase tracking-widest shadow-lg transition-all flex items-center justify-center gap-2.5 border border-emerald-700 active:scale-[0.98]"
+                  onClick={handleAdminPortalClick}
+                  className="text-[11px] font-bold text-slate-600 hover:text-indigo-600 transition-colors"
                 >
-                  <Scan className="w-5 h-5 text-emerald-300 animate-pulse" />
-                  <span>Sign In with Face ID / Fingerprint</span>
+                  Admin Management
                 </button>
-              )}
+                <span className="text-slate-300">&bull;</span>
+                <button
+                  type="button"
+                  onClick={handleGuestPortalClick}
+                  className="text-[11px] font-bold text-emerald-600 hover:text-emerald-800 transition-colors"
+                >
+                  Guest Mobile Portal
+                </button>
+              </div>
             </div>
           </form>
-
-          {/* Biometric Setup Offer Modal for Mobile Staff */}
-          {pendingStaff && (
-            <BiometricEnableModal
-              type="staff"
-              identifier={pendingStaff.empId}
-              name={pendingStaff.name}
-              isOpen={showBiometricModal}
-              onClose={() => {
-                setShowBiometricModal(false);
-                navigate('/staff-schedule');
-              }}
-              onEnabled={() => {
-                setShowBiometricModal(false);
-                navigate('/staff-schedule');
-              }}
-            />
-          )}
         </div>
       </div>
     </div>

@@ -1,9 +1,8 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { guestAuth, DEFAULT_GUEST_PORTAL_SETTINGS } from '../services/guestAuthService';
+import { guestAuth } from '../services/guestAuthService';
 import { db } from '../services/mockSupabase';
 import { useSettings } from '../contexts/SettingsContext';
-import { GuestPortalSettings } from '../types';
 import {
   LogIn,
   Mail,
@@ -19,12 +18,7 @@ import {
   RefreshCw,
   HelpCircle,
   Building2,
-  ArrowLeft,
-  Smartphone,
-  Phone,
-  ExternalLink,
-  AlertTriangle,
-  Power
+  ArrowLeft
 } from 'lucide-react';
 import { Button } from '../components/ui';
 import {
@@ -32,9 +26,6 @@ import {
   validatePasswordComplexity
 } from '../components/PasswordComplexityChecker';
 import { GuestLoadingScreen } from '../components/GuestLoadingScreen';
-import { biometricAuth } from '../services/biometricAuth';
-import { BiometricEnableModal } from '../components/BiometricEnableModal';
-import { Scan, Fingerprint } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 type LoginView = 'login' | 'force_change' | 'forgot_email' | 'forgot_otp' | 'forgot_new_pass';
@@ -43,156 +34,42 @@ export default function GuestLogin() {
   const navigate = useNavigate();
   const { settings, currentProperty } = useSettings();
 
+  // Loading state
   const [initialLoading, setInitialLoading] = useState(true);
   const [loading, setLoading] = useState(false);
   const [view, setView] = useState<LoginView>('login');
 
-  // Master System App Name from Settings Page
-  const fullAppName = settings?.name || 'Perfection Health Club & Spa';
-
-  const [dynamicPropertyName, setDynamicPropertyName] = useState(
-    currentProperty?.name || settings?.name || 'Luxury Health Club & Spa'
-  );
-  const [dynamicLogoUrl, setDynamicLogoUrl] = useState<string | null>(
-    currentProperty?.logo_url || settings?.logo_url || null
-  );
-
+  // Input states
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
 
+  // First-login / Password change state
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showNewPassword, setShowNewPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
+  // Forgot password OTP state
   const [otpCode, setOtpCode] = useState('');
   const [resendCooldown, setResendCooldown] = useState(0);
 
-  // Mobile Biometric States
-  const [isMobile, setIsMobile] = useState(false);
-  const [hasBiometric, setHasBiometric] = useState(false);
-  const [showBiometricModal, setShowBiometricModal] = useState(false);
-  const [pendingAccount, setPendingAccount] = useState<{ email: string; name: string } | null>(null);
+  // Property Branding
+  const propertyName = currentProperty?.name || settings?.name || 'Luxury Health Club & Spa';
+  const logoUrl = currentProperty?.logo_url || settings?.logo_url || null;
 
-  useEffect(() => {
-    if (biometricAuth.isMobileDevice()) {
-      setIsMobile(true);
-      const bioId = biometricAuth.getRegisteredIdentifier('guest');
-      if (bioId) {
-        setHasBiometric(true);
-        if (!email) setEmail(bioId);
-      }
-    }
-  }, []);
-
-  const handleBiometricLogin = async () => {
-    setLoading(true);
-    setError('');
-    try {
-      const res = await biometricAuth.authenticateBiometric('guest', email || undefined);
-      if (res.success && res.identifier) {
-        const account = await guestAuth.getAccountByEmail(res.identifier);
-        if (account && account.is_active) {
-          guestAuth.setActiveSession(account);
-          toast.success(`Biometric verification verified! Welcome, ${account.name || 'Member'}!`, {
-            icon: '👤',
-          });
-          navigate('/guest-portal');
-          return;
-        } else if (account && !account.is_active) {
-          setError('Your mobile portal access is currently suspended. Please contact front desk.');
-        } else {
-          setError('No active guest profile associated with this biometric credential.');
-        }
-      } else if (res.error && !res.error.includes('cancelled')) {
-        setError(res.error);
-      }
-    } catch (e: any) {
-      setError('Biometric verification failed.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Portal Online/Offline & Preferences State from Database
-  const [portalSettings, setPortalSettings] = useState<GuestPortalSettings>(DEFAULT_GUEST_PORTAL_SETTINGS);
-  const [checkingStatus, setCheckingStatus] = useState(false);
-
-  const fetchPortalSettings = useCallback(async (scopeId?: string) => {
-    try {
-      const activeScope = scopeId || currentProperty?.id;
-      const ps = await guestAuth.getPortalSettings(activeScope);
-      setPortalSettings(ps);
-    } catch (e) {
-      console.warn('Error reading portal settings:', e);
-    }
-  }, [currentProperty?.id]);
-
-  useEffect(() => {
-    fetchPortalSettings();
-  }, [fetchPortalSettings]);
-
-  // Sync settings and properties reactively when context updates
-  useEffect(() => {
-    if (currentProperty?.name) {
-      setDynamicPropertyName(currentProperty.name);
-    } else if (settings?.name) {
-      setDynamicPropertyName(settings.name);
-    }
-
-    if (currentProperty?.logo_url) {
-      setDynamicLogoUrl(currentProperty.logo_url);
-    } else if (settings?.logo_url) {
-      setDynamicLogoUrl(settings.logo_url);
-    }
-  }, [settings, currentProperty]);
-
-  const handleEmailBlur = async () => {
-    if (!email || !email.includes('@')) return;
-    try {
-      const account = await guestAuth.getAccountByEmail(email);
-      if (account) {
-        if (account.property_id || account.outlet_id) {
-          fetchPortalSettings(account.outlet_id || account.property_id);
-        }
-        if (account.property_id) {
-          const props = await db.getProperties().catch(() => []);
-          const matchedProp = props.find((p: any) => p.id === account.property_id);
-          if (matchedProp) {
-            if (matchedProp.name) setDynamicPropertyName(matchedProp.name);
-            if (matchedProp.logo_url) setDynamicLogoUrl(matchedProp.logo_url);
-          }
-        }
-      }
-    } catch (e) {
-      console.warn('Could not load property branding by email:', e);
-    }
-  };
-
-  const handleRecheckStatus = async () => {
-    setCheckingStatus(true);
-    try {
-      await fetchPortalSettings();
-      toast.success('Portal status verified from database.');
-    } catch (e) {
-      toast.error('Unable to verify portal status.');
-    } finally {
-      setCheckingStatus(false);
-    }
-  };
-
+  // Domain checks
   useEffect(() => {
     localStorage.setItem('preferred_portal', 'guest');
 
+    // Host check: if on main domain or staff domain specifically requested
     const host = window.location.hostname.toLowerCase();
-    const isProd = host.includes('perfection.my');
-    if (isProd && (host.includes('hcm.perfection.my') || host.includes('hcm-staff.perfection.my')) && !host.includes('hcm-guest')) {
-      window.location.href = 'https://hcm-guest.perfection.my/#/guest-login';
-      return;
+    if (host.includes('hcm.perfection.my') && !host.includes('hcm-guest') && !host.includes('hcm-staff')) {
+      // If user came to hcm.perfection.my/#/guest-login, that is valid
     }
 
+    // Auto login check if already has session
     const existing = guestAuth.getActiveSession();
     if (existing && existing.email && !existing.must_change_password) {
       navigate('/guest-portal');
@@ -201,11 +78,12 @@ export default function GuestLogin() {
 
     const timer = setTimeout(() => {
       setInitialLoading(false);
-    }, 1200);
+    }, 600);
 
     return () => clearTimeout(timer);
   }, [navigate]);
 
+  // Resend OTP countdown timer
   useEffect(() => {
     if (resendCooldown <= 0) return;
     const interval = setInterval(() => {
@@ -214,24 +92,16 @@ export default function GuestLogin() {
     return () => clearInterval(interval);
   }, [resendCooldown]);
 
+  // Complexity validation for new password
   const validation = validatePasswordComplexity(newPassword, confirmPassword);
 
+  // --- ACTIONS ---
   const handleLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
     setLoading(true);
 
     try {
-      const account = await guestAuth.getAccountByEmail(email);
-      if (account && account.property_id) {
-        const props = await db.getProperties().catch(() => []);
-        const matchedProp = props.find((p: any) => p.id === account.property_id);
-        if (matchedProp) {
-          if (matchedProp.name) setDynamicPropertyName(matchedProp.name);
-          if (matchedProp.logo_url) setDynamicLogoUrl(matchedProp.logo_url);
-        }
-      }
-
       const res = await guestAuth.loginGuest(email, password);
 
       if (res.error) {
@@ -251,15 +121,6 @@ export default function GuestLogin() {
       }
 
       toast.success(`Welcome back, ${res.account?.name || 'Member'}!`);
-
-      // Offer biometric registration on mobile if not already registered
-      if (isMobile && res.account && !biometricAuth.hasRegisteredBiometric('guest', res.account.email)) {
-        setPendingAccount({ email: res.account.email, name: res.account.name || 'Guest' });
-        setShowBiometricModal(true);
-        setLoading(false);
-        return;
-      }
-
       navigate('/guest-portal');
     } catch (err: any) {
       setError(err?.message || 'Failed to authenticate. Please try again.');
@@ -358,535 +219,444 @@ export default function GuestLogin() {
   };
 
   if (initialLoading) {
-    return (
-      <GuestLoadingScreen
-        propertyName={dynamicPropertyName}
-        logoUrl={dynamicLogoUrl}
-        message="Connecting to Guest Portal..."
-      />
-    );
+    return <GuestLoadingScreen propertyName={propertyName} logoUrl={logoUrl} message="Connecting to Guest Portal..." />;
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 sm:p-6 relative overflow-hidden bg-[#fcfdfe] selection:bg-indigo-100 text-slate-900">
-      {/* Background Soft Ambient Lights */}
-      <div className="absolute inset-0 z-0 overflow-hidden pointer-events-none">
-        <div className="absolute top-[-20%] right-[-10%] w-[700px] h-[700px] bg-indigo-50/50 rounded-full blur-[120px]"></div>
-        <div className="absolute bottom-[-10%] left-[-10%] w-[500px] h-[500px] bg-blue-50/30 rounded-full blur-[100px]"></div>
-      </div>
+    <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden bg-slate-950 selection:bg-indigo-500 selection:text-white">
+      {/* Ambient Luxury Lighting */}
+      <div className="absolute top-[-20%] right-[-10%] w-[550px] h-[550px] bg-indigo-600/15 rounded-full blur-[140px] pointer-events-none" />
+      <div className="absolute bottom-[-15%] left-[-10%] w-[500px] h-[500px] bg-amber-500/10 rounded-full blur-[140px] pointer-events-none" />
 
-      <div className="w-full max-w-5xl z-10 grid grid-cols-1 lg:grid-cols-2 bg-white rounded-[3rem] shadow-[0_100px_200px_-50px_rgba(0,0,0,0.1)] border border-slate-100/50 overflow-hidden animate-in fade-in zoom-in-95 duration-700">
-        {/* Left Hero Sidebar */}
-        <div className="hidden lg:flex flex-col justify-between p-12 bg-[#1a237e] text-white relative overflow-hidden">
-          <div className="absolute top-[-10%] right-[-5%] w-80 h-80 bg-white/5 rounded-full blur-3xl"></div>
+      {/* Main Container */}
+      <div className="w-full max-w-md z-10 bg-white rounded-[2.5rem] shadow-[0_25px_70px_rgba(0,0,0,0.45)] border border-slate-100 overflow-hidden animate-in fade-in zoom-in-95 duration-500">
+        {/* Top Decorative Bar */}
+        <div className="h-2 w-full bg-gradient-to-r from-amber-400 via-indigo-600 to-amber-400" />
 
-          <div className="relative z-10">
-            {/* Full App Name System Badge */}
-            <div className="inline-flex items-center gap-3 px-4 py-1.5 bg-white/5 backdrop-blur-md rounded-full border border-white/10 mb-12">
-              <div className="w-1.5 h-1.5 bg-indigo-400 rounded-full animate-pulse"></div>
-              <span className="text-[10px] font-black text-indigo-100 uppercase tracking-[0.3em]">
-                {fullAppName}
-              </span>
-            </div>
-
-            <h1 className="text-6xl font-black tracking-tighter leading-[0.9] mb-6 text-white uppercase" style={{ textShadow: '0 0 20px rgba(255, 255, 255, 0.1)' }}>
-              Guest<br />Member<br />Portal
-            </h1>
-
-            <p className="text-indigo-100/60 text-base font-medium max-w-sm leading-relaxed">
-              Access your digital membership pass, touchless check-in QR code, PT tracking, and spa treatments.
-            </p>
-          </div>
-
-          <div className="relative z-10 pt-8 border-t border-white/10 space-y-1">
-            <p className="text-indigo-100 text-[10px] font-black uppercase tracking-widest">
-              &copy; {new Date().getFullYear()} <span className="text-white">Perfection</span>. All Rights Reserved.
-            </p>
-          </div>
-        </div>
-
-        {/* Right Form Container */}
-        <div className="flex flex-col justify-start p-8 md:p-12 lg:p-16 pt-10 md:pt-16 bg-white relative">
-          <div className="mb-6 flex flex-col items-center text-center">
-            {dynamicLogoUrl ? (
-              <img
-                src={dynamicLogoUrl}
-                alt="Logo"
-                referrerPolicy="no-referrer"
-                className="w-32 h-auto object-contain mb-4 filter drop-shadow-[0_10px_20px_rgba(0,0,0,0.05)]"
-              />
+        <div className="p-8 sm:p-10 space-y-6">
+          {/* Brand Header */}
+          <div className="flex flex-col items-center text-center space-y-3">
+            {logoUrl ? (
+              <div className="h-16 w-32 flex items-center justify-center mb-1">
+                <img
+                  src={logoUrl}
+                  alt={propertyName}
+                  className="max-h-full max-w-full object-contain filter drop-shadow-sm"
+                  referrerPolicy="no-referrer"
+                />
+              </div>
             ) : (
-              <div className="w-24 h-24 bg-indigo-600 rounded-[1.8rem] flex items-center justify-center text-white shadow-2xl shadow-indigo-100 mb-4">
-                <Sparkles className="w-12 h-12" />
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-indigo-600 to-indigo-800 flex items-center justify-center text-white shadow-xl shadow-indigo-500/20 mb-1">
+                <Sparkles className="w-8 h-8 text-amber-300" />
               </div>
             )}
 
-            <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tighter mb-1 leading-tight">
-              {view === 'login' && dynamicPropertyName}
-              {view === 'force_change' && 'Establish Password'}
-              {view === 'forgot_email' && 'Password Recovery'}
-              {view === 'forgot_otp' && 'Verify Security PIN'}
-              {view === 'forgot_new_pass' && 'Reset Password'}
-            </h2>
-
-            <div className="flex items-center justify-center gap-3">
-              <div className="h-px w-8 bg-slate-200"></div>
-              <p className="text-slate-400 text-[9px] font-black uppercase tracking-[0.3em] whitespace-nowrap">
-                {view === 'login' && 'Guest Secure Sign In'}
-                {view === 'force_change' && 'First-Time Security Directive'}
-                {view === 'forgot_email' && 'Enter Account Email'}
-                {view === 'forgot_otp' && '6-Digit Code Verification'}
-                {view === 'forgot_new_pass' && 'Secure Key Generation'}
+            <div className="space-y-1">
+              <span className="inline-block text-[10px] font-black uppercase tracking-[0.25em] text-indigo-600 bg-indigo-50 px-3 py-1 rounded-full">
+                Member Mobile Portal
+              </span>
+              <h1 className="text-2xl font-black tracking-tight text-slate-900 uppercase">
+                {view === 'login' && 'Member Access'}
+                {view === 'force_change' && 'Set Permanent Key'}
+                {view === 'forgot_email' && 'Password Recovery'}
+                {view === 'forgot_otp' && 'Enter 6-Digit OTP'}
+                {view === 'forgot_new_pass' && 'Establish New Key'}
+              </h1>
+              <p className="text-xs text-slate-400 font-medium">
+                {view === 'login' && 'Sign in with your registered email and access password.'}
+                {view === 'force_change' && 'Please establish your permanent password to continue.'}
+                {view === 'forgot_email' && 'Enter your account email to receive a verification code.'}
+                {view === 'forgot_otp' && `Verification code sent to ${email}.`}
+                {view === 'forgot_new_pass' && 'Create your new private password.'}
               </p>
-              <div className="h-px w-8 bg-slate-200"></div>
             </div>
           </div>
 
-          {/* VIEW: 1. STANDARD LOGIN (OR NICE OFFLINE CONCIERGE MESSAGE IF PORTAL IS DISABLED) */}
+          {/* VIEW: 1. STANDARD LOGIN */}
           {view === 'login' && (
-            <>
-              {portalSettings && !portalSettings.is_enabled ? (
-                /* OFFLINE PORTAL NOTICE WITH LUXURY GUEST CONCIERGE MESSAGE */
-                <div className="space-y-6 max-w-md mx-auto w-full animate-in fade-in zoom-in-95 duration-500 text-center">
-                  <div className="p-6 sm:p-8 rounded-3xl bg-slate-950/80 border border-amber-500/30 shadow-2xl relative overflow-hidden text-left space-y-4">
-                    {/* Ambient Glow */}
-                    <div className="absolute top-0 right-0 w-32 h-32 bg-amber-500/10 rounded-full blur-2xl pointer-events-none" />
-
-                    <div className="flex items-center justify-between">
-                      <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-400 text-[9px] font-black uppercase tracking-widest">
-                        <Power className="w-3 h-3 text-amber-400 animate-pulse" /> Portal Status: Offline
-                      </div>
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
-                        {dynamicPropertyName}
-                      </span>
-                    </div>
-
-                    <div className="space-y-2">
-                      <h3 className="text-xl font-black text-white uppercase tracking-tight">
-                        Concierge Notice
-                      </h3>
-                      <p className="text-slate-300 text-sm font-medium leading-relaxed">
-                        {portalSettings.welcome_message ||
-                          'Our digital guest portal is currently offline for scheduled concierge maintenance. Please visit our front desk reception or contact us directly below.'}
-                      </p>
-                    </div>
-
-                    {/* CONTACT RECEPTION BAR */}
-                    <div className="pt-2 border-t border-white/10 space-y-2">
-                      <p className="text-[9px] font-black uppercase tracking-widest text-slate-400">
-                        Front Desk &amp; Concierge Assistance
-                      </p>
-                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        {portalSettings.support_phone && (
-                          <a
-                            href={`tel:${portalSettings.support_phone}`}
-                            className="p-3 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-amber-400/40 rounded-xl flex items-center gap-2.5 transition-all group"
-                          >
-                            <div className="p-1.5 rounded-lg bg-amber-500/20 text-amber-400">
-                              <Phone className="w-3.5 h-3.5" />
-                            </div>
-                            <div className="truncate">
-                              <span className="text-[8px] font-black uppercase text-slate-400 block">Call Front Desk</span>
-                              <span className="text-xs font-bold text-slate-200 group-hover:text-amber-300 transition-colors">
-                                {portalSettings.support_phone}
-                              </span>
-                            </div>
-                          </a>
-                        )}
-
-                        {portalSettings.support_email && (
-                          <a
-                            href={`mailto:${portalSettings.support_email}`}
-                            className="p-3 bg-white/5 hover:bg-white/10 border border-white/10 hover:border-amber-400/40 rounded-xl flex items-center gap-2.5 transition-all group"
-                          >
-                            <div className="p-1.5 rounded-lg bg-indigo-500/20 text-indigo-400">
-                              <Mail className="w-3.5 h-3.5" />
-                            </div>
-                            <div className="truncate">
-                              <span className="text-[8px] font-black uppercase text-slate-400 block">Email Concierge</span>
-                              <span className="text-xs font-bold text-slate-200 group-hover:text-indigo-300 transition-colors truncate block">
-                                {portalSettings.support_email}
-                              </span>
-                            </div>
-                          </a>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
-                    <Button
-                      onClick={handleRecheckStatus}
-                      isLoading={checkingStatus}
-                      className="w-full sm:w-auto h-11 px-6 rounded-xl bg-white/10 hover:bg-white/20 text-white font-black text-xs uppercase tracking-wider border border-white/10 transition-all flex items-center justify-center gap-2"
-                    >
-                      <RefreshCw className={`w-3.5 h-3.5 text-amber-400 ${checkingStatus ? 'animate-spin' : ''}`} />
-                      Check Portal Status
-                    </Button>
-                  </div>
-                </div>
-              ) : (
-                /* ONLINE STANDARD LOGIN FORM */
-                <form onSubmit={handleLoginSubmit} className="space-y-4 max-w-sm mx-auto w-full">
-                  {/* Nice Welcome Concierge Banner when Online */}
-                  {portalSettings.welcome_message && (
-                    <div className="p-3.5 bg-indigo-50 border border-indigo-100 rounded-xl flex items-start gap-2.5">
-                      <Sparkles className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
-                      <p className="text-[11px] text-indigo-900 font-medium leading-relaxed">
-                        {portalSettings.welcome_message}
-                      </p>
-                    </div>
-                  )}
-
-                  <div className="space-y-1.5">
-                    <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">
-                      Registered Email Address
-                    </label>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                        <Mail className="w-4 h-4 text-slate-300" />
-                      </div>
-                      <input
-                        type="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        onBlur={handleEmailBlur}
-                        placeholder="guest@resort.com"
-                        className="w-full h-12 pl-11 pr-4 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 hover:bg-white transition-all text-sm font-bold shadow-sm"
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  <div className="space-y-1.5">
-                    <div className="flex justify-between items-center ml-1 mr-1">
-                      <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                        Private Password
-                      </label>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setError('');
-                          setView('forgot_email');
-                        }}
-                        className="text-[9px] font-black text-indigo-600 hover:text-indigo-800 uppercase tracking-wider transition-colors"
-                      >
-                        Forgot Password?
-                      </button>
-                    </div>
-                    <div className="relative">
-                      <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                        <Lock className="w-4 h-4 text-slate-300" />
-                      </div>
-                      <input
-                        type={showPassword ? 'text' : 'password'}
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        placeholder="••••••••"
-                        className="w-full h-12 pl-11 pr-11 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 hover:bg-white transition-all text-sm font-bold shadow-sm"
-                        required
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors"
-                      >
-                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  {error && (
-                    <div className="bg-red-50 border border-red-100 text-red-600 text-xs font-bold p-3.5 rounded-xl flex items-center gap-3 animate-in shake duration-300">
-                      <ShieldAlert className="w-4 h-4 shrink-0 text-red-600" />
-                      <span>{error}</span>
-                    </div>
-                  )}
-
-                  <div className="pt-2 space-y-2.5">
-                    <Button
-                      type="submit"
-                      className="w-full h-12 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-100 transition-all active:scale-[0.99] flex items-center justify-center gap-2 group"
-                      isLoading={loading}
-                    >
-                      <span className="flex items-center justify-center gap-2">
-                        Sign In to Portal <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
-                      </span>
-                    </Button>
-
-                    {/* Mobile Biometric Sign-In Button (iOS Face ID / Touch ID & Android Fingerprint) */}
-                    {isMobile && (
-                      <button
-                        type="button"
-                        onClick={handleBiometricLogin}
-                        disabled={loading}
-                        className="w-full h-12 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-black text-xs uppercase tracking-widest shadow-lg transition-all flex items-center justify-center gap-2.5 border border-slate-700 active:scale-[0.98]"
-                      >
-                        <Scan className="w-4 h-4 text-amber-300 animate-pulse" />
-                        <span>Sign In with Face ID / Fingerprint</span>
-                      </button>
-                    )}
-                  </div>
-                </form>
-              )}
-            </>
-          )}
-
-          {/* Biometric Setup Offer Modal for Mobile */}
-          {pendingAccount && (
-            <BiometricEnableModal
-              type="guest"
-              identifier={pendingAccount.email}
-              name={pendingAccount.name}
-              isOpen={showBiometricModal}
-              onClose={() => {
-                setShowBiometricModal(false);
-                navigate('/guest-portal');
-              }}
-              onEnabled={() => {
-                setShowBiometricModal(false);
-                navigate('/guest-portal');
-              }}
-            />
-          )}
-
-          {/* VIEW: 2. FORCE PASSWORD CHANGE */}
-          {view === 'force_change' && (
-            <form onSubmit={handleForcePasswordChange} className="space-y-4 max-w-sm mx-auto w-full animate-in slide-in-from-right-10 duration-500">
-              <div className="bg-indigo-50 border border-indigo-100 p-3.5 rounded-xl">
-                <p className="text-indigo-900 text-xs font-medium leading-relaxed">
-                  First-time access detected. Please replace your temporary password with your permanent private key.
-                </p>
-              </div>
-
+            <form onSubmit={handleLoginSubmit} className="space-y-4">
               <div className="space-y-1.5">
-                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">New Permanent Password</label>
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">
+                  Registered Email
+                </label>
                 <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <Lock className="w-4 h-4 text-slate-300" />
-                  </div>
-                  <input 
-                    type={showNewPassword ? "text" : "password"} 
-                    value={newPassword} 
-                    onChange={(e) => setNewPassword(e.target.value)} 
-                    placeholder="••••••••"
-                    className="w-full h-12 pl-11 pr-11 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 hover:bg-white transition-all text-sm font-bold shadow-sm" 
-                    required 
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="guest@domain.com"
+                    className="w-full h-12 pl-11 pr-4 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 text-sm font-bold transition-all"
+                    required
                   />
-                  <button type="button" onClick={() => setShowNewPassword(!showNewPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
-                    {showNewPassword ? <EyeOff className="w-4 h-4"/> : <Eye className="w-4 h-4"/>}
-                  </button>
                 </div>
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Confirm Password</label>
-                <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <CheckCircle2 className={`w-4 h-4 ${validation.isMatch ? 'text-emerald-500' : 'text-slate-300'}`} />
-                  </div>
-                  <input 
-                    type={showConfirmPassword ? "text" : "password"} 
-                    value={confirmPassword} 
-                    onChange={(e) => setConfirmPassword(e.target.value)} 
-                    placeholder="••••••••"
-                    className="w-full h-12 pl-11 pr-11 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 hover:bg-white transition-all text-sm font-bold shadow-sm" 
-                    required 
-                  />
-                  <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
-                    {showConfirmPassword ? <EyeOff className="w-4 h-4"/> : <Eye className="w-4 h-4"/>}
+                <div className="flex justify-between items-center px-1">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                    Access Password
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setError('');
+                      setView('forgot_email');
+                    }}
+                    className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 uppercase tracking-wider"
+                  >
+                    Forgot Password?
                   </button>
                 </div>
-              </div>
-
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl">
-                <PasswordComplexityChecker password={newPassword} confirmPassword={confirmPassword} />
+                <div className="relative">
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input
+                    type={showPassword ? 'text' : 'password'}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full h-12 pl-11 pr-11 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 text-sm font-bold transition-all"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  >
+                    {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
               </div>
 
               {error && (
-                <div className="bg-red-50 border border-red-100 text-red-600 text-xs font-bold p-3.5 rounded-xl flex items-center gap-3">
-                  <ShieldAlert className="w-4 h-4 shrink-0 text-red-600" />
+                <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-xs font-bold flex items-center gap-2 animate-in shake">
+                  <ShieldAlert className="w-4 h-4 shrink-0" />
                   <span>{error}</span>
                 </div>
               )}
 
-              <div className="pt-2">
-                <Button 
-                  type="submit" 
-                  disabled={!validation.isValid || loading} 
-                  isLoading={loading}
-                  className={`w-full h-12 rounded-xl font-black text-xs uppercase tracking-widest shadow-xl transition-all ${validation.isValid ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-100' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
-                >
-                  Update &amp; Enter Portal <ShieldCheck className="w-4 h-4 ml-2" />
-                </Button>
-              </div>
+              <Button
+                type="submit"
+                disabled={loading}
+                isLoading={loading}
+                className="w-full h-13 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-600/25 transition-all active:scale-[0.98]"
+              >
+                Access Guest Portal <ArrowRight className="w-4 h-4 ml-1.5" />
+              </Button>
             </form>
           )}
 
-          {/* VIEW: 3. FORGOT PASSWORD EMAIL */}
-          {view === 'forgot_email' && (
-            <form onSubmit={handleRequestOtp} className="space-y-4 max-w-sm mx-auto w-full animate-in slide-in-from-right-10 duration-500">
+          {/* VIEW: 2. MANDATORY FIRST-TIME PASSWORD CHANGE */}
+          {view === 'force_change' && (
+            <form onSubmit={handleForcePasswordChange} className="space-y-4">
+              <div className="p-3.5 bg-amber-50 border border-amber-200 rounded-2xl text-amber-900 text-xs font-semibold leading-relaxed">
+                👋 First-time sign in detected! For your private security, please establish your permanent password.
+              </div>
+
               <div className="space-y-1.5">
-                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Account Email Address</label>
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">
+                  New Permanent Password
+                </label>
                 <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <Mail className="w-4 h-4 text-slate-300" />
-                  </div>
-                  <input 
-                    type="email" 
-                    value={email} 
-                    onChange={(e) => setEmail(e.target.value)} 
-                    placeholder="guest@resort.com"
-                    className="w-full h-12 pl-11 pr-4 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 hover:bg-white transition-all text-sm font-bold shadow-sm" 
-                    required 
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input
+                    type={showNewPassword ? 'text' : 'password'}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full h-12 pl-11 pr-11 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 text-sm font-bold"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword(!showNewPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  >
+                    {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">
+                  Confirm Password
+                </label>
+                <div className="relative">
+                  <CheckCircle2
+                    className={`absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 ${
+                      validation.isMatch ? 'text-emerald-500' : 'text-slate-400'
+                    }`}
+                  />
+                  <input
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full h-12 pl-11 pr-11 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 text-sm font-bold"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  >
+                    {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* LIVE PASSWORD COMPLEXITY CHECKER */}
+              <PasswordComplexityChecker password={newPassword} confirmPassword={confirmPassword} />
+
+              {error && (
+                <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-xs font-bold flex items-center gap-2">
+                  <ShieldAlert className="w-4 h-4 shrink-0" />
+                  <span>{error}</span>
+                </div>
+              )}
+
+              <Button
+                type="submit"
+                disabled={!validation.isValid || loading}
+                isLoading={loading}
+                className={`w-full h-13 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl transition-all ${
+                  validation.isValid
+                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/25 active:scale-[0.98]'
+                    : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                }`}
+              >
+                Save &amp; Enter Portal <ShieldCheck className="w-4 h-4 ml-1.5" />
+              </Button>
+            </form>
+          )}
+
+          {/* VIEW: 3. FORGOT PASSWORD - EMAIL INPUT */}
+          {view === 'forgot_email' && (
+            <form onSubmit={handleRequestOtp} className="space-y-4">
+              <div className="space-y-1.5">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">
+                  Account Email Address
+                </label>
+                <div className="relative">
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="guest@domain.com"
+                    className="w-full h-12 pl-11 pr-4 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 text-sm font-bold"
+                    required
                   />
                 </div>
               </div>
 
               {error && (
-                <div className="bg-red-50 border border-red-100 text-red-600 text-xs font-bold p-3.5 rounded-xl flex items-center gap-3">
-                  <ShieldAlert className="w-4 h-4 shrink-0 text-red-600" />
+                <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-xs font-bold flex items-center gap-2">
+                  <ShieldAlert className="w-4 h-4 shrink-0" />
                   <span>{error}</span>
                 </div>
               )}
 
-              <div className="pt-2">
-                <Button 
-                  type="submit" 
-                  isLoading={loading}
-                  className="w-full h-12 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-100"
-                >
-                  Send Verification Code &rarr;
-                </Button>
-              </div>
+              <Button
+                type="submit"
+                disabled={loading}
+                isLoading={loading}
+                className="w-full h-13 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs uppercase tracking-widest shadow-xl transition-all"
+              >
+                Send 6-Digit Verification Code &rarr;
+              </Button>
 
-              <button 
-                type="button" 
-                onClick={() => { setError(''); setView('login'); }}
-                className="w-full text-center text-xs font-bold text-indigo-600 hover:text-indigo-800 py-1 transition-colors"
+              <button
+                type="button"
+                onClick={() => {
+                  setError('');
+                  setView('login');
+                }}
+                className="w-full text-center text-xs font-bold text-slate-400 hover:text-slate-600 py-1"
               >
                 &larr; Back to Sign In
               </button>
             </form>
           )}
 
-          {/* VIEW: 4. FORGOT PASSWORD OTP */}
+          {/* VIEW: 4. FORGOT PASSWORD - 6-DIGIT OTP */}
           {view === 'forgot_otp' && (
-            <form onSubmit={handleVerifyOtp} className="space-y-5 max-w-sm mx-auto w-full text-center animate-in slide-in-from-right-10 duration-500">
-              <div className="space-y-2">
-                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest">Enter 6-Digit Verification PIN</label>
-                <div className="flex justify-center">
-                  <input 
-                    type="text" 
+            <form onSubmit={handleVerifyOtp} className="space-y-5">
+              <div className="space-y-2 text-center">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                  Enter 6-Digit Security Code
+                </label>
+                <div className="relative flex justify-center">
+                  <input
+                    type="text"
                     maxLength={6}
-                    value={otpCode} 
+                    value={otpCode}
                     onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, ''))}
                     placeholder="••••••"
-                    className="w-48 h-14 text-center text-2xl font-mono font-black tracking-[0.4em] rounded-2xl bg-slate-50 border-2 border-indigo-200 text-indigo-900 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 shadow-inner" 
+                    className="w-48 h-14 text-center text-2xl font-mono font-black tracking-[0.4em] rounded-2xl bg-slate-50 border-2 border-indigo-200 text-indigo-900 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-600"
                     autoFocus
-                    required 
+                    required
                   />
                 </div>
-                <p className="text-[11px] text-slate-400 font-medium">Verification code expires in 15 minutes.</p>
+                <p className="text-[11px] text-slate-400 font-medium">
+                  Code expires in 15 minutes. Check your spam folder if not received.
+                </p>
               </div>
 
               {error && (
-                <div className="bg-red-50 border border-red-100 text-red-600 text-xs font-bold p-3.5 rounded-xl flex items-center justify-center gap-3">
-                  <ShieldAlert className="w-4 h-4 shrink-0 text-red-600" />
+                <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-xs font-bold flex items-center gap-2">
+                  <ShieldAlert className="w-4 h-4 shrink-0" />
                   <span>{error}</span>
                 </div>
               )}
 
-              <Button 
-                type="submit" 
+              <Button
+                type="submit"
                 disabled={otpCode.length !== 6}
-                className="w-full h-12 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-100"
+                className="w-full h-13 rounded-2xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs uppercase tracking-widest shadow-xl transition-all"
               >
-                Verify Code &rarr;
+                Verify Code &amp; Continue &rarr;
               </Button>
 
-              <div className="flex justify-between items-center text-xs px-2 pt-2">
-                <button type="button" onClick={() => setView('forgot_email')} className="font-bold text-slate-500 hover:text-slate-800 transition-colors">
+              <div className="flex justify-between items-center text-xs px-2">
+                <button
+                  type="button"
+                  onClick={() => setView('forgot_email')}
+                  className="font-bold text-slate-400 hover:text-slate-600"
+                >
                   Change Email
                 </button>
-                <button 
-                  type="button" 
-                  disabled={resendCooldown > 0} 
+                <button
+                  type="button"
+                  disabled={resendCooldown > 0}
                   onClick={handleRequestOtp}
-                  className={`font-bold ${resendCooldown > 0 ? 'text-slate-400' : 'text-indigo-600 hover:text-indigo-800 transition-colors'}`}
+                  className={`font-bold ${
+                    resendCooldown > 0
+                      ? 'text-slate-300 cursor-not-allowed'
+                      : 'text-indigo-600 hover:text-indigo-800'
+                  }`}
                 >
-                  {resendCooldown > 0 ? `Resend in ${resendCooldown}s` : 'Resend Code'}
+                  {resendCooldown > 0 ? `Resend code in ${resendCooldown}s` : 'Resend Code'}
                 </button>
               </div>
             </form>
           )}
 
-          {/* VIEW: 5. FORGOT PASSWORD NEW PASS */}
+          {/* VIEW: 5. FORGOT PASSWORD - NEW PASSWORD & COMPLEXITY */}
           {view === 'forgot_new_pass' && (
-            <form onSubmit={handleResetPasswordWithOtp} className="space-y-4 max-w-sm mx-auto w-full animate-in slide-in-from-right-10 duration-500">
+            <form onSubmit={handleResetPasswordWithOtp} className="space-y-4">
               <div className="space-y-1.5">
-                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">New Password</label>
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">
+                  New Password
+                </label>
                 <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <Lock className="w-4 h-4 text-slate-300" />
-                  </div>
-                  <input 
-                    type={showNewPassword ? "text" : "password"} 
-                    value={newPassword} 
-                    onChange={(e) => setNewPassword(e.target.value)} 
+                  <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
+                  <input
+                    type={showNewPassword ? 'text' : 'password'}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
                     placeholder="••••••••"
-                    className="w-full h-12 pl-11 pr-11 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 hover:bg-white transition-all text-sm font-bold shadow-sm" 
-                    required 
+                    className="w-full h-12 pl-11 pr-11 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 text-sm font-bold"
+                    required
                   />
-                  <button type="button" onClick={() => setShowNewPassword(!showNewPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
-                    {showNewPassword ? <EyeOff className="w-4 h-4"/> : <Eye className="w-4 h-4"/>}
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword(!showNewPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  >
+                    {showNewPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
               </div>
 
               <div className="space-y-1.5">
-                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest ml-1">Confirm Password</label>
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest ml-1">
+                  Confirm New Password
+                </label>
                 <div className="relative">
-                  <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <CheckCircle2 className={`w-4 h-4 ${validation.isMatch ? 'text-emerald-500' : 'text-slate-300'}`} />
-                  </div>
-                  <input 
-                    type={showConfirmPassword ? "text" : "password"} 
-                    value={confirmPassword} 
-                    onChange={(e) => setConfirmPassword(e.target.value)} 
-                    placeholder="••••••••"
-                    className="w-full h-12 pl-11 pr-11 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 hover:bg-white transition-all text-sm font-bold shadow-sm" 
-                    required 
+                  <CheckCircle2
+                    className={`absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 ${
+                      validation.isMatch ? 'text-emerald-500' : 'text-slate-400'
+                    }`}
                   />
-                  <button type="button" onClick={() => setShowConfirmPassword(!showConfirmPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600">
-                    {showConfirmPassword ? <EyeOff className="w-4 h-4"/> : <Eye className="w-4 h-4"/>}
+                  <input
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    placeholder="••••••••"
+                    className="w-full h-12 pl-11 pr-11 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500 text-sm font-bold"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  >
+                    {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
               </div>
 
-              <div className="p-3 bg-slate-50 border border-slate-200 rounded-2xl">
-                <PasswordComplexityChecker password={newPassword} confirmPassword={confirmPassword} />
-              </div>
+              {/* LIVE PASSWORD COMPLEXITY CHECKER */}
+              <PasswordComplexityChecker password={newPassword} confirmPassword={confirmPassword} />
 
               {error && (
-                <div className="bg-red-50 border border-red-100 text-red-600 text-xs font-bold p-3.5 rounded-xl flex items-center gap-3">
-                  <ShieldAlert className="w-4 h-4 shrink-0 text-red-600" />
+                <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-red-600 text-xs font-bold flex items-center gap-2">
+                  <ShieldAlert className="w-4 h-4 shrink-0" />
                   <span>{error}</span>
                 </div>
               )}
 
-              <div className="pt-2">
-                <Button 
-                  type="submit" 
-                  disabled={!validation.isValid || loading} 
-                  isLoading={loading}
-                  className={`w-full h-12 rounded-xl font-black text-xs uppercase tracking-widest shadow-xl transition-all ${validation.isValid ? 'bg-indigo-600 hover:bg-indigo-700 text-white shadow-indigo-100' : 'bg-slate-200 text-slate-400 cursor-not-allowed'}`}
-                >
-                  Reset &amp; Enter Portal <ShieldCheck className="w-4 h-4 ml-2" />
-                </Button>
-              </div>
+              <Button
+                type="submit"
+                disabled={!validation.isValid || loading}
+                isLoading={loading}
+                className={`w-full h-13 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl transition-all ${
+                  validation.isValid
+                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/25 active:scale-[0.98]'
+                    : 'bg-slate-200 text-slate-400 cursor-not-allowed'
+                }`}
+              >
+                Reset &amp; Enter Portal <ShieldCheck className="w-4 h-4 ml-1.5" />
+              </Button>
             </form>
           )}
+
+          {/* Portal Switcher Footer */}
+          <div className="pt-4 border-t border-slate-100 flex flex-col items-center gap-2 text-center">
+            <p className="text-[10px] font-black uppercase tracking-wider text-slate-400">
+              Need another portal?
+            </p>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={() => {
+                  const host = window.location.hostname.toLowerCase();
+                  if (host.includes('perfection.my')) {
+                    window.location.href = 'https://hcm-staff.perfection.my/#/staff-login';
+                  } else {
+                    navigate('/staff-login');
+                  }
+                }}
+                className="text-[11px] font-bold text-slate-600 hover:text-indigo-600 transition-colors"
+              >
+                Staff Portal
+              </button>
+              <span className="text-slate-300">&bull;</span>
+              <button
+                onClick={() => {
+                  const host = window.location.hostname.toLowerCase();
+                  if (host.includes('perfection.my')) {
+                    window.location.href = 'https://hcm.perfection.my/#/login';
+                  } else {
+                    navigate('/login');
+                  }
+                }}
+                className="text-[11px] font-bold text-slate-600 hover:text-indigo-600 transition-colors"
+              >
+                Admin Management
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     </div>

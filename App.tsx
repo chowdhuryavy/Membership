@@ -367,13 +367,6 @@ const ProtectedLayout = () => {
     return () => window.removeEventListener('keydown', handleGlobalShortcuts);
   }, [checkShortcut, navigate]);
 
-  const isPublicPortalRoute = useMemo(() => {
-    const p = location.pathname.toLowerCase();
-    const h = location.hash.toLowerCase();
-    return p.includes('guest') || p.includes('staff') || p.includes('login') || p.includes('pass') ||
-           h.includes('guest') || h.includes('staff') || h.includes('login') || h.includes('pass');
-  }, [location.pathname, location.hash]);
-
   if (!user && !combinedLoading) {
     const host = window.location.hostname.toLowerCase();
     const isGuestDomain = host.includes('hcm-guest');
@@ -385,8 +378,8 @@ const ProtectedLayout = () => {
   
   return (
     <>
-      {!isPublicPortalRoute && !showSplash && <TopLoader />}
-      {!isPublicPortalRoute && showSplash && <SplashLoading />}
+      {!showSplash && <TopLoader />}
+      {showSplash && <SplashLoading />}
       {user && (
         <div className={`flex h-screen bg-slate-50 overflow-hidden print:h-auto print:overflow-visible transition-opacity duration-1000 ${showSplash ? 'opacity-0 pointer-events-none' : 'opacity-100'}`}>
           <Sidebar onLogout={handleLogout} isCollapsed={isSidebarCollapsed} onToggle={() => setIsSidebarCollapsed(!isSidebarCollapsed)} />
@@ -827,13 +820,12 @@ const DynamicHead = () => {
     if (!settings) return;
 
     const updateManifest = () => {
-      const isStaff = window.location.hash.includes('staff') || window.location.search.includes('portal=staff') || window.location.hostname.includes('hcm-staff');
-      const isGuest = window.location.hash.includes('guest') || window.location.search.includes('portal=guest') || window.location.hostname.includes('hcm-guest');
+      const isStaff = window.location.hash.includes('staff') || window.location.search.includes('portal=staff');
       const manifestLink = document.querySelector('link[rel="manifest"]') as HTMLLinkElement;
       
       if (manifestLink) {
-        // Use static manifest files for iPhone & Android compatibility
-        const manifestPath = isStaff ? '/manifest-staff.json' : isGuest ? '/manifest-guest.json' : '/manifest.json';
+        // Use static manifest files for iPhone compatibility
+        const manifestPath = isStaff ? '/manifest-staff.json' : '/manifest.json';
         manifestLink.setAttribute('href', window.location.origin + manifestPath);
       }
 
@@ -848,7 +840,7 @@ const DynamicHead = () => {
         meta.content = content;
       };
 
-      const portalName = isStaff ? "HCM - Staff Portal" : isGuest ? "HCM - Guest Portal" : (settings.name || "HCM - Guest Portal");
+      const portalName = isStaff ? "Staff Portal" : (settings.name || "Health Club");
       updateMeta('apple-mobile-web-app-title', portalName);
       updateMeta('application-name', portalName);
     };

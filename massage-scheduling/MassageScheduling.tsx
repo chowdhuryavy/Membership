@@ -750,14 +750,6 @@ NOTIFY pgrst, 'reload schema';`}
   );
   
   const [itemToDelete_deprecated_removed, _] = useState<null>(null); // Kept layout to not break offsets in this multi-edit
-  const [showPendingModal, setShowPendingModal] = useState(false);
-  const [confirmingBookingId, setConfirmingBookingId] = useState<string | null>(null);
-  const [assignTherapistId, setAssignTherapistId] = useState<string>('');
-  const [assignRoomId, setAssignRoomId] = useState<string>('');
-
-  const pendingBookings = useMemo(() => {
-    return bookings.filter(b => (b.status || '').toLowerCase() === 'pending');
-  }, [bookings]);
 
   const allowedOutletsInProperty = useMemo(() => {
     if (!currentProperty || !user || !outlets) return [];
@@ -1024,23 +1016,6 @@ NOTIFY pgrst, 'reload schema';`}
     }
   };
 
-  const handleConfirmPendingBooking = async (id: string, therapistId?: string, roomId?: string) => {
-    if (!canEdit) return;
-    try {
-      const updates: any = { status: 'confirmed' };
-      if (therapistId && therapistId !== 'unassigned') updates.therapist_id = therapistId;
-      if (roomId) updates.room_id = roomId;
-      await db.updateMassageBooking(id, updates);
-      toast.success('Guest booking confirmed and updated in Guest Portal!');
-      setSelectedBooking(null);
-      setConfirmingBookingId(null);
-      loadData();
-    } catch (e: any) {
-      toast.error('Failed to confirm booking.');
-      console.error(e);
-    }
-  };
-
   const handleSaveMassageType = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!currentProperty || !currentOutlet || !newType.name || !canManageResources) return;
@@ -1151,8 +1126,6 @@ NOTIFY pgrst, 'reload schema';`}
         return `${base} bg-gradient-to-br from-rose-500/95 via-rose-600/90 to-pink-700/95 border-rose-400/50 text-white shadow-rose-500/30`;
       case 'cancelled': 
         return `${base} bg-slate-200/40 border-slate-400/30 text-slate-500 line-through italic shadow-none opacity-40 grayscale`;
-      case 'pending': 
-        return `${base} bg-gradient-to-br from-amber-500/95 via-amber-600/90 to-yellow-800/95 border-amber-400/80 text-white shadow-amber-500/40 ring-2 ring-amber-400/80 animate-pulse`;
       default: 
         if (isConsultation) return `${base} bg-gradient-to-br from-indigo-500/95 via-indigo-600/90 to-blue-700/95 border-indigo-400/50 text-white shadow-indigo-500/30`;
         if (isTest) return `${base} bg-gradient-to-br from-violet-500/95 via-violet-600/90 to-purple-700/95 border-violet-400/50 text-white shadow-violet-500/30`;
@@ -1248,38 +1221,6 @@ NOTIFY pgrst, 'reload schema';`}
 
       {activeTab === 'bookings' && (
         <div className="space-y-4">
-          {/* PENDING GUEST APPOINTMENT REQUESTS ALERT BANNER */}
-          {pendingBookings.length > 0 && (
-            <div className="bg-gradient-to-r from-amber-500/15 via-amber-500/10 to-amber-500/5 border-2 border-amber-400/80 p-5 rounded-[2rem] shadow-lg shadow-amber-500/10 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 animate-in fade-in">
-              <div className="flex items-center gap-4">
-                <div className="w-12 h-12 rounded-2xl bg-amber-500 text-white flex items-center justify-center shadow-lg shadow-amber-500/30 shrink-0">
-                  <Clock className="w-6 h-6 animate-spin" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="px-2.5 py-0.5 rounded-full bg-amber-500 text-white text-[9px] font-black uppercase tracking-wider">
-                      Action Required
-                    </span>
-                    <h3 className="text-base font-black text-slate-900 uppercase tracking-tight">
-                      {pendingBookings.length} Guest Appointment Request{pendingBookings.length > 1 ? 's' : ''} Awaiting Confirmation
-                    </h3>
-                  </div>
-                  <p className="text-xs text-slate-600 mt-0.5 font-medium">
-                    Guests have requested appointments from the Guest Portal. Confirm and assign specialists to update their status instantly.
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2 w-full md:w-auto">
-                <button
-                  onClick={() => setShowPendingModal(true)}
-                  className="h-11 px-6 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-black text-xs uppercase tracking-wider shadow-md transition-all flex items-center justify-center gap-2 w-full md:w-auto"
-                >
-                  <CheckCircle className="w-4 h-4" /> Review Requests ({pendingBookings.length})
-                </button>
-              </div>
-            </div>
-          )}
-
           {currentOutlet?.booking_enabled === false && (
             <div className="bg-amber-50 border border-amber-200 p-6 rounded-[2rem] flex items-start gap-4 animate-in fade-in">
               <ShieldAlert className="w-8 h-8 text-amber-600 shrink-0" />
@@ -1927,63 +1868,6 @@ NOTIFY pgrst, 'reload schema';`}
                         </div>
                     </div>
                     <div className="flex flex-col gap-3">
-                        {/* PENDING GUEST PORTAL REQUEST ACTIONS */}
-                        {(selectedBooking.status === 'pending' || (selectedBooking.status as string) === 'Pending') && canEdit && (
-                            <div className="p-5 bg-amber-50 rounded-2xl border border-amber-200 space-y-4">
-                                <div className="flex items-center gap-2 text-amber-800 font-black text-xs uppercase tracking-wider">
-                                    <Clock className="w-4 h-4 text-amber-600 animate-spin" /> Guest Portal Appointment Request
-                                </div>
-                                {(selectedBooking as any).notes && (
-                                    <div className="p-3 bg-white rounded-xl border border-amber-200/80 text-xs text-slate-700">
-                                        <span className="font-bold uppercase text-[9px] text-amber-600 block">Guest Notes:</span>
-                                        {(selectedBooking as any).notes}
-                                    </div>
-                                )}
-                                <div className="space-y-3">
-                                    <div>
-                                        <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest block mb-1">Assign Specialist / Therapist</label>
-                                        <Select 
-                                            value={assignTherapistId || selectedBooking.therapist_id || ''} 
-                                            onChange={e => setAssignTherapistId(e.target.value)} 
-                                            className="h-11 rounded-xl font-bold text-xs bg-white"
-                                        >
-                                            <option value="">Select Specialist</option>
-                                            {therapists.map(t => (
-                                                <option key={t.id} value={t.id}>{t.name} ({t.type || 'Specialist'})</option>
-                                            ))}
-                                        </Select>
-                                    </div>
-                                    <div>
-                                        <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest block mb-1">Assign Treatment Room</label>
-                                        <Select 
-                                            value={assignRoomId || selectedBooking.room_id || ''} 
-                                            onChange={e => setAssignRoomId(e.target.value)} 
-                                            className="h-11 rounded-xl font-bold text-xs bg-white"
-                                        >
-                                            <option value="">Select Room (Optional)</option>
-                                            {massageRooms.filter(r => r.is_active || r.id === selectedBooking.room_id).map(r => (
-                                                <option key={r.id} value={r.id}>{r.name} {r.number ? `(${r.number})` : ''}</option>
-                                            ))}
-                                        </Select>
-                                    </div>
-                                    <div className="flex gap-2 pt-2">
-                                        <button 
-                                            onClick={() => handleUpdateStatus(selectedBooking.id, 'cancelled')} 
-                                            className="flex-1 h-12 rounded-xl border-2 border-red-200 hover:bg-red-50 text-red-600 font-black text-[10px] uppercase transition-colors"
-                                        >
-                                            Decline
-                                        </button>
-                                        <button 
-                                            onClick={() => handleConfirmPendingBooking(selectedBooking.id, assignTherapistId || selectedBooking.therapist_id, assignRoomId || selectedBooking.room_id)} 
-                                            className="flex-1 h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/30 transition-all active:scale-95"
-                                        >
-                                            <CheckCircle className="w-4 h-4" /> Approve &amp; Confirm
-                                        </button>
-                                    </div>
-                                </div>
-                            </div>
-                        )}
-
                         {selectedBooking.status === 'confirmed' && canEdit && (
                             <>
                                 {completingBookingId === selectedBooking.id ? (
@@ -2121,133 +2005,6 @@ NOTIFY pgrst, 'reload schema';`}
                     </form>
                 </CardContent>
             </Card>
-        </div>
-      )}
-
-      {/* PENDING GUEST APPOINTMENTS REVIEW MODAL */}
-      {showPendingModal && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-md animate-in fade-in duration-200">
-          <Card className="rounded-[2.5rem] border-slate-200/60 shadow-2xl overflow-hidden bg-white w-full max-w-4xl max-h-[90vh] flex flex-col scale-100 animate-in zoom-in-95 duration-200">
-            <CardHeader className="p-8 border-b bg-gradient-to-r from-amber-600 via-amber-700 to-amber-800 text-white flex flex-row items-center justify-between shrink-0">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center">
-                  <Clock className="w-5 h-5 text-white animate-spin" />
-                </div>
-                <div>
-                  <CardTitle className="text-xl font-black uppercase tracking-tight">
-                    Guest Portal Appointment Requests
-                  </CardTitle>
-                  <p className="text-amber-100 text-xs font-medium">
-                    {pendingBookings.length} pending request{pendingBookings.length > 1 ? 's' : ''} awaiting front desk confirmation
-                  </p>
-                </div>
-              </div>
-              <button 
-                onClick={() => setShowPendingModal(false)} 
-                className="p-2 hover:bg-white/10 rounded-full transition-colors"
-              >
-                <X className="w-5 h-5 text-white" />
-              </button>
-            </CardHeader>
-            <CardContent className="p-6 overflow-y-auto flex-1 divide-y divide-slate-100">
-              {pendingBookings.length === 0 ? (
-                <div className="py-16 text-center text-slate-400 space-y-2">
-                  <CheckCircle className="w-12 h-12 text-emerald-500 mx-auto" />
-                  <p className="font-black text-slate-700 uppercase text-sm">All Guest Requests Processed</p>
-                  <p className="text-xs text-slate-400">There are no pending appointments awaiting confirmation.</p>
-                </div>
-              ) : (
-                pendingBookings.map((b) => (
-                  <div key={b.id} className="py-6 first:pt-2 last:pb-2 space-y-4">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-base font-black text-slate-900 uppercase">
-                            {b.guest_name || 'Guest'}
-                          </span>
-                          <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[9px] font-black uppercase tracking-wider">
-                            Pending
-                          </span>
-                        </div>
-                        <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 mt-1 font-medium">
-                          <span>📅 {b.date ? format(parseISO(b.date), 'EEEE, dd MMM yyyy') : 'No date'}</span>
-                          <span>⏰ {b.start_time} - {b.end_time}</span>
-                          {(b as any).type_name && <span className="text-purple-600 font-bold">✨ {(b as any).type_name}</span>}
-                          {b.guest_phone && <span>📞 {b.guest_phone}</span>}
-                          {(b as any).guest_email && <span>✉️ {(b as any).guest_email}</span>}
-                        </div>
-                      </div>
-                    </div>
-
-                    {b.notes && (
-                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/80 text-xs text-slate-600 font-medium">
-                        <span className="font-bold uppercase text-[9px] text-slate-400 block">Notes from Guest:</span>
-                        {b.notes}
-                      </div>
-                    )}
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                      <div>
-                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">
-                          Select Specialist / Therapist
-                        </label>
-                        <Select
-                          value={confirmingBookingId === b.id ? assignTherapistId : (b.therapist_id || '')}
-                          onChange={(e) => {
-                            setConfirmingBookingId(b.id);
-                            setAssignTherapistId(e.target.value);
-                          }}
-                          className="h-10 text-xs font-bold bg-white rounded-xl"
-                        >
-                          <option value="">Select Specialist</option>
-                          {therapists.map(t => (
-                            <option key={t.id} value={t.id}>{t.name} ({t.type || 'Specialist'})</option>
-                          ))}
-                        </Select>
-                      </div>
-                      <div>
-                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">
-                          Select Treatment Room (Optional)
-                        </label>
-                        <Select
-                          value={confirmingBookingId === b.id ? assignRoomId : (b.room_id || '')}
-                          onChange={(e) => {
-                            setConfirmingBookingId(b.id);
-                            setAssignRoomId(e.target.value);
-                          }}
-                          className="h-10 text-xs font-bold bg-white rounded-xl"
-                        >
-                          <option value="">Select Room</option>
-                          {massageRooms.filter(r => r.is_active || r.id === b.room_id).map(r => (
-                            <option key={r.id} value={r.id}>{r.name} {r.number ? `(${r.number})` : ''}</option>
-                          ))}
-                        </Select>
-                      </div>
-                    </div>
-
-                    <div className="flex gap-2 justify-end pt-2">
-                      <button
-                        onClick={() => handleUpdateStatus(b.id, 'cancelled')}
-                        className="h-10 px-5 rounded-xl border border-red-200 hover:bg-red-50 text-red-600 font-black text-xs uppercase transition-all"
-                      >
-                        Decline
-                      </button>
-                      <button
-                        onClick={() => {
-                          const chosenTherapist = confirmingBookingId === b.id ? assignTherapistId : (b.therapist_id || therapists[0]?.id);
-                          const chosenRoom = confirmingBookingId === b.id ? assignRoomId : b.room_id;
-                          handleConfirmPendingBooking(b.id, chosenTherapist, chosenRoom);
-                        }}
-                        className="h-10 px-6 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wider flex items-center gap-2 shadow-md shadow-emerald-600/20 transition-all active:scale-95"
-                      >
-                        <CheckCircle className="w-4 h-4" /> Approve &amp; Confirm
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </CardContent>
-          </Card>
         </div>
       )}
 
