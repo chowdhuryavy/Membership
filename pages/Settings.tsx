@@ -3315,8 +3315,8 @@ const SettingsPage = () => {
             </div>
             
             <div className="pt-6 border-t border-slate-100 flex gap-4">
-                <Button variant="secondary" onClick={() => setShowForm(false)} className="flex-1 h-16 rounded-2xl font-black uppercase text-xs">Discard</Button>
-                <Button onClick={handleRoleSubmit} className="flex-[2] h-16 rounded-2xl font-black uppercase tracking-widest bg-indigo-600 shadow-2xl shadow-indigo-200">Save Role Identity</Button>
+                <Button variant="secondary" onClick={() => setShowForm(false)} className="flex-1 h-16 rounded-2xl font-black uppercase text-xs cursor-pointer">Discard</Button>
+                <Button onClick={handleRoleSubmit} isLoading={isSaving} className="flex-[2] h-16 rounded-2xl font-black uppercase tracking-widest bg-indigo-600 shadow-2xl shadow-indigo-200 cursor-pointer">Save Role Identity</Button>
             </div>
         </div>
       </Modal>

@@ -74,7 +74,7 @@ import {
   InventoryItem,
   MassageRoom
 } from '../types';
-import { format, addDays, subDays } from 'date-fns';
+import { format, addDays, subDays, parseISO } from 'date-fns';
 import { useSettings } from '../contexts/SettingsContext';
 import { useAuth } from '../contexts/AuthContext';
 import BookingForm from './BookingForm';

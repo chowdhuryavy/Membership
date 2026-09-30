@@ -226,7 +226,7 @@ const Login = () => {
                         className="w-full h-12 pl-11 pr-11 rounded-xl bg-slate-50 border border-slate-200 text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-4 focus:ring-indigo-500/10 focus:border-indigo-500/50 hover:bg-white transition-all text-sm font-bold shadow-sm"
                         required
                       />
-                      <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors">
+                      <button type="button" onClick={() => setShowPassword(!showPassword)} className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer">
                         {showPassword ? <EyeOff className="w-4 h-4"/> : <Eye className="w-4 h-4"/>}
                       </button>
                     </div>
@@ -285,7 +285,7 @@ const Login = () => {
               <div className="pt-2">
                 <Button 
                   type="submit" 
-                  className="w-full h-12 rounded-xl bg-[#1a237e] hover:bg-indigo-900 text-white font-black text-xs uppercase tracking-widest shadow-[0_15px_30px_-10px_rgba(26,35,126,0.3)] transition-all active:scale-[0.98] group" 
+                  className="w-full h-12 rounded-xl bg-[#1a237e] hover:bg-indigo-900 text-white font-black text-xs uppercase tracking-widest shadow-[0_15px_30px_-10px_rgba(26,35,126,0.3)] transition-all active:scale-[0.98] group cursor-pointer" 
                   isLoading={loading}
                 >
                   <span className="flex items-center justify-center gap-2">

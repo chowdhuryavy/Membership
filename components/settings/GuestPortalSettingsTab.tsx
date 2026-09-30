@@ -65,7 +65,7 @@ export const GuestPortalSettingsTab: React.FC = () => {
         ps.support_phone = currentOutlet?.phone || currentProperty?.phone || settings?.phone || '+60 3-1234 5678';
       }
       if (!ps.support_email) {
-        ps.support_email = currentOutlet?.email || currentProperty?.email || settings?.email || 'support@perfection.my';
+        ps.support_email = currentOutlet?.backup_email || (currentProperty as any)?.email || (settings as any)?.email || 'support@perfection.my';
       }
 
       setPortalSettings(ps);

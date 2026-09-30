@@ -528,6 +528,8 @@ export interface MassageBooking {
   property_id: string;
   outlet_id: string;
   guest_id: string;
+  guest_name?: string;
+  guest_phone?: string;
   therapist_id: string;
   date: string;
   start_time: string;
@@ -536,7 +538,8 @@ export interface MassageBooking {
   inventory_item_id?: string;
   additional_service_ids?: string[];
   price: number;
-  status: 'confirmed' | 'cancelled' | 'completed' | 'no-show';
+  status: 'confirmed' | 'cancelled' | 'completed' | 'no-show' | 'pending';
+  notes?: string;
   created_at: string;
   discount?: number;
   discount_reason?: string;

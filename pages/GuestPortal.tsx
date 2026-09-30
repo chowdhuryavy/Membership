@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { guestAuth } from '../services/guestAuthService';
+import { guestAuth, DEFAULT_GUEST_PORTAL_SETTINGS } from '../services/guestAuthService';
 import { db } from '../services/mockSupabase';
 import {
   GuestAccount,
@@ -277,7 +277,7 @@ export default function GuestPortal() {
           db.getMassageBookings('').catch(() => []),
           db.getEntranceFeeConsents().catch(() => []),
           db.getSales('').catch(() => []),
-          db.getTherapists().catch(() => []),
+          db.getTherapists(activeScopeId || '').catch(() => []),
           db.getMassageRooms().catch(() => []),
           db.getMassageTypes().catch(() => [])
         ]);
@@ -364,7 +364,7 @@ export default function GuestPortal() {
       // Match Sales transactions
       const matchedSales = allSales.filter((s: any) => {
         if (s.customer_name && s.customer_name.toLowerCase() === session.name.toLowerCase()) return true;
-        if (matchedMember && s.member_id === matchedMember.id) return true;
+        if (matchedMembers.some((m: any) => m.id === s.member_id)) return true;
         return false;
       });
       setSales(matchedSales);
@@ -1224,7 +1224,7 @@ export default function GuestPortal() {
                 Front Desk Concierge &bull; {matchedOutlet?.name || matchedProperty?.name || propertyName}
               </p>
               <p className="text-xs font-bold text-indigo-400">
-                {portalSettings?.support_phone || matchedOutlet?.phone || matchedProperty?.phone || settings?.phone || '+60 3-1234 5678'} &bull; {portalSettings?.support_email || matchedOutlet?.email || matchedProperty?.email || settings?.email || 'support@perfection.my'}
+                {portalSettings?.support_phone || matchedOutlet?.phone || matchedProperty?.phone || settings?.phone || '+60 3-1234 5678'} &bull; {portalSettings?.support_email || matchedOutlet?.email || matchedProperty?.email || (settings as any)?.email || 'support@perfection.my'}
               </p>
             </div>
 

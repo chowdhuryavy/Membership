@@ -168,7 +168,7 @@ export const Modal = ({ isOpen, onClose, title, children }: ModalProps) => {
       <div className="bg-white rounded-2xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden border border-slate-200 animate-in zoom-in-95 slide-in-from-bottom-4 duration-300">
         <div className="px-6 py-5 border-b border-slate-100 bg-white flex justify-between items-center">
           <h3 className="font-black text-slate-900 uppercase tracking-widest text-base">{title}</h3>
-          <button onClick={onClose} className="p-2 rounded-xl text-slate-400 hover:text-red-600 hover:bg-red-50 transition-all">
+          <button onClick={onClose} className="p-2 rounded-xl text-slate-400 hover:text-red-600 hover:bg-red-50 transition-all cursor-pointer">
             <X className="w-5 h-5" />
           </button>
         </div>
