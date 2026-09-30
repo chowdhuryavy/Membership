@@ -1500,15 +1500,32 @@ export const emailService = {
         db.getOutlets().catch(() => [])
       ]);
 
-      const primaryProp = params.propertyId
-        ? properties.find(p => p.id === params.propertyId)
-        : (properties[0] || null);
-
       const primaryOutlet = params.outletId
         ? outlets.find(o => o.id === params.outletId)
-        : (outlets[0] || null);
+        : (params.propertyId ? outlets.find(o => o.property_id === params.propertyId) : (outlets[0] || null));
 
-      const propertyName = params.propertyName || primaryProp?.name || settings?.name || 'Health Club & Spa';
+      const primaryProp = params.propertyId
+        ? properties.find(p => p.id === params.propertyId)
+        : (primaryOutlet ? properties.find(p => p.id === primaryOutlet.property_id) : (properties[0] || null));
+
+      // Resolve true property name (ignore "test" or generic test placeholders)
+      let resolvedPropName = params.propertyName;
+      if (!resolvedPropName || resolvedPropName.toLowerCase() === 'test') {
+        if (primaryProp?.name && primaryProp.name.toLowerCase() !== 'test') {
+          resolvedPropName = primaryProp.name;
+        } else if (settings?.name) {
+          resolvedPropName = settings.name;
+        } else {
+          resolvedPropName = 'Health Club & Spa Resort';
+        }
+      }
+
+      // Resolve true outlet / facility name
+      let resolvedOutletName = params.outletName;
+      if (!resolvedOutletName && primaryOutlet?.name) {
+        resolvedOutletName = primaryOutlet.name;
+      }
+
       const logoUrl = resolveLogoUrl(primaryOutlet, primaryProp, settings);
 
       let portalUrl = 'https://hcm-guest.perfection.my/#/guest-login';
@@ -1519,14 +1536,14 @@ export const emailService = {
         }
       }
 
-      const subject = `Welcome to Your Member Portal - ${propertyName}`;
+      const subject = `Welcome to Your Member Portal - ${resolvedPropName}`;
 
       const html = buildGuestCredentialsEmailHtml({
         guestName: params.guestName,
         guestEmail: params.guestEmail,
         temporaryPassword: params.temporaryPassword,
-        propertyName: propertyName,
-        outletName: params.outletName || primaryOutlet?.name,
+        propertyName: resolvedPropName,
+        outletName: resolvedOutletName,
         loginUrl: portalUrl,
         logoUrl: logoUrl
       });
@@ -1596,10 +1613,14 @@ export function buildGuestCredentialsEmailHtml(params: {
   logoUrl?: string;
 }): string {
   const logoHtml = params.logoUrl ? `
-    <div style="margin-bottom: 20px;">
-      <img src="${params.logoUrl}" width="140" style="max-width: 140px; max-height: 70px; object-fit: contain; display: block;" alt="${params.propertyName}" />
+    <div style="margin-bottom: 22px;">
+      <img src="${params.logoUrl}" width="150" style="max-width: 150px; max-height: 80px; object-fit: contain; display: block;" alt="${params.propertyName}" />
     </div>
   ` : '';
+
+  const facilityBadge = params.outletName
+    ? `<span style="color: #cbd5e1;"> &bull; </span><span style="color: #38bdf8;">${params.outletName}</span>`
+    : '';
 
   return `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
@@ -1615,10 +1636,10 @@ export function buildGuestCredentialsEmailHtml(params: {
         <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="max-width: 580px; margin: 0 auto; background-color: #ffffff; border-radius: 24px; overflow: hidden; box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.4);">
           <!-- HEADER STRIP -->
           <tr>
-            <td bgcolor="#0f172a" style="background-color: #0f172a; padding: 14px 28px; text-align: left; border-bottom: 3px solid #6366f1;">
-              <span style="font-family: Arial, Helvetica, sans-serif; font-size: 11px; font-weight: 800; color: #a5b4fc; text-transform: uppercase; letter-spacing: 0.15em;">
-                OFFICIAL MEMBER PRIVILEGE ACCESS &bull; ${params.propertyName.toUpperCase()}
-              </span>
+            <td bgcolor="#0f172a" style="background-color: #0f172a; padding: 16px 28px; text-align: left; border-bottom: 3px solid #6366f1;">
+              <div style="font-family: Arial, Helvetica, sans-serif; font-size: 11px; font-weight: 800; color: #a5b4fc; text-transform: uppercase; letter-spacing: 0.15em;">
+                OFFICIAL MEMBER PRIVILEGE ACCESS ${facilityBadge}
+              </div>
             </td>
           </tr>
 
@@ -1633,7 +1654,7 @@ export function buildGuestCredentialsEmailHtml(params: {
                 Welcome, ${params.guestName}
               </h1>
               <p style="margin: 0; font-size: 14px; color: #475569; line-height: 1.6;">
-                Your personal digital guest account for <strong>${params.propertyName}</strong> is now active. Access your touchless digital membership card, track fitness &amp; PT packages, view spa appointments, and manage day passes right from your mobile device.
+                Your personal digital guest account for <strong>${params.propertyName}</strong>${params.outletName ? ' (' + params.outletName + ')' : ''} is now active. Access your touchless digital membership pass, track fitness &amp; PT packages, view spa appointments, and manage day passes right from your mobile device.
               </p>
             </td>
           </tr>
@@ -1641,55 +1662,59 @@ export function buildGuestCredentialsEmailHtml(params: {
           <!-- CREDENTIALS BOX -->
           <tr>
             <td style="padding: 0 32px 28px 32px;">
-              <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #0f172a; border-radius: 16px; overflow: hidden;">
+              <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color: #0f172a; border-radius: 20px; overflow: hidden; box-shadow: inset 0 2px 4px rgba(0,0,0,0.3);">
                 <tr>
-                  <td style="padding: 24px 24px 20px 24px;">
-                    <div style="font-size: 10px; font-weight: 800; color: #fbbf24; text-transform: uppercase; letter-spacing: 0.15em; margin-bottom: 16px;">
+                  <td style="padding: 24px 24px 22px 24px;">
+                    <div style="font-size: 10px; font-weight: 800; color: #fbbf24; text-transform: uppercase; letter-spacing: 0.15em; margin-bottom: 18px;">
                       &bull; YOUR SECURE LOGIN CREDENTIALS
                     </div>
 
                     <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0">
-                      <tr>
-                        <td style="padding-bottom: 12px;">
-                          <div style="font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px;">Portal URL</div>
-                          <div style="font-size: 13px; font-weight: 700; color: #38bdf8;">hcm-guest.perfection.my</div>
-                        </td>
-                      </tr>
+                      <!-- LOCATION DETAILS -->
                       <tr>
                         <td style="padding-bottom: 14px;">
-                          <div style="font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px;">Registered Email / Username</div>
-                          <table role="presentation" border="0" cellspacing="0" cellpadding="0">
-                            <tr>
-                              <td style="background-color: #1e293b; border: 1px solid #334155; padding: 8px 14px; border-top-left-radius: 8px; border-bottom-left-radius: 8px; font-size: 14px; font-weight: 800; color: #ffffff; font-family: monospace;">
-                                ${params.guestEmail}
-                              </td>
-                              <td style="background-color: #334155; border: 1px solid #475569; border-left: none; padding: 8px 12px; border-top-right-radius: 8px; border-bottom-right-radius: 8px; text-align: center; vertical-align: middle;">
-                                <span style="display: inline-block; font-size: 12px; color: #38bdf8; font-weight: 800; font-family: sans-serif; text-transform: uppercase; letter-spacing: 0.05em;" title="Copy Email">
-                                  &#128203; COPY
-                                </span>
-                              </td>
-                            </tr>
-                          </table>
+                          <div style="font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px;">Resort Property &amp; Facility</div>
+                          <div style="font-size: 14px; font-weight: 800; color: #ffffff;">
+                            ${params.propertyName}${params.outletName ? ' &mdash; <span style="color: #38bdf8;">' + params.outletName + '</span>' : ''}
+                          </div>
                         </td>
                       </tr>
+
+                      <!-- PORTAL URL -->
                       <tr>
-                        <td style="padding-bottom: 6px;">
-                          <div style="font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px;">Temporary Access Password</div>
-                          <table role="presentation" border="0" cellspacing="0" cellpadding="0">
-                            <tr>
-                              <td style="background-color: #1e293b; border: 1px solid #334155; padding: 8px 16px; border-top-left-radius: 8px; border-bottom-left-radius: 8px; font-size: 18px; font-weight: 900; color: #fbbf24; font-family: monospace; letter-spacing: 0.08em;">
-                                ${params.temporaryPassword}
-                              </td>
-                              <td style="background-color: #3b82f6; border: 1px solid #60a5fa; border-left: none; padding: 8px 14px; border-top-right-radius: 8px; border-bottom-right-radius: 8px; text-align: center; vertical-align: middle;">
-                                <span style="display: inline-block; font-size: 12px; color: #ffffff; font-weight: 900; font-family: sans-serif; text-transform: uppercase; letter-spacing: 0.05em;" title="Copy Password">
-                                  &#128203; COPY
-                                </span>
-                              </td>
-                            </tr>
-                          </table>
+                        <td style="padding-bottom: 16px;">
+                          <div style="font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px;">Portal Web Address</div>
+                          <div style="font-size: 14px; font-weight: 800; color: #38bdf8; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;">
+                            https://hcm-guest.perfection.my
+                          </div>
+                        </td>
+                      </tr>
+
+                      <!-- REGISTERED EMAIL -->
+                      <tr>
+                        <td style="padding-bottom: 16px;">
+                          <div style="font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px;">Registered Email / Username</div>
+                          <div style="background-color: #1e293b; border: 1px solid #334155; padding: 12px 16px; border-radius: 10px; font-size: 15px; font-weight: 800; color: #ffffff; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; letter-spacing: 0.02em; user-select: all; -webkit-user-select: all; word-break: break-all;">
+                            ${params.guestEmail}
+                          </div>
+                        </td>
+                      </tr>
+
+                      <!-- TEMPORARY PASSWORD -->
+                      <tr>
+                        <td style="padding-bottom: 10px;">
+                          <div style="font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px;">Temporary Access Password</div>
+                          <div style="background-color: #1e293b; border: 1px solid #334155; padding: 12px 16px; border-radius: 10px; font-size: 20px; font-weight: 900; color: #fbbf24; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace; letter-spacing: 0.1em; user-select: all; -webkit-user-select: all; word-break: break-all;">
+                            ${params.temporaryPassword}
+                          </div>
                         </td>
                       </tr>
                     </table>
+
+                    <!-- SELECTION & COPY TIP -->
+                    <div style="margin-top: 14px; padding: 10px 14px; background-color: #1e293b; border-radius: 8px; font-size: 11px; color: #94a3b8; font-weight: 600; line-height: 1.4;">
+                      💡 <strong>Quick Copy Tip:</strong> Double-click or press &amp; hold either box above to instantly select and copy to your clipboard.
+                    </div>
                   </td>
                 </tr>
               </table>

@@ -32,6 +32,9 @@ import {
   validatePasswordComplexity
 } from '../components/PasswordComplexityChecker';
 import { GuestLoadingScreen } from '../components/GuestLoadingScreen';
+import { biometricAuth } from '../services/biometricAuth';
+import { BiometricEnableModal } from '../components/BiometricEnableModal';
+import { Scan, Fingerprint } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 type LoginView = 'login' | 'force_change' | 'forgot_email' | 'forgot_otp' | 'forgot_new_pass';
@@ -66,6 +69,52 @@ export default function GuestLogin() {
 
   const [otpCode, setOtpCode] = useState('');
   const [resendCooldown, setResendCooldown] = useState(0);
+
+  // Mobile Biometric States
+  const [isMobile, setIsMobile] = useState(false);
+  const [hasBiometric, setHasBiometric] = useState(false);
+  const [showBiometricModal, setShowBiometricModal] = useState(false);
+  const [pendingAccount, setPendingAccount] = useState<{ email: string; name: string } | null>(null);
+
+  useEffect(() => {
+    if (biometricAuth.isMobileDevice()) {
+      setIsMobile(true);
+      const bioId = biometricAuth.getRegisteredIdentifier('guest');
+      if (bioId) {
+        setHasBiometric(true);
+        if (!email) setEmail(bioId);
+      }
+    }
+  }, []);
+
+  const handleBiometricLogin = async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const res = await biometricAuth.authenticateBiometric('guest', email || undefined);
+      if (res.success && res.identifier) {
+        const account = await guestAuth.getAccountByEmail(res.identifier);
+        if (account && account.is_active) {
+          guestAuth.setActiveSession(account);
+          toast.success(`Biometric verification verified! Welcome, ${account.name || 'Member'}!`, {
+            icon: '👤',
+          });
+          navigate('/guest-portal');
+          return;
+        } else if (account && !account.is_active) {
+          setError('Your mobile portal access is currently suspended. Please contact front desk.');
+        } else {
+          setError('No active guest profile associated with this biometric credential.');
+        }
+      } else if (res.error && !res.error.includes('cancelled')) {
+        setError(res.error);
+      }
+    } catch (e: any) {
+      setError('Biometric verification failed.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Portal Online/Offline & Preferences State from Database
   const [portalSettings, setPortalSettings] = useState<GuestPortalSettings>(DEFAULT_GUEST_PORTAL_SETTINGS);
@@ -202,6 +251,15 @@ export default function GuestLogin() {
       }
 
       toast.success(`Welcome back, ${res.account?.name || 'Member'}!`);
+
+      // Offer biometric registration on mobile if not already registered
+      if (isMobile && res.account && !biometricAuth.hasRegisteredBiometric('guest', res.account.email)) {
+        setPendingAccount({ email: res.account.email, name: res.account.name || 'Guest' });
+        setShowBiometricModal(true);
+        setLoading(false);
+        return;
+      }
+
       navigate('/guest-portal');
     } catch (err: any) {
       setError(err?.message || 'Failed to authenticate. Please try again.');
@@ -545,7 +603,7 @@ export default function GuestLogin() {
                     </div>
                   )}
 
-                  <div className="pt-2">
+                  <div className="pt-2 space-y-2.5">
                     <Button
                       type="submit"
                       className="w-full h-12 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black text-xs uppercase tracking-widest shadow-xl shadow-indigo-100 transition-all active:scale-[0.99] flex items-center justify-center gap-2 group"
@@ -555,10 +613,41 @@ export default function GuestLogin() {
                         Sign In to Portal <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                       </span>
                     </Button>
+
+                    {/* Mobile Biometric Sign-In Button (iOS Face ID / Touch ID & Android Fingerprint) */}
+                    {isMobile && (
+                      <button
+                        type="button"
+                        onClick={handleBiometricLogin}
+                        disabled={loading}
+                        className="w-full h-12 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-black text-xs uppercase tracking-widest shadow-lg transition-all flex items-center justify-center gap-2.5 border border-slate-700 active:scale-[0.98]"
+                      >
+                        <Scan className="w-4 h-4 text-amber-300 animate-pulse" />
+                        <span>Sign In with Face ID / Fingerprint</span>
+                      </button>
+                    )}
                   </div>
                 </form>
               )}
             </>
+          )}
+
+          {/* Biometric Setup Offer Modal for Mobile */}
+          {pendingAccount && (
+            <BiometricEnableModal
+              type="guest"
+              identifier={pendingAccount.email}
+              name={pendingAccount.name}
+              isOpen={showBiometricModal}
+              onClose={() => {
+                setShowBiometricModal(false);
+                navigate('/guest-portal');
+              }}
+              onEnabled={() => {
+                setShowBiometricModal(false);
+                navigate('/guest-portal');
+              }}
+            />
           )}
 
           {/* VIEW: 2. FORCE PASSWORD CHANGE */}
