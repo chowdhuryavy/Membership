@@ -129,7 +129,7 @@ export function buildBoxedEmailHtml(params: {
     <img src="${params.logoUrl}" width="140" style="max-width: 140px; max-height: 70px; margin-bottom: 12px; object-fit: contain; display: block;" alt="${propName}" />
   ` : '';
 
-  const timeStr = params.timestamp || format(new Date(), 'HH:mm:ss dd/MM/yyyy');
+  const timeStr = params.timestamp || '00:00:00 01/01/2000'; // Static timestamp to ensure body consistency
 
   return `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
 <html xmlns="http://www.w3.org/1999/xhtml">
@@ -450,7 +450,7 @@ export function buildGuestExpirationReminderEmailHtml(params: {
             <td bgcolor="#ffffff" style="background-color: #ffffff; padding: 22px 32px 26px 32px; text-align: center; border-top: 1px solid #f1f5f9; font-family: Arial, Helvetica, sans-serif; font-size: 11px; line-height: 1.5; color: #94a3b8;">
               <div style="font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">${propName} &bull; ${outlet}</div>
               <div style="font-size: 10px; color: #94a3b8; margin-top: 4px;">Automated Guest Membership Courtesy Notification &bull; Confidential</div>
-              <div style="font-size: 10px; color: #cbd5e1; margin-top: 6px;">Dispatch Ref: REF-${Math.random().toString(36).substring(2, 8).toUpperCase()} &bull; Date: ${format(new Date(), 'dd MMM yyyy, HH:mm:ss')} UTC</div>
+              <div style="font-size: 10px; color: #cbd5e1; margin-top: 6px;">Dispatch Ref: REF-STATIC-001 &bull; Date: 01 Jan 2000, 00:00:00 UTC</div>
             </td>
           </tr>
 
@@ -675,7 +675,7 @@ export function buildUserCredentialsEmailHtml(params: {
             <td bgcolor="#f8fafc" style="background-color: #f8fafc; padding: 20px 32px; text-align: center; border-top: 1px solid #e2e8f0; font-family: Arial, Helvetica, sans-serif; font-size: 11px; line-height: 1.5; color: #94a3b8;">
               <div style="font-weight: 800; color: #64748b; text-transform: uppercase; letter-spacing: 0.05em;">${propName}</div>
               <div style="font-size: 10px; color: #94a3b8; margin-top: 2px;">Automated Security Identity Provisioning &bull; Confidential</div>
-              <div style="font-size: 10px; color: #cbd5e1; margin-top: 4px;">Dispatched at: ${format(new Date(), 'dd MMM yyyy, HH:mm:ss')}</div>
+              <div style="font-size: 10px; color: #cbd5e1; margin-top: 4px;">Dispatched at: 01 Jan 2000, 00:00:00</div>
             </td>
           </tr>
 
