@@ -420,19 +420,20 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
     } as Member;
 
     try {
-        if (isUpdate) await db.updateMember(existingMember!.id, payload);
-        else await db.addMember(payload);
-
-        // Trigger Full Purchase Email with Agreement PDF
         const cat = categories.find(c => c.id === payload.category_id);
-        emailService.sendMemberPurchaseEmail({
+        const enrichedPayload = {
             ...payload,
             category_name: cat?.name || 'Standard Tier'
-        }).then(() => {
-            console.log('[Enrollment Email] Purchase notification email dispatched.');
-        }).catch(err => {
-            console.warn('[Enrollment Email] Purchase notification failed:', err);
-        });
+        };
+
+        if (isUpdate) {
+            await db.updateMember(existingMember!.id, enrichedPayload);
+            emailService.sendMemberPurchaseEmail(enrichedPayload).catch(err => {
+                console.warn('[Enrollment Email] Purchase notification failed:', err);
+            });
+        } else {
+            await db.addMember(enrichedPayload);
+        }
 
         toast.success('Member agreement saved.');
 

@@ -256,6 +256,7 @@ export class GuestAuthService {
     member_id?: string;
     guest_id?: string;
     forceResend?: boolean;
+    skipSeparateEmail?: boolean;
   }): Promise<{ account: GuestAccount; isNew: boolean; tempPassword?: string }> {
     const cleanEmail = (params.email || '').trim().toLowerCase();
     if (!cleanEmail || !cleanEmail.includes('@')) {
@@ -307,8 +308,8 @@ export class GuestAuthService {
       tempPass = account.temp_password || '';
     }
 
-    // Dispatch welcome email if new or explicitly requested
-    if ((isNew || params.forceResend) && tempPass) {
+    // Dispatch welcome email if new or explicitly requested (unless included in member welcome agreement email)
+    if (!params.skipSeparateEmail && (isNew || params.forceResend) && tempPass) {
       emailService.sendGuestWelcomeCredentialsEmail({
         guestName: account.name,
         guestEmail: account.email,

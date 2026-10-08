@@ -1737,7 +1737,8 @@ class DatabaseService {
           phone: member.phone,
           property_id: member.property_id,
           outlet_id: member.outlet_id,
-          member_id: member.id
+          member_id: member.id,
+          skipSeparateEmail: true
         }).catch(err => {
           console.error('[Automatic Guest Portal Provisioning Error]:', err);
         });

@@ -1100,7 +1100,7 @@ export const emailService = {
       return;
     }
     recentlySentMembersSet.add(memberKey);
-    setTimeout(() => recentlySentMembersSet.delete(memberKey), 10000);
+    setTimeout(() => recentlySentMembersSet.delete(memberKey), 30000);
 
     console.log('[Email Service] sendMemberPurchaseEmail triggered for member:', member?.id || member?.guest_name);
     try {
@@ -1114,29 +1114,43 @@ export const emailService = {
       const property = outlet ? properties.find(p => p.id === outlet.property_id) : properties[0];
       const currency = (settings && currencies.find(c => c.id === settings.currency_id)) || currencies[0];
       const symbol = currency?.symbol || 'QAR';
+      const logoUrl = resolveLogoUrl(outlet, property, settings);
 
-      // Find recipients configured for members_joined, or all active recipients for property and outlet
-      let targetEmails: string[] = [];
-      const purchasedRecipients = recipients.filter(r => r.is_active && r.report_type === 'members_joined' && (!r.property_id || r.property_id === property?.id) && (r.outlet_id === 'all' || r.outlet_id === member.outlet_id));
-      
-      if (purchasedRecipients.length > 0) {
-        targetEmails = purchasedRecipients.flatMap(r => r.email.split(',').map(e => e.trim()));
-      } else {
-        const activeRecipients = recipients.filter(r => r.is_active && (!r.property_id || r.property_id === property?.id) && (r.outlet_id === 'all' || r.outlet_id === member.outlet_id));
-        targetEmails = activeRecipients.flatMap(r => r.email.split(',').map(e => e.trim()));
-      }
+      const memberEmail = (member.email || '').trim();
 
-      // Always include the member's own email so they get their signed agreement & confirmation
-      if (member.email && typeof member.email === 'string' && member.email.trim()) {
-        targetEmails.push(member.email.trim());
-      }
+      // Automatically provision/ensure Guest Portal account credentials
+      let guestCredentials: { tempPassword?: string; loginUrl: string } | null = null;
+      if (memberEmail && memberEmail.includes('@')) {
+        try {
+          const { guestAuth } = await import('./guestAuthService');
+          const provisionResult = await guestAuth.provisionGuestAccount({
+            email: memberEmail,
+            name: member.guest_name,
+            phone: member.phone,
+            property_id: member.property_id || property?.id,
+            outlet_id: member.outlet_id || outlet?.id,
+            member_id: member.id,
+            forceResend: true,
+            skipSeparateEmail: true
+          });
 
-      targetEmails = Array.from(new Set(targetEmails.filter(Boolean)));
-      console.log(`[Email Service] Targeted recipients for purchase: ${targetEmails.length}`, targetEmails);
-      
-      if (targetEmails.length === 0) {
-        console.log('[Email Service] No recipient emails found for member purchase notification.');
-        return;
+          let portalUrl = 'https://hcm-guest.perfection.my/#/guest-login';
+          if (typeof window !== 'undefined' && window.location?.origin) {
+            const host = window.location.hostname.toLowerCase();
+            if (!host.includes('perfection.my')) {
+              portalUrl = `${window.location.origin}/#/guest-login`;
+            }
+          }
+
+          if (provisionResult?.tempPassword) {
+            guestCredentials = {
+              tempPassword: provisionResult.tempPassword,
+              loginUrl: portalUrl
+            };
+          }
+        } catch (authErr) {
+          console.error('[Email Service] Error provisioning guest portal account for member:', authErr);
+        }
       }
 
       // Generate Member Agreement PDF Attachment
@@ -1147,66 +1161,138 @@ export const emailService = {
         console.error('[Email Service] Error generating Member Agreement PDF base64:', pdfErr);
       }
 
-      const rawContractTemplate = outlet?.contract_template || (property as any)?.contract_template || (settings as any)?.contract_template || 'Standard Health Club Membership Agreement';
-      const rawTermsConditions = outlet?.conditions || (property as any)?.conditions || (settings as any)?.conditions || 'All club rules and regulations apply.';
-
-      // Replace template placeholders if present
-      const cleanContract = rawContractTemplate
-        .replace(/\{\{guest_name\}\}/g, member.guest_name || 'Member')
-        .replace(/\{\{membership_number\}\}/g, member.membership_number || '')
-        .replace(/\{\{start_date\}\}/g, member.start_date || '')
-        .replace(/\{\{end_date\}\}/g, member.current_end_date || member.original_end_date || '');
-
-      const cleanTerms = rawTermsConditions
-        .replace(/\{\{guest_name\}\}/g, member.guest_name || 'Member')
-        .replace(/\{\{membership_number\}\}/g, member.membership_number || '');
-
-      const startDateFormatted = member.start_date ? format(parseISO(member.start_date), 'dd MMM yyyy') : 'N/A';
-      const endDateFormatted = (member.current_end_date || member.original_end_date) ? format(parseISO(member.current_end_date || member.original_end_date), 'dd MMM yyyy') : 'N/A';
-
-      const subject = `Membership Purchase Confirmed - ${member.guest_name} (${member.membership_number})`;
-      
-      const logoUrl = resolveLogoUrl(outlet, property, settings);
-
-      const html = buildBoxedEmailHtml({
-        bannerType: 'success',
-        bannerText: 'MEMBERSHIP ENROLLMENT CONFIRMED',
-        logoUrl,
-        propertyName: property?.name || 'HEALTH CLUB',
-        outletName: outlet?.name || 'CLUB',
-        subtitle: 'OFFICIAL MEMBERSHIP ENROLLMENT',
-        greeting: 'Dear Admin,',
-        introParagraph: `A new membership purchase has been completed and registered in the system for <strong>${property?.name || 'HEALTH CLUB'}</strong> (${outlet?.name || 'CLUB'}). Below are the member enrollment details and attached agreement.`,
-        calloutBox: pdfBase64 ? `📄 <strong>Official Document Attached:</strong> ${member.guest_name || 'Member'}'s signed Membership Agreement & Facility Rules PDF is attached to this email (Membership_Agreement_${member.membership_number || 'Record'}.pdf).` : undefined,
-        dataFields: [
-          { label: 'MEMBER NAME', value: member.guest_name || 'N/A' },
-          { label: 'MEMBERSHIP NUMBER', value: member.membership_number || 'N/A' },
-          { label: 'PACKAGE & ACCESS', value: `${member.package_type || 'Single'} (${member.access_type || 'Both'})` },
-          { label: 'ENROLLMENT TYPE', value: member.membership_type || 'New' },
-          { label: 'COMMENCEMENT DATE', value: startDateFormatted },
-          { label: 'EXPIRY DATE (VALIDITY)', value: endDateFormatted }
-        ],
-        amountBox: {
-          label: 'TOTAL CONTRIBUTION PAID',
-          amount: (member.net_amount || 0),
-          currency: symbol,
-          subtext: `Payment Ref: ${member.check_no || 'Direct Registration'}`
-        },
-        timestamp: format(new Date(), 'HH:mm:ss dd/MM/yyyy')
-      });
-
       const attachments = pdfBase64 ? [{
         filename: `Membership_Agreement_${member.membership_number || 'Record'}.pdf`,
         content: pdfBase64
       }] : [];
 
-      for (const email of targetEmails) {
-        await this.sendEmail(email, subject, html, attachments, undefined, {
+      const startDateFormatted = member.start_date ? format(parseISO(member.start_date), 'dd MMM yyyy') : 'N/A';
+      const endDateFormatted = (member.current_end_date || member.original_end_date) ? format(parseISO(member.current_end_date || member.original_end_date), 'dd MMM yyyy') : 'N/A';
+
+      // 1. DISPATCH TO MEMBER (PERSONALIZED WELCOME + AGREEMENT + GUEST PORTAL CREDENTIALS)
+      if (memberEmail && memberEmail.includes('@')) {
+        const memberSubject = `Welcome to ${property?.name || 'Health Club'} - Membership Confirmed (${member.membership_number})`;
+
+        let credentialsCalloutHtml = '';
+        if (guestCredentials?.tempPassword) {
+          credentialsCalloutHtml = `
+            <div style="background-color: #f8fafc; border: 1.5px solid #cbd5e1; border-radius: 12px; padding: 18px 20px; margin: 16px 0;">
+              <div style="font-size: 13px; font-weight: 800; color: #4338ca; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 8px;">
+                🔑 Your Digital Guest Portal Access
+              </div>
+              <p style="font-size: 12px; color: #475569; margin: 0 0 12px 0; line-height: 1.5;">
+                Log into your private Guest Portal to access your Digital Membership Pass, view check-in QR code, track personal training, and book spa amenities.
+              </p>
+              <table role="presentation" width="100%" border="0" cellspacing="0" cellpadding="0" style="margin-bottom: 14px;">
+                <tr>
+                  <td style="padding: 5px 0; font-size: 11px; font-weight: bold; color: #64748b; text-transform: uppercase; width: 140px;">Portal Link:</td>
+                  <td style="padding: 5px 0; font-size: 12px; font-weight: bold; color: #1e293b;"><a href="${guestCredentials.loginUrl}" style="color: #4338ca; text-decoration: underline;">${guestCredentials.loginUrl}</a></td>
+                </tr>
+                <tr>
+                  <td style="padding: 5px 0; font-size: 11px; font-weight: bold; color: #64748b; text-transform: uppercase;">Username (Email):</td>
+                  <td style="padding: 5px 0; font-size: 12px; font-weight: bold; color: #1e293b;">${memberEmail}</td>
+                </tr>
+                <tr>
+                  <td style="padding: 5px 0; font-size: 11px; font-weight: bold; color: #64748b; text-transform: uppercase;">Temporary Password:</td>
+                  <td style="padding: 5px 0; font-size: 14px; font-family: monospace; font-weight: 900; color: #4338ca; letter-spacing: 1.5px;">${guestCredentials.tempPassword}</td>
+                </tr>
+              </table>
+              <div style="margin-top: 10px;">
+                <a href="${guestCredentials.loginUrl}" style="display: inline-block; background-color: #4338ca; color: #ffffff; font-weight: bold; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; padding: 10px 20px; border-radius: 8px; text-decoration: none;">Access Guest Portal &rarr;</a>
+              </div>
+            </div>
+          `;
+        }
+
+        const memberCallout = credentialsCalloutHtml + (pdfBase64 ? `<div style="margin-top: 10px; font-size: 12px; color: #0369a1;">📄 <strong>Official Document Attached:</strong> Your signed Membership Agreement & Facility Rules PDF is attached to this email (Membership_Agreement_${member.membership_number || 'Record'}.pdf).</div>` : '');
+
+        const memberHtml = buildBoxedEmailHtml({
+          bannerType: 'success',
+          bannerText: 'MEMBERSHIP ENROLLMENT CONFIRMED',
+          logoUrl,
+          propertyName: property?.name || 'HEALTH CLUB',
+          outletName: outlet?.name || 'CLUB',
+          subtitle: 'OFFICIAL MEMBERSHIP ENROLLMENT',
+          greeting: `Dear ${member.guest_name || 'Valued Member'},`,
+          introParagraph: `Welcome to <strong>${property?.name || 'HEALTH CLUB'}</strong> (${outlet?.name || 'CLUB'})! Your membership enrollment has been successfully registered and activated. Below are your membership enrollment details, your attached signed agreement, and your official <strong>Guest Portal Login Credentials</strong>.`,
+          calloutBox: memberCallout,
+          dataFields: [
+            { label: 'MEMBER NAME', value: member.guest_name || 'N/A' },
+            { label: 'MEMBERSHIP NUMBER', value: member.membership_number || 'N/A' },
+            { label: 'PACKAGE & ACCESS', value: `${member.package_type || 'Single'} (${member.access_type || 'Both'})` },
+            { label: 'ENROLLMENT TYPE', value: member.membership_type || 'New' },
+            { label: 'COMMENCEMENT DATE', value: startDateFormatted },
+            { label: 'EXPIRY DATE (VALIDITY)', value: endDateFormatted }
+          ],
+          amountBox: {
+            label: 'TOTAL CONTRIBUTION PAID',
+            amount: (member.net_amount || 0),
+            currency: symbol,
+            subtext: `Payment Ref: ${member.check_no || 'Direct Registration'}`
+          },
+          timestamp: format(new Date(), 'HH:mm:ss dd/MM/yyyy')
+        });
+
+        await this.sendEmail(memberEmail, memberSubject, memberHtml, attachments, undefined, {
           propertyId: property?.id,
           outletId: outlet?.id
         });
+        console.log(`[Email Service] Member enrollment confirmation with guest portal credentials sent to: ${memberEmail}`);
       }
-      console.log(`[Email Service] Member purchase notification email sent to: ${targetEmails.join(', ')} with ${attachments.length} attachments.`);
+
+      // 2. DISPATCH TO ADMIN ONLY IF EXPLICITLY CONFIGURED FOR 'members_joined' ALERTS
+      // (Never fall back to other unrelated report recipients like daily sales, night audit, etc.)
+      const purchasedRecipients = recipients.filter(r => 
+        r.is_active && 
+        r.report_type === 'members_joined' && 
+        (!r.property_id || r.property_id === property?.id) && 
+        (r.outlet_id === 'all' || r.outlet_id === member.outlet_id)
+      );
+
+      if (purchasedRecipients.length > 0) {
+        const adminEmails = Array.from(new Set(
+          purchasedRecipients.flatMap(r => r.email.split(',').map(e => e.trim()))
+            .filter(e => e && e.toLowerCase() !== memberEmail.toLowerCase())
+        ));
+
+        if (adminEmails.length > 0) {
+          const adminSubject = `[Internal Alert] New Member Enrollment - ${member.guest_name} (${member.membership_number})`;
+          const adminHtml = buildBoxedEmailHtml({
+            bannerType: 'info',
+            bannerText: 'NEW MEMBER ENROLLMENT REGISTERED',
+            logoUrl,
+            propertyName: property?.name || 'HEALTH CLUB',
+            outletName: outlet?.name || 'CLUB',
+            subtitle: 'INTERNAL ENROLLMENT NOTIFICATION',
+            greeting: 'Dear Admin,',
+            introParagraph: `A new membership enrollment has been completed and registered in the system for <strong>${property?.name || 'HEALTH CLUB'}</strong> (${outlet?.name || 'CLUB'}). Below are the member enrollment details and attached agreement for club records.`,
+            calloutBox: pdfBase64 ? `📄 <strong>Official Document Attached:</strong> Member's signed Membership Agreement & Facility Rules PDF is attached to this email (Membership_Agreement_${member.membership_number || 'Record'}.pdf).` : undefined,
+            dataFields: [
+              { label: 'MEMBER NAME', value: member.guest_name || 'N/A' },
+              { label: 'MEMBERSHIP NUMBER', value: member.membership_number || 'N/A' },
+              { label: 'PACKAGE & ACCESS', value: `${member.package_type || 'Single'} (${member.access_type || 'Both'})` },
+              { label: 'ENROLLMENT TYPE', value: member.membership_type || 'New' },
+              { label: 'COMMENCEMENT DATE', value: startDateFormatted },
+              { label: 'EXPIRY DATE (VALIDITY)', value: endDateFormatted }
+            ],
+            amountBox: {
+              label: 'TOTAL CONTRIBUTION PAID',
+              amount: (member.net_amount || 0),
+              currency: symbol,
+              subtext: `Payment Ref: ${member.check_no || 'Direct Registration'}`
+            },
+            timestamp: format(new Date(), 'HH:mm:ss dd/MM/yyyy')
+          });
+
+          for (const adminEmail of adminEmails) {
+            await this.sendEmail(adminEmail, adminSubject, adminHtml, attachments, undefined, {
+              propertyId: property?.id,
+              outletId: outlet?.id
+            });
+          }
+          console.log(`[Email Service] Internal member enrollment alert sent to admins: ${adminEmails.join(', ')}`);
+        }
+      }
     } catch (err) {
       console.error('[Email Service] Error sending member purchase email:', err);
     }
