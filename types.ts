@@ -542,7 +542,7 @@ export interface MassageBooking {
   inventory_item_id?: string;
   additional_service_ids?: string[];
   price: number;
-  status: 'confirmed' | 'cancelled' | 'completed' | 'no-show' | 'pending';
+  status: 'confirmed' | 'cancelled' | 'completed' | 'no-show' | 'pending' | 'pending_guest_approval';
   notes?: string;
   created_at: string;
   discount?: number;

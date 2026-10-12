@@ -25,6 +25,9 @@ import {
   UserX,
   CheckCircle,
   X,
+  Send,
+  Sparkles,
+  AlertCircle,
   Edit3,
   Coins,
   UserPlus,
@@ -754,6 +757,14 @@ NOTIFY pgrst, 'reload schema';`}
   const [confirmingBookingId, setConfirmingBookingId] = useState<string | null>(null);
   const [assignTherapistId, setAssignTherapistId] = useState<string>('');
   const [assignRoomId, setAssignRoomId] = useState<string>('');
+  const [reviewDrafts, setReviewDrafts] = useState<Record<string, {
+    date: string;
+    start_time: string;
+    end_time: string;
+    therapist_id: string;
+    room_id: string;
+    proposal_note: string;
+  }>>({});
 
   const allowedOutletsInProperty = useMemo(() => {
     if (!currentProperty || !user || !outlets) return [];
@@ -768,7 +779,8 @@ NOTIFY pgrst, 'reload schema';`}
 
   const pendingBookings = useMemo(() => {
     return bookings.filter(b => {
-      const isPending = (b.status || '').toLowerCase() === 'pending';
+      const statusLower = (b.status || '').toLowerCase();
+      const isPending = statusLower === 'pending' || statusLower === 'pending_guest_approval';
       if (!isPending) return false;
       if (viewScope === 'property') {
         const outletIds = allowedOutletsInProperty.map(o => o.id);
@@ -1052,19 +1064,146 @@ NOTIFY pgrst, 'reload schema';`}
     }
   };
 
-  const handleConfirmPendingBooking = async (id: string, therapistId?: string, roomId?: string) => {
+  const getDraftForBooking = (b: MassageBooking) => {
+    const existing = reviewDrafts[b.id];
+    if (existing) return existing;
+    const dur = massageTypes.find(t => t.id === (b.massage_type_id || b.inventory_item_id))?.duration_minutes || 60;
+    const startTimeClean = b.start_time ? b.start_time.substring(0, 5) : '14:00';
+    let endTimeClean = b.end_time ? b.end_time.substring(0, 5) : '15:00';
+    if (!b.end_time || endTimeClean === startTimeClean) {
+      const [h, m] = startTimeClean.split(':').map(Number);
+      const totalM = ((h || 0) * 60 + (m || 0) + dur) % (24 * 60);
+      endTimeClean = `${String(Math.floor(totalM / 60)).padStart(2, '0')}:${String(totalM % 60).padStart(2, '0')}`;
+    }
+    return {
+      date: b.date || format(new Date(), 'yyyy-MM-dd'),
+      start_time: startTimeClean,
+      end_time: endTimeClean,
+      therapist_id: b.therapist_id || therapists[0]?.id || '',
+      room_id: b.room_id || '',
+      proposal_note: ''
+    };
+  };
+
+  const updateDraft = (bId: string, updates: Partial<{
+    date: string;
+    start_time: string;
+    end_time: string;
+    therapist_id: string;
+    room_id: string;
+    proposal_note: string;
+  }>, durationMin: number = 60) => {
+    setReviewDrafts(prev => {
+      const bObj = bookings.find(b => b.id === bId);
+      const current = prev[bId] || (bObj ? getDraftForBooking(bObj) : {
+        date: format(new Date(), 'yyyy-MM-dd'),
+        start_time: '14:00',
+        end_time: '15:00',
+        therapist_id: '',
+        room_id: '',
+        proposal_note: ''
+      });
+      let newStart = updates.start_time !== undefined ? updates.start_time : current.start_time;
+      let newEnd = updates.end_time !== undefined ? updates.end_time : current.end_time;
+      
+      if (updates.start_time && updates.end_time === undefined) {
+        const [h, m] = updates.start_time.split(':').map(Number);
+        if (!isNaN(h) && !isNaN(m)) {
+          const totalM = (h * 60 + m + durationMin) % (24 * 60);
+          newEnd = `${String(Math.floor(totalM / 60)).padStart(2, '0')}:${String(totalM % 60).padStart(2, '0')}`;
+        }
+      }
+
+      return {
+        ...prev,
+        [bId]: {
+          ...current,
+          ...updates,
+          start_time: newStart,
+          end_time: newEnd
+        }
+      };
+    });
+  };
+
+  const handleConfirmPendingBooking = async (
+    id: string, 
+    therapistId?: string, 
+    roomId?: string,
+    date?: string,
+    startTime?: string,
+    endTime?: string
+  ) => {
     if (!canEdit) return;
     try {
       const updates: any = { status: 'confirmed' };
       if (therapistId && therapistId !== 'unassigned') updates.therapist_id = therapistId;
       if (roomId) updates.room_id = roomId;
+      if (date) updates.date = date;
+      if (startTime) updates.start_time = startTime;
+      if (endTime) updates.end_time = endTime;
+
       await db.updateMassageBooking(id, updates);
-      toast.success('Guest booking confirmed and updated in Guest Portal!');
+      toast.success('Appointment confirmed and updated in Guest Portal!');
       setSelectedBooking(null);
       setConfirmingBookingId(null);
       loadData();
     } catch (e: any) {
       toast.error('Failed to confirm booking.');
+      console.error(e);
+    }
+  };
+
+  const handleProposeChangesToGuest = async (
+    b: MassageBooking,
+    proposedDate: string,
+    proposedStartTime: string,
+    proposedEndTime: string,
+    proposedTherapistId?: string,
+    proposedRoomId?: string,
+    proposalNote?: string
+  ) => {
+    if (!canEdit) return;
+    try {
+      const therapistObj = therapists.find(t => t.id === proposedTherapistId);
+      const therapistName = therapistObj ? therapistObj.name : 'Specialist Assigned';
+      const originalDate = b.date;
+      const originalTime = b.start_time ? b.start_time.substring(0, 5) : '';
+
+      const proposalTag = `[Proposed by Front Desk: ${proposedDate} at ${proposedStartTime} - ${proposedEndTime} with ${therapistName}${proposalNote ? ` | Note: ${proposalNote.trim()}` : ''}]`;
+      const cleanExistingNotes = (b.notes || '').replace(/\[Proposed by Front Desk:[^\]]+\]\s*/g, '');
+
+      const updates: any = {
+        status: 'pending_guest_approval',
+        date: proposedDate,
+        start_time: proposedStartTime,
+        end_time: proposedEndTime,
+        therapist_id: (proposedTherapistId && proposedTherapistId !== 'unassigned') ? proposedTherapistId : null,
+        room_id: proposedRoomId || null,
+        notes: `${proposalTag} ${cleanExistingNotes}`.trim()
+      };
+
+      await db.updateMassageBooking(b.id, updates);
+
+      // Notify guest in guest portal
+      const guestEmail = (b as any).guest_email || b.guest_email;
+      if (guestEmail) {
+        import('../services/guestAuthService').then(({ guestAuth }) => {
+          guestAuth.addGuestNotification(
+            guestEmail,
+            'Concierge Proposed Alternative Slot',
+            `Front desk suggested moving your spa reservation from ${originalDate} ${originalTime} to ${proposedDate} at ${proposedStartTime} with ${therapistName}. Please review and confirm in your Guest Portal.`,
+            'info'
+          ).catch(console.error);
+        });
+      }
+
+      toast.success('Proposed slot sent to guest! Awaiting their confirmation in Guest Portal.');
+      setSelectedBooking(null);
+      setConfirmingBookingId(null);
+      loadData();
+    } catch (e: any) {
+      toast.error('Failed to propose changes to guest.');
       console.error(e);
     }
   };
@@ -1191,6 +1330,8 @@ NOTIFY pgrst, 'reload schema';`}
         return `${base} bg-slate-200/40 border-slate-400/30 text-slate-500 line-through italic shadow-none opacity-40 grayscale`;
       case 'pending': 
         return `${base} bg-gradient-to-br from-amber-500/95 via-amber-600/90 to-yellow-800/95 border-amber-400/80 text-white shadow-amber-500/40 ring-2 ring-amber-400/80 animate-pulse`;
+      case 'pending_guest_approval':
+        return `${base} bg-gradient-to-br from-indigo-600/95 via-purple-600/90 to-amber-700/95 border-indigo-400/80 text-white shadow-indigo-500/40 ring-2 ring-indigo-400/80 animate-pulse`;
       default: 
         if (isConsultation) return `${base} bg-gradient-to-br from-indigo-500/95 via-indigo-600/90 to-blue-700/95 border-indigo-400/50 text-white shadow-indigo-500/30`;
         if (isTest) return `${base} bg-gradient-to-br from-violet-500/95 via-violet-600/90 to-purple-700/95 border-violet-400/50 text-white shadow-violet-500/30`;
@@ -2033,61 +2174,152 @@ NOTIFY pgrst, 'reload schema';`}
                     </div>
                     <div className="flex flex-col gap-3">
                         {/* PENDING GUEST PORTAL REQUEST ACTIONS */}
-                        {(selectedBooking.status === 'pending' || (selectedBooking.status as string) === 'Pending') && canEdit && (
-                            <div className="p-5 bg-amber-50 rounded-2xl border border-amber-200 space-y-4">
-                                <div className="flex items-center gap-2 text-amber-800 font-black text-xs uppercase tracking-wider">
-                                    <Clock className="w-4 h-4 text-amber-600 animate-spin" /> Guest Portal Appointment Request
-                                </div>
-                                {(selectedBooking as any).notes && (
-                                    <div className="p-3 bg-white rounded-xl border border-amber-200/80 text-xs text-slate-700">
-                                        <span className="font-bold uppercase text-[9px] text-amber-600 block">Guest Notes:</span>
-                                        {(selectedBooking as any).notes}
+                        {(selectedBooking.status === 'pending' || (selectedBooking.status as string) === 'Pending' || selectedBooking.status === 'pending_guest_approval') && canEdit && (() => {
+                            const draft = getDraftForBooking(selectedBooking);
+                            const matchedType = massageTypes.find(t => t.id === (selectedBooking.massage_type_id || (selectedBooking as any).inventory_item_id));
+                            const durMin = matchedType?.duration_minutes || 60;
+                            const isAwaitingGuest = selectedBooking.status === 'pending_guest_approval';
+
+                            return (
+                                <div className="p-5 bg-amber-50/90 rounded-2xl border border-amber-200 space-y-4">
+                                    <div className="flex items-center justify-between">
+                                        <div className="flex items-center gap-2 text-amber-800 font-black text-xs uppercase tracking-wider">
+                                            <Clock className="w-4 h-4 text-amber-600 animate-spin" /> Guest Appointment Request
+                                        </div>
+                                        {isAwaitingGuest && (
+                                            <span className="px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-800 text-[9px] font-black uppercase tracking-wider">
+                                                Awaiting Guest Reply
+                                            </span>
+                                        )}
                                     </div>
-                                )}
-                                <div className="space-y-3">
-                                    <div>
-                                        <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest block mb-1">Assign Specialist / Therapist</label>
-                                        <Select 
-                                            value={assignTherapistId || selectedBooking.therapist_id || ''} 
-                                            onChange={e => setAssignTherapistId(e.target.value)} 
-                                            className="h-11 rounded-xl font-bold text-xs bg-white"
-                                        >
-                                            <option value="">Select Specialist</option>
-                                            {therapists.map(t => (
-                                                <option key={t.id} value={t.id}>{t.name} ({t.type || 'Specialist'})</option>
-                                            ))}
-                                        </Select>
+                                    {(selectedBooking as any).notes && (
+                                        <div className="p-3 bg-white rounded-xl border border-amber-200/80 text-xs text-slate-700">
+                                            <span className="font-bold uppercase text-[9px] text-amber-600 block">Guest Notes:</span>
+                                            {(selectedBooking as any).notes}
+                                        </div>
+                                    )}
+
+                                    {/* Move Time, Date and Therapist Controls */}
+                                    <div className="p-4 bg-white rounded-xl border border-amber-200/60 space-y-3">
+                                        <div className="text-[10px] font-black text-slate-600 uppercase tracking-widest flex items-center gap-1.5">
+                                            <Settings2 className="w-3.5 h-3.5 text-indigo-600" /> Move Time, Date or Specialist
+                                        </div>
+                                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                                            <div>
+                                                <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1">Date</label>
+                                                <input
+                                                    type="date"
+                                                    value={draft.date}
+                                                    onChange={(e) => updateDraft(selectedBooking.id, { date: e.target.value }, durMin)}
+                                                    className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1">Start Time</label>
+                                                <input
+                                                    type="time"
+                                                    value={draft.start_time}
+                                                    onChange={(e) => updateDraft(selectedBooking.id, { start_time: e.target.value }, durMin)}
+                                                    className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1">End Time</label>
+                                                <input
+                                                    type="time"
+                                                    value={draft.end_time}
+                                                    onChange={(e) => updateDraft(selectedBooking.id, { end_time: e.target.value }, durMin)}
+                                                    className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                                                />
+                                            </div>
+                                        </div>
+                                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                            <div>
+                                                <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1">Assign Specialist / Therapist</label>
+                                                <Select 
+                                                    value={draft.therapist_id} 
+                                                    onChange={e => updateDraft(selectedBooking.id, { therapist_id: e.target.value }, durMin)} 
+                                                    className="h-10 rounded-xl font-bold text-xs bg-slate-50"
+                                                >
+                                                    <option value="">Select Specialist</option>
+                                                    {therapists.map(t => (
+                                                        <option key={t.id} value={t.id}>{t.name} ({t.type || 'Specialist'})</option>
+                                                    ))}
+                                                </Select>
+                                            </div>
+                                            <div>
+                                                <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1">Assign Treatment Room</label>
+                                                <Select 
+                                                    value={draft.room_id} 
+                                                    onChange={e => updateDraft(selectedBooking.id, { room_id: e.target.value }, durMin)} 
+                                                    className="h-10 rounded-xl font-bold text-xs bg-slate-50"
+                                                >
+                                                    <option value="">Select Room (Optional)</option>
+                                                    {massageRooms.filter(r => r.is_active || r.id === selectedBooking.room_id).map(r => (
+                                                        <option key={r.id} value={r.id}>{r.name} {r.number ? `(${r.number})` : ''}</option>
+                                                    ))}
+                                                </Select>
+                                            </div>
+                                        </div>
+                                        <div>
+                                            <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1">Concierge Message to Guest (Optional)</label>
+                                            <input
+                                                type="text"
+                                                placeholder="e.g. Moved 30 mins later to accommodate your preferred therapist"
+                                                value={draft.proposal_note}
+                                                onChange={e => updateDraft(selectedBooking.id, { proposal_note: e.target.value }, durMin)}
+                                                className="w-full h-10 px-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                                            />
+                                        </div>
                                     </div>
-                                    <div>
-                                        <label className="text-[10px] font-black text-slate-900 uppercase tracking-widest block mb-1">Assign Treatment Room</label>
-                                        <Select 
-                                            value={assignRoomId || selectedBooking.room_id || ''} 
-                                            onChange={e => setAssignRoomId(e.target.value)} 
-                                            className="h-11 rounded-xl font-bold text-xs bg-white"
-                                        >
-                                            <option value="">Select Room (Optional)</option>
-                                            {massageRooms.filter(r => r.is_active || r.id === selectedBooking.room_id).map(r => (
-                                                <option key={r.id} value={r.id}>{r.name} {r.number ? `(${r.number})` : ''}</option>
-                                            ))}
-                                        </Select>
-                                    </div>
-                                    <div className="flex gap-2 pt-2">
+
+                                    <div className="flex flex-col gap-2 pt-1">
+                                        <div className="flex gap-2">
+                                            <button 
+                                                onClick={() => handleUpdateStatus(selectedBooking.id, 'cancelled')} 
+                                                className="h-11 px-4 rounded-xl border border-red-200 hover:bg-red-50 text-red-600 font-black text-[10px] uppercase transition-colors"
+                                            >
+                                                Decline
+                                            </button>
+                                            <button 
+                                                onClick={() => {
+                                                    handleProposeChangesToGuest(
+                                                        selectedBooking,
+                                                        draft.date,
+                                                        draft.start_time,
+                                                        draft.end_time,
+                                                        draft.therapist_id,
+                                                        draft.room_id,
+                                                        draft.proposal_note
+                                                    );
+                                                }} 
+                                                className="flex-1 h-11 rounded-xl border-2 border-purple-300 bg-purple-50 hover:bg-purple-100 text-purple-700 font-black text-[10px] uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all active:scale-95 shadow-sm"
+                                                title="Notify guest in portal to review and accept the revised time/therapist"
+                                            >
+                                                <Sparkles className="w-3.5 h-3.5 text-purple-600" /> Propose &amp; Ask Guest
+                                            </button>
+                                        </div>
                                         <button 
-                                            onClick={() => handleUpdateStatus(selectedBooking.id, 'cancelled')} 
-                                            className="flex-1 h-12 rounded-xl border-2 border-red-200 hover:bg-red-50 text-red-600 font-black text-[10px] uppercase transition-colors"
-                                        >
-                                            Decline
-                                        </button>
-                                        <button 
-                                            onClick={() => handleConfirmPendingBooking(selectedBooking.id, assignTherapistId || selectedBooking.therapist_id, assignRoomId || selectedBooking.room_id)} 
-                                            className="flex-1 h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/30 transition-all active:scale-95"
+                                            onClick={() => {
+                                                const chosenTherapist = draft.therapist_id || selectedBooking.therapist_id;
+                                                const chosenRoom = draft.room_id || selectedBooking.room_id;
+                                                handleConfirmPendingBooking(
+                                                    selectedBooking.id, 
+                                                    chosenTherapist, 
+                                                    chosenRoom,
+                                                    draft.date,
+                                                    draft.start_time,
+                                                    draft.end_time
+                                                );
+                                            }} 
+                                            className="w-full h-12 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-2 shadow-lg shadow-emerald-600/30 transition-all active:scale-95"
                                         >
                                             <CheckCircle className="w-4 h-4" /> Approve &amp; Confirm
                                         </button>
                                     </div>
                                 </div>
-                            </div>
-                        )}
+                            );
+                        })()}
 
                         {selectedBooking.status === 'confirmed' && canEdit && (
                             <>
@@ -2262,112 +2494,224 @@ NOTIFY pgrst, 'reload schema';`}
                   <p className="text-xs text-slate-400">There are no pending appointments awaiting confirmation.</p>
                 </div>
               ) : (
-                pendingBookings.map((b) => (
-                  <div key={b.id} className="py-6 first:pt-2 last:pb-2 space-y-4">
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                      <div>
-                        <div className="flex items-center gap-2">
-                          <span className="text-base font-black text-slate-900 uppercase">
-                            {b.guest_name || 'Guest'}
-                          </span>
-                          <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[9px] font-black uppercase tracking-wider">
-                            Pending
-                          </span>
+                pendingBookings.map((b) => {
+                  const draft = getDraftForBooking(b);
+                  const matchedType = massageTypes.find(t => t.id === (b.massage_type_id || (b as any).inventory_item_id));
+                  const durMin = matchedType?.duration_minutes || 60;
+                  const isModifiedFromOriginal = Boolean(
+                    (draft.date && draft.date !== b.date) ||
+                    (draft.start_time && draft.start_time !== (b.start_time ? b.start_time.substring(0, 5) : '')) ||
+                    (draft.therapist_id && draft.therapist_id !== b.therapist_id)
+                  );
+                  const isAwaitingGuest = b.status === 'pending_guest_approval';
+
+                  return (
+                    <div key={b.id} className="py-6 first:pt-2 last:pb-2 space-y-4">
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="text-base font-black text-slate-900 uppercase">
+                              {b.guest_name || 'Guest'}
+                            </span>
+                            {isAwaitingGuest ? (
+                              <span className="px-2.5 py-0.5 rounded-full bg-purple-100 text-purple-800 text-[9px] font-black uppercase tracking-wider flex items-center gap-1">
+                                <Sparkles className="w-3 h-3 text-purple-600" /> Awaiting Guest Confirmation
+                              </span>
+                            ) : (
+                              <span className="px-2.5 py-0.5 rounded-full bg-amber-100 text-amber-800 text-[9px] font-black uppercase tracking-wider">
+                                New Request
+                              </span>
+                            )}
+                          </div>
+                          <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 mt-1 font-medium">
+                            <span className="font-bold text-slate-700">Requested: 📅 {b.date ? format(parseISO(b.date), 'EEEE, dd MMM yyyy') : 'No date'}</span>
+                            <span className="font-bold text-slate-700">⏰ {b.start_time ? b.start_time.substring(0, 5) : ''} - {b.end_time ? b.end_time.substring(0, 5) : ''}</span>
+                            {(b as any).type_name && <span className="text-purple-600 font-bold">✨ {(b as any).type_name}</span>}
+                            {b.guest_phone && <span>📞 {b.guest_phone}</span>}
+                            {(b as any).guest_email && <span>✉️ {(b as any).guest_email}</span>}
+                          </div>
                         </div>
-                        <div className="flex flex-wrap items-center gap-3 text-xs text-slate-500 mt-1 font-medium">
-                          <span>📅 {b.date ? format(parseISO(b.date), 'EEEE, dd MMM yyyy') : 'No date'}</span>
-                          <span>⏰ {b.start_time} - {b.end_time}</span>
-                          {(b as any).type_name && <span className="text-purple-600 font-bold">✨ {(b as any).type_name}</span>}
-                          {b.guest_phone && <span>📞 {b.guest_phone}</span>}
-                          {(b as any).guest_email && <span>✉️ {(b as any).guest_email}</span>}
+                        {b.price ? (
+                          <div className="text-right">
+                            <span className="text-xs font-black text-indigo-600">{formatMoney(Number(b.price))}</span>
+                          </div>
+                        ) : null}
+                      </div>
+
+                      {b.notes && (
+                        <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/80 text-xs text-slate-600 font-medium">
+                          <span className="font-bold uppercase text-[9px] text-slate-400 block">Notes from Guest:</span>
+                          {b.notes}
                         </div>
-                      </div>
-                    </div>
-
-                    {b.notes && (
-                      <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/80 text-xs text-slate-600 font-medium">
-                        <span className="font-bold uppercase text-[9px] text-slate-400 block">Notes from Guest:</span>
-                        {b.notes}
-                      </div>
-                    )}
-
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
-                      <div>
-                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">
-                          Select Specialist / Therapist
-                        </label>
-                        <Select
-                          value={confirmingBookingId === b.id ? assignTherapistId : (b.therapist_id || '')}
-                          onChange={(e) => {
-                            setConfirmingBookingId(b.id);
-                            setAssignTherapistId(e.target.value);
-                          }}
-                          className="h-10 text-xs font-bold bg-white rounded-xl"
-                        >
-                          <option value="">Select Specialist</option>
-                          {therapists.map(t => (
-                            <option key={t.id} value={t.id}>{t.name} ({t.type || 'Specialist'})</option>
-                          ))}
-                        </Select>
-                      </div>
-                      <div>
-                        <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest block mb-1">
-                          Select Treatment Room (Optional)
-                        </label>
-                        <Select
-                          value={confirmingBookingId === b.id ? assignRoomId : (b.room_id || '')}
-                          onChange={(e) => {
-                            setConfirmingBookingId(b.id);
-                            setAssignRoomId(e.target.value);
-                          }}
-                          className="h-10 text-xs font-bold bg-white rounded-xl"
-                        >
-                          <option value="">Select Room</option>
-                          {massageRooms.filter(r => r.is_active || r.id === b.room_id).map(r => (
-                            <option key={r.id} value={r.id}>{r.name} {r.number ? `(${r.number})` : ''}</option>
-                          ))}
-                        </Select>
-                      </div>
-                    </div>
-
-                    <div className="flex items-center justify-between pt-2">
-                      {canDelete && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setItemToDelete({
-                              id: b.id,
-                              type: 'booking',
-                              name: `Appointment Request for ${b.guest_name || 'Guest'}`
-                            });
-                          }}
-                          className="h-10 px-4 rounded-xl border border-red-200/80 hover:bg-red-50 text-red-600 font-black text-xs uppercase transition-all flex items-center gap-1.5"
-                          title="Permanently remove this request from the database"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" /> Purge
-                        </button>
                       )}
-                      <div className="flex gap-2 ml-auto">
-                        <button
-                          onClick={() => handleUpdateStatus(b.id, 'cancelled')}
-                          className="h-10 px-5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 font-black text-xs uppercase transition-all"
-                        >
-                          Decline
-                        </button>
-                        <button
-                          onClick={() => {
-                            const chosenTherapist = confirmingBookingId === b.id ? assignTherapistId : (b.therapist_id || therapists[0]?.id);
-                            const chosenRoom = confirmingBookingId === b.id ? assignRoomId : b.room_id;
-                            handleConfirmPendingBooking(b.id, chosenTherapist, chosenRoom);
-                          }}
-                          className="h-10 px-6 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wider flex items-center gap-2 shadow-md shadow-emerald-600/20 transition-all active:scale-95"
-                        >
-                          <CheckCircle className="w-4 h-4" /> Approve &amp; Confirm
-                        </button>
+
+                      {/* Interactive Admin Schedule Adjustment Controls */}
+                      <div className="p-4 bg-slate-50/80 rounded-2xl border border-slate-200/70 space-y-3">
+                        <div className="flex items-center justify-between">
+                          <span className="text-[10px] font-black text-slate-600 uppercase tracking-widest flex items-center gap-1.5">
+                            <Settings2 className="w-3.5 h-3.5 text-indigo-600" /> Adjust Date, Time &amp; Specialist
+                          </span>
+                          {isModifiedFromOriginal && (
+                            <span className="text-[9px] font-bold text-amber-700 bg-amber-100/80 px-2 py-0.5 rounded-full uppercase">
+                              Modified from original request
+                            </span>
+                          )}
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-3">
+                          <div>
+                            <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1">
+                              Date
+                            </label>
+                            <input
+                              type="date"
+                              value={draft.date}
+                              onChange={(e) => updateDraft(b.id, { date: e.target.value }, durMin)}
+                              className="w-full h-10 px-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1">
+                              Start Time
+                            </label>
+                            <input
+                              type="time"
+                              value={draft.start_time}
+                              onChange={(e) => updateDraft(b.id, { start_time: e.target.value }, durMin)}
+                              className="w-full h-10 px-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1">
+                              End Time
+                            </label>
+                            <input
+                              type="time"
+                              value={draft.end_time}
+                              onChange={(e) => updateDraft(b.id, { end_time: e.target.value }, durMin)}
+                              className="w-full h-10 px-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1">
+                              Specialist / Therapist
+                            </label>
+                            <Select
+                              value={draft.therapist_id}
+                              onChange={(e) => updateDraft(b.id, { therapist_id: e.target.value }, durMin)}
+                              className="h-10 text-xs font-bold bg-white rounded-xl"
+                            >
+                              <option value="">Select Specialist</option>
+                              {therapists.map(t => (
+                                <option key={t.id} value={t.id}>{t.name} ({t.type || 'Specialist'})</option>
+                              ))}
+                            </Select>
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 pt-1">
+                          <div>
+                            <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1">
+                              Treatment Room (Optional)
+                            </label>
+                            <Select
+                              value={draft.room_id}
+                              onChange={(e) => updateDraft(b.id, { room_id: e.target.value }, durMin)}
+                              className="h-10 text-xs font-bold bg-white rounded-xl"
+                            >
+                              <option value="">Select Room (Optional)</option>
+                              {massageRooms.filter(r => r.is_active || r.id === b.room_id).map(r => (
+                                <option key={r.id} value={r.id}>{r.name} {r.number ? `(${r.number})` : ''}</option>
+                              ))}
+                            </Select>
+                          </div>
+                          <div>
+                            <label className="text-[9px] font-black text-slate-500 uppercase tracking-widest block mb-1">
+                              Note to Guest (If Proposing Alternate Slot)
+                            </label>
+                            <input
+                              type="text"
+                              placeholder="e.g. Requested therapist is booked at 14:00; moved to 15:30"
+                              value={draft.proposal_note}
+                              onChange={(e) => updateDraft(b.id, { proposal_note: e.target.value }, durMin)}
+                              className="w-full h-10 px-3 bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500/20"
+                            />
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Action Bar */}
+                      <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-100">
+                        {canDelete && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setItemToDelete({
+                                id: b.id,
+                                type: 'booking',
+                                name: `Appointment Request for ${b.guest_name || 'Guest'}`
+                              });
+                            }}
+                            className="h-10 px-3.5 rounded-xl border border-red-200/80 hover:bg-red-50 text-red-600 font-black text-xs uppercase transition-all flex items-center gap-1.5"
+                            title="Permanently remove this request from the database"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" /> Purge
+                          </button>
+                        )}
+
+                        <div className="flex flex-wrap items-center gap-2 ml-auto">
+                          <button
+                            onClick={() => handleUpdateStatus(b.id, 'cancelled')}
+                            className="h-10 px-4 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 font-black text-xs uppercase transition-all"
+                          >
+                            Decline
+                          </button>
+
+                          {/* Propose Changes to Guest (when time/therapist modified) */}
+                          <button
+                            onClick={() => {
+                              handleProposeChangesToGuest(
+                                b,
+                                draft.date,
+                                draft.start_time,
+                                draft.end_time,
+                                draft.therapist_id,
+                                draft.room_id,
+                                draft.proposal_note
+                              );
+                            }}
+                            className="h-10 px-5 rounded-xl border-2 border-purple-300 bg-purple-50 hover:bg-purple-100 text-purple-700 font-black text-xs uppercase tracking-wider flex items-center gap-1.5 transition-all active:scale-95 shadow-sm"
+                            title="Send revised slot to the guest for approval before confirming"
+                          >
+                            <Sparkles className="w-3.5 h-3.5 text-purple-600" /> Propose &amp; Ask Guest
+                          </button>
+
+                          {/* Direct Confirm */}
+                          <button
+                            onClick={() => {
+                              const chosenTherapist = draft.therapist_id || b.therapist_id || therapists[0]?.id;
+                              const chosenRoom = draft.room_id || b.room_id;
+                              handleConfirmPendingBooking(
+                                b.id,
+                                chosenTherapist,
+                                chosenRoom,
+                                draft.date,
+                                draft.start_time,
+                                draft.end_time
+                              );
+                            }}
+                            className="h-10 px-5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wider flex items-center gap-2 shadow-md shadow-emerald-600/20 transition-all active:scale-95"
+                          >
+                            <CheckCircle className="w-4 h-4" /> Approve &amp; Confirm
+                          </button>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))
+                  );
+                })
               )}
             </CardContent>
           </Card>

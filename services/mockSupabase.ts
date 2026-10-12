@@ -4936,24 +4936,33 @@ class DatabaseService {
         if (guestId) {
             query = query.eq('guest_id', guestId).limit(2000);
         } else if (isPropertyScope) {
+            let scopeClause = '';
             if (limitToOutletIds && limitToOutletIds.length > 0) {
-                query = query.or(`outlet_id.in.(${limitToOutletIds.join(',')}),property_id.eq.${scopeId}`);
+                scopeClause = `or(outlet_id.in.(${limitToOutletIds.join(',')}),property_id.eq.${scopeId})`;
             } else {
                 const { data: outlets } = await supabase.from('outlets').select('id').eq('property_id', scopeId);
                 const oIds = (outlets || []).map((o: any) => o.id);
                 if (oIds.length > 0) {
-                    query = query.or(`property_id.eq.${scopeId},outlet_id.in.(${oIds.join(',')})`);
+                    scopeClause = `or(property_id.eq.${scopeId},outlet_id.in.(${oIds.join(',')}))`;
                 } else {
-                    query = query.eq('property_id', scopeId);
+                    scopeClause = `property_id.eq.${scopeId}`;
                 }
+            }
+
+            if (startDate) {
+                query = query.or(`and(${scopeClause},or(date.gte.${startDate},status.eq.pending,status.eq.pending_guest_approval))`);
+            } else {
+                query = query.or(scopeClause);
             }
         }
         else if (scopeId && scopeId !== 'all') {
-            query = query.eq('outlet_id', scopeId);
-        }
-
-        if (startDate) {
-            query = query.or(`date.gte.${startDate},status.eq.pending`);
+            if (startDate) {
+                query = query.or(`and(outlet_id.eq.${scopeId},or(date.gte.${startDate},status.eq.pending,status.eq.pending_guest_approval))`);
+            } else {
+                query = query.eq('outlet_id', scopeId);
+            }
+        } else if (startDate) {
+            query = query.or(`date.gte.${startDate},status.eq.pending,status.eq.pending_guest_approval`);
         }
 
         const { data, error } = await query.order('date', { ascending: false }).limit(startDate ? 10000 : 2000);
@@ -5269,16 +5278,25 @@ class DatabaseService {
           const statusText = finalStatus.charAt(0).toUpperCase() + finalStatus.slice(1);
           
           let alertMsg = `Your spa appointment for ${finalDate} at ${finalStart} - ${finalEnd} has been updated (${statusText}).`;
-          if (updates.status === 'confirmed' && booking?.status === 'pending') {
+          let notifTitle = `Spa Appointment Update (${statusText})`;
+          let notifType: 'info' | 'success' | 'warning' = finalStatus === 'cancelled' ? 'warning' : 'success';
+
+          if (updates.status === 'confirmed') {
             alertMsg = `Your spa appointment request for ${finalDate} at ${finalStart} has been CONFIRMED by the front desk concierge!`;
+            notifTitle = 'Spa Appointment Confirmed! ✓';
+            notifType = 'success';
+          } else if (updates.status === 'pending_guest_approval') {
+            alertMsg = `Front desk concierge has proposed an adjusted schedule for your treatment: ${finalDate} at ${finalStart} - ${finalEnd}. Please review and confirm in your portal.`;
+            notifTitle = 'Concierge Proposed New Appointment Slot';
+            notifType = 'info';
           }
 
           import('./guestAuthService').then(({ guestAuth }) => {
             guestAuth.addGuestNotification(
               targetGuestEmail,
-              `Spa Appointment Update (${statusText})`,
+              notifTitle,
               alertMsg,
-              finalStatus === 'cancelled' ? 'warning' : 'success'
+              notifType
             ).catch(console.error);
           }).catch(console.error);
         }

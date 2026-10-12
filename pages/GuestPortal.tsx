@@ -668,6 +668,34 @@ export default function GuestPortal() {
     }
   };
 
+  const handleAcceptProposal = async (b: MassageBooking) => {
+    try {
+      const existingNotes = (b as any).notes || '';
+      await db.updateMassageBooking(b.id, {
+        status: 'confirmed',
+        notes: `[Proposal Accepted by Guest on ${format(new Date(), 'dd MMM HH:mm')}] ${existingNotes}`.trim()
+      });
+
+      await db.addNotification({
+        title: 'Guest Accepted Proposed Slot! ✓',
+        message: `${account?.name || 'Guest'} has accepted the proposed spa appointment slot on ${b.date} at ${b.start_time ? b.start_time.substring(0, 5) : ''}. Booking is now CONFIRMED.`,
+        type: 'success',
+        outlet_id: b.outlet_id,
+        required_permission: 'bookings:view'
+      });
+
+      toast.success('You have accepted the proposed slot! Your appointment is now confirmed.');
+      await loadPortalData();
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to accept proposal.');
+    }
+  };
+
+  const handleDeclineProposal = (b: MassageBooking) => {
+    handleOpenEditBooking(b);
+    toast.info('Please select your preferred alternative slot, or choose Cancel.');
+  };
+
   if (loading) {
     return <GuestLoadingScreen propertyName={propertyName} logoUrl={logoUrl} message="Retrieving your private privileges..." />;
   }
@@ -1227,7 +1255,9 @@ export default function GuestPortal() {
                   <div
                     key={b.id}
                     className={`bg-slate-900/90 border rounded-3xl p-5 space-y-3 transition-all ${
-                      bStatus === 'pending'
+                      bStatus === 'pending_guest_approval'
+                        ? 'border-indigo-500/60 shadow-xl shadow-indigo-500/10 ring-2 ring-indigo-500/30'
+                        : bStatus === 'pending'
                         ? 'border-amber-500/40 shadow-lg shadow-amber-500/5'
                         : bStatus === 'confirmed'
                         ? 'border-emerald-500/40 shadow-lg shadow-emerald-500/5'
@@ -1247,6 +1277,11 @@ export default function GuestPortal() {
                       </div>
 
                       {/* Real-time Dynamic Status Badge */}
+                      {bStatus === 'pending_guest_approval' && (
+                        <span className="px-3 py-1 rounded-full bg-indigo-500/25 text-indigo-300 border border-indigo-500/40 text-[10px] font-black uppercase flex items-center gap-1.5 shrink-0 animate-pulse">
+                          <Sparkles className="w-3 h-3 text-indigo-400" /> Action Required: New Time Proposed
+                        </span>
+                      )}
                       {bStatus === 'pending' && (
                         <span className="px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-black uppercase flex items-center gap-1.5 shrink-0">
                           <Clock className="w-3 h-3 text-amber-400 animate-spin" /> Pending Confirmation
@@ -1293,9 +1328,40 @@ export default function GuestPortal() {
 
                     {(b as any).notes && (
                       <p className="text-[10px] text-slate-400 bg-white/5 p-2.5 rounded-xl border border-white/5 leading-relaxed">
-                        <span className="text-amber-400 font-bold uppercase tracking-wider text-[8px] mr-1.5">Special Requests:</span>
+                        <span className="text-amber-400 font-bold uppercase tracking-wider text-[8px] mr-1.5">Special Requests / Notes:</span>
                         {(b as any).notes.replace(/\[(?:Email|Service): [^\]]+\]\s*/g, '')}
                       </p>
+                    )}
+
+                    {/* CONCIERGE PROPOSAL REVIEW BANNER & ACTIONS */}
+                    {bStatus === 'pending_guest_approval' && (
+                      <div className="p-4 bg-gradient-to-r from-indigo-950/70 via-purple-950/50 to-slate-900 border-2 border-indigo-500/50 rounded-2xl space-y-3 shadow-lg shadow-indigo-950/40">
+                        <div className="flex items-center gap-2">
+                          <Sparkles className="w-4 h-4 text-amber-400 shrink-0" />
+                          <span className="text-xs font-black uppercase text-white tracking-wide">
+                            Concierge Proposed Schedule Adjustment
+                          </span>
+                        </div>
+                        <p className="text-xs text-slate-300 leading-relaxed font-medium">
+                          The front desk concierge suggested moving your reservation to <strong className="text-white">{b.date ? format(parseISO(b.date), 'EEEE, dd MMM yyyy') : 'the proposed date'}</strong> at <strong className="text-white">{b.start_time ? b.start_time.substring(0, 5) : ''} - {b.end_time ? b.end_time.substring(0, 5) : ''}</strong> with <strong className="text-purple-300">{specialistLabel}</strong>. Please confirm if this revised slot works for you:
+                        </p>
+                        <div className="flex flex-wrap items-center justify-end gap-2 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => handleDeclineProposal(b)}
+                            className="px-4 py-2 rounded-xl border border-rose-500/30 hover:bg-rose-500/10 text-rose-300 font-black text-xs uppercase transition-all"
+                          >
+                            Decline / Choose Other Slot
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => handleAcceptProposal(b)}
+                            className="px-5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wider flex items-center gap-1.5 shadow-md shadow-emerald-600/30 active:scale-95 transition-all"
+                          >
+                            <CheckCircle2 className="w-4 h-4" /> Accept Proposed Slot
+                          </button>
+                        </div>
+                      </div>
                     )}
 
                     {bStatus === 'pending' && (
@@ -1315,7 +1381,7 @@ export default function GuestPortal() {
                     )}
 
                     {/* Guest Booking Actions: Reschedule / Edit / Cancel */}
-                    {bStatus !== 'completed' && bStatus !== 'cancelled' && (
+                    {bStatus !== 'completed' && bStatus !== 'cancelled' && bStatus !== 'pending_guest_approval' && (
                       <div className="pt-2 border-t border-white/5 flex items-center justify-end gap-2">
                         <button
                           type="button"
