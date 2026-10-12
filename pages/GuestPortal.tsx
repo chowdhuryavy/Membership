@@ -1906,6 +1906,7 @@ export default function GuestPortal() {
           </button>
         )}
 
+        {portalSettings?.allow_shop !== false && (
         <button
           type="button"
           onClick={() => handleTabSwitch('retail')}
@@ -1916,6 +1917,7 @@ export default function GuestPortal() {
           <ShoppingBag className="w-5 h-5" />
           <span className="text-[9px] uppercase tracking-wider">Shop</span>
         </button>
+        )}
 
         <button
           type="button"
