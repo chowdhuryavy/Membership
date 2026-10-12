@@ -4937,23 +4937,23 @@ class DatabaseService {
             query = query.eq('guest_id', guestId).limit(2000);
         } else if (isPropertyScope) {
             if (limitToOutletIds && limitToOutletIds.length > 0) {
-                query = query.in('outlet_id', limitToOutletIds);
+                query = query.or(`outlet_id.in.(${limitToOutletIds.join(',')}),property_id.eq.${scopeId},property_id.is.null`);
             } else {
                 const { data: outlets } = await supabase.from('outlets').select('id').eq('property_id', scopeId);
                 const oIds = (outlets || []).map((o: any) => o.id);
                 if (oIds.length > 0) {
-                    query = query.or(`property_id.eq.${scopeId},outlet_id.in.(${oIds.join(',')})`);
+                    query = query.or(`property_id.eq.${scopeId},outlet_id.in.(${oIds.join(',')}),property_id.is.null`);
                 } else {
-                    query = query.eq('property_id', scopeId);
+                    query = query.or(`property_id.eq.${scopeId},property_id.is.null`);
                 }
             }
         }
         else if (scopeId && scopeId !== 'all') {
-            query = query.eq('outlet_id', scopeId);
+            query = query.or(`outlet_id.eq.${scopeId},outlet_id.is.null`);
         }
 
         if (startDate) {
-            query = query.gte('date', startDate);
+            query = query.or(`date.gte.${startDate},status.eq.pending`);
         }
 
         const { data, error } = await query.order('date', { ascending: false }).limit(startDate ? 10000 : 2000);
@@ -4999,17 +4999,54 @@ class DatabaseService {
   }
 
   async addMassageBooking(booking: Omit<MassageBooking, 'id' | 'created_at'>) {
+    const isValidUUID = (val: any) => typeof val === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+
     if (this.isSupabase()) {
       await this.safeCall(async () => {
         let payload: any = {
           ...booking,
-          id: crypto.randomUUID(),
-          created_at: new Date().toISOString()
+          id: (booking as any).id && isValidUUID((booking as any).id) ? (booking as any).id : crypto.randomUUID(),
+          created_at: (booking as any).created_at || new Date().toISOString()
         };
 
         // Normalize phone to guest_phone
         if (payload.phone && !payload.guest_phone) {
           payload.guest_phone = payload.phone;
+        }
+        delete payload.phone;
+
+        // Ensure UUID columns conform to UUID format to prevent 400 Bad Request (22P02)
+        if (!isValidUUID(payload.outlet_id)) payload.outlet_id = null;
+        if (!isValidUUID(payload.property_id)) payload.property_id = null;
+        if (!isValidUUID(payload.guest_id)) payload.guest_id = null;
+        if (!isValidUUID(payload.therapist_id)) payload.therapist_id = null;
+        if (!isValidUUID(payload.massage_type_id)) payload.massage_type_id = null;
+        if (!isValidUUID(payload.room_id)) payload.room_id = null;
+
+        // Verify foreign keys exist in DB before insertion to avoid 409 Conflict (23503)
+        if (payload.guest_id) {
+          const { data: g } = await supabase.from('guests').select('id').eq('id', payload.guest_id).maybeSingle();
+          if (!g) payload.guest_id = null;
+        }
+        if (payload.therapist_id) {
+          const { data: t } = await supabase.from('therapists').select('id').eq('id', payload.therapist_id).maybeSingle();
+          if (!t) payload.therapist_id = null;
+        }
+        if (payload.massage_type_id) {
+          const { data: m } = await supabase.from('massage_types').select('id').eq('id', payload.massage_type_id).maybeSingle();
+          if (!m) payload.massage_type_id = null;
+        }
+        if (payload.property_id) {
+          const { data: p } = await supabase.from('properties').select('id').eq('id', payload.property_id).maybeSingle();
+          if (!p) payload.property_id = null;
+        }
+        if (payload.outlet_id) {
+          const { data: o } = await supabase.from('outlets').select('id, property_id').eq('id', payload.outlet_id).maybeSingle();
+          if (!o) {
+            payload.outlet_id = null;
+          } else if (!payload.property_id && o.property_id) {
+            payload.property_id = o.property_id;
+          }
         }
 
         let attempts = 0;
@@ -5023,11 +5060,50 @@ class DatabaseService {
           }
           lastError = error;
 
+          // If foreign key constraint failed (23503)
+          if (error.code === '23503' || error.message?.includes('violates foreign key constraint') || error.message?.includes('not present in table')) {
+            const msg = ((error.message || '') + ' ' + (error.details || '')).toLowerCase();
+            if (msg.includes('guest_id') || msg.includes('guests')) {
+              payload.guest_id = null;
+              continue;
+            }
+            if (msg.includes('therapist_id') || msg.includes('therapists')) {
+              payload.therapist_id = null;
+              continue;
+            }
+            if (msg.includes('massage_type_id') || msg.includes('massage_types')) {
+              payload.massage_type_id = null;
+              continue;
+            }
+            if (msg.includes('property_id') || msg.includes('properties')) {
+              payload.property_id = null;
+              continue;
+            }
+            if (msg.includes('outlet_id') || msg.includes('outlets')) {
+              payload.outlet_id = null;
+              continue;
+            }
+            if (msg.includes('room_id') || msg.includes('massage_rooms')) {
+              payload.room_id = null;
+              continue;
+            }
+          }
+
+          // If invalid UUID syntax (22P02)
+          if (error.code === '22P02' || error.message?.includes('invalid input syntax for type uuid')) {
+            if (!isValidUUID(payload.guest_id)) payload.guest_id = null;
+            if (!isValidUUID(payload.therapist_id)) payload.therapist_id = null;
+            if (!isValidUUID(payload.massage_type_id)) payload.massage_type_id = null;
+            if (!isValidUUID(payload.property_id)) payload.property_id = null;
+            if (!isValidUUID(payload.outlet_id)) payload.outlet_id = null;
+            if (!isValidUUID(payload.room_id)) payload.room_id = null;
+            continue;
+          }
+
           // If PostgREST returns missing column (PGRST204)
           if (error.code === 'PGRST204' || error.message?.includes('Could not find the') || error.message?.includes('schema cache')) {
             const match = error.message?.match(/Could not find the '([^']+)' column/i);
             if (match && match[1] && payload[match[1]] !== undefined) {
-              // Preserve stripped values in notes so nothing is lost
               if (match[1] === 'guest_email' && payload.guest_email) {
                 payload.notes = `[Email: ${payload.guest_email}] ${payload.notes || ''}`.trim();
               }
@@ -5046,8 +5122,8 @@ class DatabaseService {
         await this.logAction('CREATE_BOOKING', `Created booking on ${booking.date} at ${booking.start_time} (Therapist ID: ${booking.therapist_id})`, booking.outlet_id);
         
         let guestName = booking.guest_name || 'A guest';
-        if (booking.guest_id) {
-          const { data: guestData } = await supabase.from('guests').select('name').eq('id', booking.guest_id).single();
+        if (payload.guest_id) {
+          const { data: guestData } = await supabase.from('guests').select('name').eq('id', payload.guest_id).maybeSingle();
           if (guestData?.name) guestName = guestData.name;
         }
 
@@ -5058,7 +5134,7 @@ class DatabaseService {
             message: `You have a new booking for ${guestName} on ${booking.date} at ${booking.start_time}.`,
             type: 'info',
             outlet_id: booking.outlet_id,
-            user_id: booking.therapist_id // TARGETED to assigned staff
+            user_id: booking.therapist_id
           });
         }
       }, null);
@@ -5069,18 +5145,25 @@ class DatabaseService {
       window.dispatchEvent(new CustomEvent('booking_updated', { detail: { outlet_id: booking.outlet_id } }));
     }
     
-    // Also broadcast via Supabase for other clients (instant peer-to-peer)
+    // Broadcast across live channels for instant sync to Admin Schedule & Guest Portal
     if (this.isSupabase()) {
-      supabase.channel(`massage-bookings-${booking.outlet_id}`)
-        .subscribe((status) => {
-          if (status === 'SUBSCRIBED') {
-            supabase.channel(`massage-bookings-${booking.outlet_id}`).send({
-              type: 'broadcast',
-              event: 'sync',
-              payload: { type: 'booking_created', outlet_id: booking.outlet_id }
-            });
-          }
-        });
+      if (booking.outlet_id) {
+        supabase.channel(`massage-bookings-${booking.outlet_id}`).send({
+          type: 'broadcast',
+          event: 'sync',
+          payload: { type: 'booking_created', outlet_id: booking.outlet_id }
+        }).catch(() => {});
+      }
+      supabase.channel('guest-portal-live-bookings').send({
+        type: 'broadcast',
+        event: 'sync',
+        payload: { type: 'booking_created', outlet_id: booking.outlet_id }
+      }).catch(() => {});
+      supabase.channel('massage-scheduling-realtime').send({
+        type: 'broadcast',
+        event: 'sync',
+        payload: { type: 'booking_created', outlet_id: booking.outlet_id }
+      }).catch(() => {});
     }
   }
 
@@ -5092,7 +5175,37 @@ class DatabaseService {
       booking = data;
       
       await this.safeCall(async () => {
-        const { error } = await supabase.from('massage_bookings').update(updates).eq('id', id);
+        const cleanUpdates: any = { ...updates };
+        const isValidUUID = (val: any) => typeof val === 'string' && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(val);
+
+        if (cleanUpdates.therapist_id !== undefined && (!isValidUUID(cleanUpdates.therapist_id) || cleanUpdates.therapist_id === 'unassigned')) {
+          cleanUpdates.therapist_id = null;
+        }
+        if (cleanUpdates.guest_id !== undefined && !isValidUUID(cleanUpdates.guest_id)) {
+          cleanUpdates.guest_id = null;
+        }
+        if (cleanUpdates.room_id !== undefined && !isValidUUID(cleanUpdates.room_id)) {
+          cleanUpdates.room_id = null;
+        }
+        if (cleanUpdates.massage_type_id !== undefined && !isValidUUID(cleanUpdates.massage_type_id)) {
+          cleanUpdates.massage_type_id = null;
+        }
+        if (cleanUpdates.property_id !== undefined && !isValidUUID(cleanUpdates.property_id)) {
+          cleanUpdates.property_id = null;
+        }
+        if (cleanUpdates.outlet_id !== undefined && !isValidUUID(cleanUpdates.outlet_id)) {
+          cleanUpdates.outlet_id = null;
+        }
+
+        let { error } = await supabase.from('massage_bookings').update(cleanUpdates).eq('id', id);
+        if (error && (error.code === '23503' || error.message?.includes('violates foreign key constraint') || error.message?.includes('not present in table'))) {
+          if (cleanUpdates.therapist_id) cleanUpdates.therapist_id = null;
+          if (cleanUpdates.guest_id) cleanUpdates.guest_id = null;
+          if (cleanUpdates.massage_type_id) cleanUpdates.massage_type_id = null;
+          if (cleanUpdates.room_id) cleanUpdates.room_id = null;
+          const retry = await supabase.from('massage_bookings').update(cleanUpdates).eq('id', id);
+          error = retry.error;
+        }
         if (error) throw error;
         
         const guestId = updates.guest_id || booking?.guest_id;
@@ -5179,16 +5292,28 @@ class DatabaseService {
     }
     
     if (this.isSupabase()) {
-      supabase.channel(`massage-bookings-${oid}`).send({
-        type: 'broadcast',
-        event: 'sync',
-        payload: { type: 'booking_updated', id, outlet_id: oid, updates }
-      });
+      if (oid) {
+        supabase.channel(`massage-bookings-${oid}`).send({
+          type: 'broadcast',
+          event: 'sync',
+          payload: { type: 'booking_updated', id, outlet_id: oid, updates }
+        }).catch(() => {});
+      }
       supabase.channel('global-massage-bookings').send({
         type: 'broadcast',
         event: 'sync',
         payload: { type: 'booking_updated', id, updates }
-      });
+      }).catch(() => {});
+      supabase.channel('guest-portal-live-bookings').send({
+        type: 'broadcast',
+        event: 'sync',
+        payload: { type: 'booking_updated', id, updates }
+      }).catch(() => {});
+      supabase.channel('massage-scheduling-realtime').send({
+        type: 'broadcast',
+        event: 'sync',
+        payload: { type: 'booking_updated', id, updates }
+      }).catch(() => {});
     }
   }
 
@@ -5299,8 +5424,22 @@ class DatabaseService {
         }
       }, null);
     }
-    // Trigger local event
-    window.dispatchEvent(new CustomEvent('booking_updated', { detail: {} }));
+    // Trigger local and global sync events for real-time reflection in Guest Portal and Admin
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('booking_updated', { detail: { id, status } }));
+    }
+    if (this.isSupabase()) {
+      supabase.channel('guest-portal-live-bookings').send({
+        type: 'broadcast',
+        event: 'sync',
+        payload: { type: 'booking_status_updated', id, status }
+      }).catch(() => {});
+      supabase.channel('massage-scheduling-realtime').send({
+        type: 'broadcast',
+        event: 'sync',
+        payload: { type: 'booking_status_updated', id, status }
+      }).catch(() => {});
+    }
   }
 
   subscribeToStaffPortalEvents(outletId: string, staffId: string, callback: (payload: { eventType: string, table: string, new: any }) => void) {

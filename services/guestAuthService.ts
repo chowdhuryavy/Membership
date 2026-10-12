@@ -581,6 +581,7 @@ export class GuestAuthService {
     const cleanEmail = (email || '').trim().toLowerCase();
     if (!cleanEmail) return [];
     try {
+      if (typeof localStorage === 'undefined') return [];
       const all = JSON.parse(localStorage.getItem('hcm_guest_notifications_store') || '[]') as any[];
       return all.filter(n => n.email.toLowerCase() === cleanEmail).sort((a,b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     } catch (e) {
@@ -592,6 +593,7 @@ export class GuestAuthService {
     const cleanEmail = (email || '').trim().toLowerCase();
     if (!cleanEmail) return;
     try {
+      if (typeof localStorage === 'undefined') return;
       const all = JSON.parse(localStorage.getItem('hcm_guest_notifications_store') || '[]') as any[];
       all.unshift({
         id: crypto.randomUUID(),

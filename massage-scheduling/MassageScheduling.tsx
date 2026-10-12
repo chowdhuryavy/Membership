@@ -772,12 +772,22 @@ NOTIFY pgrst, 'reload schema';`}
 
   const selectedBookingDetails = useMemo(() => {
       if (!selectedBooking) return null;
-      const primaryService = massageTypes.find(mt => mt.id === (selectedBooking.massage_type_id || selectedBooking.inventory_item_id));
+      const primaryService = massageTypes.find(mt => mt.id === (selectedBooking.massage_type_id || selectedBooking.inventory_item_id)) || {
+        id: selectedBooking.massage_type_id || 'service',
+        name: (selectedBooking as any).type_name || (selectedBooking.notes?.match(/\[Service: ([^\]]+)\]/i)?.[1]) || 'Wellness Therapy',
+        duration_minutes: 60,
+        price: selectedBooking.price || 0
+      };
       const addServices = (selectedBooking.additional_service_ids || [])
           .map(id => massageTypes.find(mt => mt.id === id))
           .filter(Boolean);
       const therapist = therapists.find(t => t.id === selectedBooking.therapist_id);
-      const guest = guests.find(g => g.id === selectedBooking.guest_id);
+      const guest = guests.find(g => g.id === selectedBooking.guest_id) || {
+        id: selectedBooking.guest_id || 'guest',
+        name: selectedBooking.guest_name || 'Guest',
+        email: (selectedBooking as any).guest_email || '',
+        phone: selectedBooking.guest_phone || ''
+      };
       return { primaryService, addServices, therapist, guest };
   }, [selectedBooking, massageTypes, therapists, guests]);
 
@@ -873,10 +883,9 @@ NOTIFY pgrst, 'reload schema';`}
 
   const lastLoadTimeRef = useRef<number>(0);
   const loadData = async (isSilent = false) => {
-    // Throttle background refreshes to at most once every 30 seconds
+    // Debounce background refreshes to avoid duplicate calls within 500ms
     const now = Date.now();
-    if (isSilent && now - lastLoadTimeRef.current < 30000) {
-      console.log('Skipping background refresh: last refresh was too recent');
+    if (isSilent && now - lastLoadTimeRef.current < 500) {
       return;
     }
     lastLoadTimeRef.current = now;
@@ -1437,13 +1446,12 @@ NOTIFY pgrst, 'reload schema';`}
                                     whileTap={{ scale: 0.98 }}
                                     className={`absolute left-1.5 right-1.5 p-3 rounded-2xl ${getStatusStyles(booking.status, type?.name)}`}
                                   >
-                                    <div className="flex items-start gap-3">
                                         <div className="w-8 h-8 rounded-xl bg-white/30 backdrop-blur-md flex items-center justify-center text-xs font-black shadow-lg border border-white/20">
-                                            {guest?.name.charAt(0) || 'G'}
+                                            {(booking.guest_name || guest?.name || 'G').charAt(0)}
                                         </div>
                                         <div className="flex-1 min-w-0">
                                             <div className="text-[11px] font-black uppercase leading-tight truncate tracking-tight flex items-center gap-2">
-                                                {guest?.name || 'Walk-in Guest'}
+                                                {booking.guest_name || guest?.name || 'Guest'}
                                                 {booking.status === 'completed' ? (
                                                     <div className="w-2 h-2 rounded-full bg-emerald-300 shadow-[0_0_8px_rgba(110,231,183,0.8)]"></div>
                                                 ) : (
@@ -1451,10 +1459,9 @@ NOTIFY pgrst, 'reload schema';`}
                                                 )}
                                             </div>
                                             <div className="text-[9px] font-black opacity-90 uppercase tracking-widest mt-0.5 truncate flex items-center gap-1.5">
-                                                <Zap className="w-2.5 h-2.5" /> {type?.name || 'Service'}
+                                                <Zap className="w-2.5 h-2.5" /> {type?.name || (booking as any).type_name || (booking.notes?.match(/\[Service: ([^\]]+)\]/i)?.[1]) || 'Service'}
                                             </div>
                                         </div>
-                                    </div>
                                     
                                     <div className="flex items-center justify-between mt-auto pt-2 border-t border-white/10">
                                         <div className="flex items-center gap-2">
@@ -1479,6 +1486,75 @@ NOTIFY pgrst, 'reload schema';`}
                             </div>
                           );
                         })}
+                        {filteredTodayBookings.filter(b => !b.therapist_id || b.therapist_id === 'unassigned').length > 0 && (
+                          <div key="unassigned-column" className="flex-1 border-r-2 border-dashed border-amber-300 relative min-w-[220px] bg-amber-50/20 hover:bg-amber-50/40 transition-all">
+                            <div className="h-14 bg-amber-50/90 backdrop-blur-md border-b border-amber-200 flex items-center justify-center sticky top-0 z-10 px-4 shadow-sm gap-3">
+                              <div className="w-9 h-9 rounded-xl bg-amber-500 flex items-center justify-center text-white font-black text-xs shadow-lg shadow-amber-500/20">
+                                <Clock className="w-4 h-4 animate-spin" />
+                              </div>
+                              <div className="flex flex-col items-start min-w-0">
+                                <span className="text-[11px] font-black text-amber-950 uppercase truncate w-full tracking-tight">
+                                  Unassigned / Requests
+                                </span>
+                                <span className="text-[9px] font-mono font-bold text-amber-600 uppercase tracking-widest truncate w-full">
+                                  {filteredTodayBookings.filter(b => !b.therapist_id || b.therapist_id === 'unassigned').length} Pending Slot{filteredTodayBookings.filter(b => !b.therapist_id || b.therapist_id === 'unassigned').length > 1 ? 's' : ''}
+                                </span>
+                              </div>
+                            </div>
+                            {HOURS.map(hour => (
+                              <div key={hour} style={{ height: SLOT_HEIGHT }} className="border-b border-amber-100/60 relative" />
+                            ))}
+                            {filteredTodayBookings.filter(b => !b.therapist_id || b.therapist_id === 'unassigned').map(booking => {
+                              const { top, height } = calculatePosition(booking.start_time, booking.end_time);
+                              const type = massageTypes.find(m => m.id === (booking.massage_type_id || booking.inventory_item_id));
+                              const room = massageRooms.find(r => r.id === booking.room_id);
+                              return (
+                                <motion.button
+                                  key={booking.id}
+                                  onClick={() => setSelectedBooking(booking)}
+                                  style={{ top: top + 56, height: height - 2 }}
+                                  initial={{ opacity: 0, scale: 0.95 }}
+                                  animate={{ opacity: 1, scale: 1 }}
+                                  whileHover={{ scale: 1.03, y: -4, zIndex: 50 }}
+                                  whileTap={{ scale: 0.98 }}
+                                  className={`absolute left-1.5 right-1.5 p-3 rounded-2xl ${getStatusStyles(booking.status, type?.name)}`}
+                                >
+                                  <div className="flex items-start gap-3">
+                                    <div className="w-8 h-8 rounded-xl bg-white/30 backdrop-blur-md flex items-center justify-center text-xs font-black shadow-lg border border-white/20">
+                                      {(booking.guest_name || 'G').charAt(0)}
+                                    </div>
+                                    <div className="flex-1 min-w-0">
+                                      <div className="text-[11px] font-black uppercase leading-tight truncate tracking-tight flex items-center gap-2">
+                                        {booking.guest_name || 'Guest'}
+                                        <div className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
+                                      </div>
+                                      <div className="text-[9px] font-black opacity-90 uppercase tracking-widest mt-0.5 truncate flex items-center gap-1.5">
+                                        <Zap className="w-2.5 h-2.5" /> {type?.name || (booking as any).type_name || 'Service'}
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div className="flex items-center justify-between mt-auto pt-2 border-t border-white/10">
+                                    <div className="flex items-center gap-2">
+                                      <div className="px-2 py-0.5 rounded-lg bg-black/20 text-[8px] font-black uppercase tracking-widest flex items-center gap-1.5 backdrop-blur-sm">
+                                        <Timer className="w-2.5 h-2.5" /> {type?.duration_minutes || 60}m
+                                      </div>
+                                      {room && (
+                                        <div className="text-[8px] font-black opacity-90 uppercase tracking-widest flex items-center gap-1.5">
+                                          <MapPin className="w-2.5 h-2.5" /> {room.name}
+                                        </div>
+                                      )}
+                                    </div>
+                                    {height > 80 && (
+                                      <div className="text-[8px] font-mono font-black opacity-70 uppercase tracking-widest">
+                                        {booking.start_time}
+                                      </div>
+                                    )}
+                                  </div>
+                                </motion.button>
+                              );
+                            })}
+                          </div>
+                        )}
                         {!loading && therapists.length === 0 && (
                             <div className="flex-1 p-12 text-center text-slate-400 uppercase text-[10px] font-black tracking-widest bg-white">
                                 No active specialist types registered for this scope.
@@ -1895,8 +1971,8 @@ NOTIFY pgrst, 'reload schema';`}
                 <CardHeader className="bg-indigo-600 text-white p-6">
                     <div className="flex justify-between items-start">
                         <div className="space-y-1">
-                            <CardTitle className="text-xl font-black uppercase tracking-tight">{selectedBookingDetails.guest?.name || 'Walk-in Guest'}</CardTitle>
-                            <div className="flex items-center gap-2 text-[10px] font-black text-indigo-200 uppercase tracking-widest"><Phone className="w-3 h-3" /> {selectedBookingDetails.guest?.phone || '--'}</div>
+                            <CardTitle className="text-xl font-black uppercase tracking-tight">{selectedBooking.guest_name || selectedBookingDetails.guest?.name || 'Guest'}</CardTitle>
+                            <div className="flex items-center gap-2 text-[10px] font-black text-indigo-200 uppercase tracking-widest"><Phone className="w-3 h-3" /> {selectedBooking.guest_phone || selectedBookingDetails.guest?.phone || (selectedBooking as any).guest_email || '--'}</div>
                         </div>
                         <button onClick={() => setSelectedBooking(null)} className="p-2 hover:bg-white/10 rounded-full"><X className="w-5 h-5"/></button>
                     </div>
@@ -1919,7 +1995,7 @@ NOTIFY pgrst, 'reload schema';`}
                         </div>
                         <div className="flex items-center justify-between border-b border-slate-200 pb-3">
                             <div className="flex items-center gap-3 text-[10px] font-black uppercase text-slate-500 tracking-widest"><User className="w-4 h-4 text-indigo-600" /> Specialist Type</div>
-                            <span className="font-black text-slate-900 uppercase">{selectedBookingDetails.therapist?.name}</span>
+                            <span className="font-black text-slate-900 uppercase">{selectedBookingDetails.therapist?.name || (selectedBooking.therapist_id ? 'Specialist Assigned' : 'Unassigned / Pending')}</span>
                         </div>
                         <div className="flex items-center justify-between">
                             <div className="flex items-center gap-3 text-[10px] font-black uppercase text-slate-500 tracking-widest"><Coins className="w-4 h-4 text-indigo-600" /> Investment</div>

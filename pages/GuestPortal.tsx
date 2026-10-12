@@ -57,7 +57,9 @@ import {
   Wallet,
   Building2,
   Bell,
-  Check
+  Check,
+  Edit3,
+  Trash2
 } from 'lucide-react';
 import { Button } from '../components/ui';
 import { format, parseISO } from 'date-fns';
@@ -119,6 +121,20 @@ export default function GuestPortal() {
   const [requestTime, setRequestTime] = useState('14:00');
   const [requestNotes, setRequestNotes] = useState('');
   const [bookingSubmitting, setBookingSubmitting] = useState(false);
+
+  // Edit / Reschedule state
+  const [editingBooking, setEditingBooking] = useState<MassageBooking | null>(null);
+  const [editServiceId, setEditServiceId] = useState('');
+  const [editTherapistId, setEditTherapistId] = useState('');
+  const [editDate, setEditDate] = useState('');
+  const [editTime, setEditTime] = useState('');
+  const [editNotes, setEditNotes] = useState('');
+  const [editSubmitting, setEditSubmitting] = useState(false);
+
+  // Cancel reservation state
+  const [cancellingBooking, setCancellingBooking] = useState<MassageBooking | null>(null);
+  const [cancelReason, setCancelReason] = useState('');
+  const [cancelSubmitting, setCancelSubmitting] = useState(false);
 
   // Branding
   const [dynamicPropertyName, setDynamicPropertyName] = useState(currentProperty?.name || settings?.name || 'Luxury Health Club & Spa');
@@ -501,8 +517,9 @@ export default function GuestPortal() {
 
     setBookingSubmitting(true);
     try {
-      const mOutlet = outletsList.find(o => o.id === (account.outlet_id || member?.outlet_id)) || outletsList[0];
-      const mProp = propertiesList.find(p => p.id === mOutlet?.property_id) || propertiesList[0];
+      // Resolve facility outlet and property safely from genuine entities
+      const effectiveOutlet = outletsList.find(o => o.id === (selectedType.outlet_id || account.outlet_id || effectiveMember?.outlet_id || matchedOutlet?.id)) || matchedOutlet || outletsList[0];
+      const effectiveProperty = propertiesList.find(p => p.id === (selectedType.property_id || effectiveOutlet?.property_id || account.property_id || effectiveMember?.property_id || matchedProperty?.id)) || matchedProperty || propertiesList[0];
 
       const duration = selectedType.duration_minutes || 60;
       const [hours, minutes] = (requestTime || '14:00').split(':').map(Number);
@@ -512,17 +529,19 @@ export default function GuestPortal() {
       const endMins = endTotalMinutes % 60;
       const endTime = `${String(endHours).padStart(2, '0')}:${String(endMins).padStart(2, '0')}`;
 
+      const therapistParam = requestTherapistId && requestTherapistId !== 'unassigned' && requestTherapistId !== 'any' ? requestTherapistId : null;
+
       await db.addMassageBooking({
-        outlet_id: mOutlet?.id || account.outlet_id || 'default',
-        property_id: mProp?.id || account.property_id || '',
-        guest_id: member?.id || account?.member_id || null,
-        guest_name: account.name || member?.guest_name || 'Guest',
-        guest_email: account.email || member?.email || '',
-        phone: account.phone || member?.phone || '',
-        guest_phone: account.phone || member?.phone || '',
-        massage_type_id: selectedType.id,
+        outlet_id: effectiveOutlet?.id || null,
+        property_id: effectiveProperty?.id || effectiveOutlet?.property_id || null,
+        guest_id: null,
+        member_id: effectiveMember?.id || account?.member_id || account?.id || null,
+        guest_name: account.name || effectiveMember?.guest_name || 'Guest',
+        guest_email: account.email || effectiveMember?.email || '',
+        guest_phone: account.phone || effectiveMember?.phone || '',
+        massage_type_id: selectedType.id && /^[0-9a-f-]{36}$/i.test(selectedType.id) ? selectedType.id : null,
         type_name: selectedType.name,
-        therapist_id: requestTherapistId || null,
+        therapist_id: therapistParam,
         date: requestDate,
         start_time: requestTime,
         end_time: endTime,
@@ -541,6 +560,110 @@ export default function GuestPortal() {
       toast.error(err?.message || 'Failed to submit spa appointment request.');
     } finally {
       setBookingSubmitting(false);
+    }
+  };
+
+  const handleOpenEditBooking = (b: MassageBooking) => {
+    setEditingBooking(b);
+    setEditServiceId(b.massage_type_id || (b as any).inventory_item_id || facilityMassageTypes[0]?.id || '');
+    setEditTherapistId(b.therapist_id || '');
+    setEditDate(b.date || format(new Date(), 'yyyy-MM-dd'));
+    setEditTime(b.start_time ? b.start_time.substring(0, 5) : '14:00');
+    setEditNotes(((b as any).notes || '').replace(/\[(?:Email|Service|Cancelled|Rescheduled): [^\]]+\]\s*/g, ''));
+  };
+
+  const handleEditBookingSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingBooking) return;
+
+    setEditSubmitting(true);
+    try {
+      const selectedType = facilityMassageTypes.find(t => t.id === editServiceId) || massageTypesList.find(t => t.id === editServiceId);
+      const duration = selectedType?.duration_minutes || 60;
+      const [hours, minutes] = (editTime || '14:00').split(':').map(Number);
+      const startMinutes = (hours || 0) * 60 + (minutes || 0);
+      const endTotalMinutes = (startMinutes + duration) % (24 * 60);
+      const endHours = Math.floor(endTotalMinutes / 60);
+      const endMins = endTotalMinutes % 60;
+      const endTime = `${String(endHours).padStart(2, '0')}:${String(endMins).padStart(2, '0')}`;
+
+      const therapistParam = editTherapistId && editTherapistId !== 'unassigned' && editTherapistId !== 'any' ? editTherapistId : null;
+
+      const previousDate = editingBooking.date;
+      const previousTime = (editingBooking.start_time || '').substring(0, 5);
+      const isRescheduled = previousDate !== editDate || previousTime !== editTime;
+
+      const updates: any = {
+        date: editDate,
+        start_time: editTime,
+        end_time: endTime,
+        therapist_id: therapistParam,
+        notes: editNotes ? editNotes.trim() : null
+      };
+
+      if (selectedType) {
+        updates.massage_type_id = /^[0-9a-f-]{36}$/i.test(selectedType.id) ? selectedType.id : null;
+        updates.type_name = selectedType.name;
+        updates.price = selectedType.price || 0;
+      }
+
+      // If timing changed, set status to pending so front desk concierge confirms
+      if (isRescheduled) {
+        updates.status = 'pending';
+        updates.notes = `[Rescheduled by Guest from ${previousDate} ${previousTime}] ${editNotes || ''}`.trim();
+      }
+
+      await db.updateMassageBooking(editingBooking.id, updates);
+
+      // Add notification for staff/admin
+      await db.addNotification({
+        title: isRescheduled ? 'Guest Rescheduled Appointment' : 'Guest Modified Appointment Details',
+        message: `${account?.name || 'A guest'} ${isRescheduled ? `rescheduled spa appointment to ${editDate} at ${editTime}` : 'modified reservation details'}.`,
+        type: 'info',
+        outlet_id: editingBooking.outlet_id,
+        required_permission: 'bookings:view'
+      });
+
+      toast.success(isRescheduled ? 'Appointment rescheduled! Front desk concierge has been notified.' : 'Appointment details updated!');
+      setEditingBooking(null);
+      await loadPortalData();
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to update appointment.');
+    } finally {
+      setEditSubmitting(false);
+    }
+  };
+
+  const handleCancelBookingSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!cancellingBooking) return;
+
+    setCancelSubmitting(true);
+    try {
+      const cancelNote = cancelReason.trim() ? `[Cancelled by Guest: ${cancelReason.trim()}]` : '[Cancelled by Guest via Portal]';
+      const existingNotes = (cancellingBooking as any).notes || '';
+
+      await db.updateMassageBooking(cancellingBooking.id, {
+        status: 'cancelled',
+        notes: `${cancelNote} ${existingNotes}`.trim()
+      });
+
+      await db.addNotification({
+        title: 'Spa Appointment Cancelled by Guest',
+        message: `${account?.name || 'Guest'} has cancelled their spa appointment for ${cancellingBooking.date} at ${cancellingBooking.start_time}. ${cancelReason ? `Reason: ${cancelReason}` : ''}`,
+        type: 'warning',
+        outlet_id: cancellingBooking.outlet_id,
+        required_permission: 'bookings:view'
+      });
+
+      toast.success('Your reservation has been cancelled. Front desk concierge has been updated.');
+      setCancellingBooking(null);
+      setCancelReason('');
+      await loadPortalData();
+    } catch (err: any) {
+      toast.error(err?.message || 'Failed to cancel appointment.');
+    } finally {
+      setCancelSubmitting(false);
     }
   };
 
@@ -1184,6 +1307,34 @@ export default function GuestPortal() {
                         ✓ Your reservation is confirmed. Please arrive 10 minutes prior to your treatment.
                       </p>
                     )}
+                    {bStatus === 'cancelled' && (
+                      <p className="text-[10px] text-rose-400/80 font-medium italic">
+                        This reservation was cancelled. Tap "Request Slot" above to book a new appointment.
+                      </p>
+                    )}
+
+                    {/* Guest Booking Actions: Reschedule / Edit / Cancel */}
+                    {bStatus !== 'completed' && bStatus !== 'cancelled' && (
+                      <div className="pt-2 border-t border-white/5 flex items-center justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleOpenEditBooking(b)}
+                          className="px-3.5 py-2 rounded-xl bg-purple-500/15 hover:bg-purple-500/25 text-purple-200 font-black text-[10px] uppercase tracking-wider flex items-center gap-1.5 border border-purple-500/30 transition-all active:scale-95 shadow-sm"
+                        >
+                          <Edit3 className="w-3.5 h-3.5 text-purple-300" /> Reschedule / Modify
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCancellingBooking(b);
+                            setCancelReason('');
+                          }}
+                          className="px-3.5 py-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 text-rose-300 font-black text-[10px] uppercase tracking-wider flex items-center gap-1.5 border border-rose-500/20 transition-all active:scale-95 shadow-sm"
+                        >
+                          <Trash2 className="w-3.5 h-3.5 text-rose-400" /> Cancel
+                        </button>
+                      </div>
+                    )}
                   </div>
                 );
               })
@@ -1761,6 +1912,214 @@ export default function GuestPortal() {
                 Close &amp; Mark as Read
               </Button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* GUEST RESCHEDULE / MODIFY BOOKING MODAL */}
+      {editingBooking && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="w-full max-w-sm bg-white rounded-3xl p-6 text-slate-900 space-y-4 shadow-2xl animate-in zoom-in-95 max-h-[90vh] overflow-y-auto">
+            <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-purple-50 text-purple-600 flex items-center justify-center">
+                  <Edit3 className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black uppercase text-slate-900">
+                    Reschedule / Modify
+                  </h3>
+                  <p className="text-[10px] text-slate-500 font-medium">Update treatment, date, time or notes</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setEditingBooking(null)}
+                className="p-1 rounded-full text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <form onSubmit={handleEditBookingSubmit} className="space-y-3">
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                  Treatment / Service
+                </label>
+                <select
+                  value={editServiceId}
+                  onChange={(e) => setEditServiceId(e.target.value)}
+                  className="w-full h-11 px-3 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold"
+                  required
+                >
+                  {facilityMassageTypes.map((t) => (
+                    <option key={t.id} value={t.id}>
+                      {t.name} ({t.duration_minutes} min){t.price ? ` - ${formatMoney(t.price)}` : ''}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Specialist Selection with Privacy Mode */}
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                    Specialist Preference
+                  </label>
+                  <span className="text-[8px] font-mono uppercase text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">
+                    {portalSettings?.show_therapist_name_to_guests ? 'Names Revealed' : '🛡 Nationality Mode'}
+                  </span>
+                </div>
+                <select
+                  value={editTherapistId}
+                  onChange={(e) => setEditTherapistId(e.target.value)}
+                  className="w-full h-11 px-3 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold"
+                >
+                  <option value="">Any Available Specialist (No Preference)</option>
+                  {facilityTherapists.map((t) => {
+                    const showNames = Boolean(portalSettings?.show_therapist_name_to_guests);
+                    const label = showNames
+                      ? `${t.name} (${t.country || 'Specialist'})`
+                      : (t.country ? `${t.country} Specialist` : (t.specialty || 'Certified Specialist'));
+                    return (
+                      <option key={t.id} value={t.id}>
+                        {label}
+                      </option>
+                    );
+                  })}
+                </select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                    Date
+                  </label>
+                  <input
+                    type="date"
+                    value={editDate}
+                    onChange={(e) => setEditDate(e.target.value)}
+                    className="w-full h-11 px-3 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold"
+                    required
+                  />
+                </div>
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                    Time
+                  </label>
+                  <input
+                    type="time"
+                    value={editTime}
+                    onChange={(e) => setEditTime(e.target.value)}
+                    className="w-full h-11 px-3 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold"
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                  Special Requests / Notes
+                </label>
+                <textarea
+                  value={editNotes}
+                  onChange={(e) => setEditNotes(e.target.value)}
+                  rows={2}
+                  placeholder="e.g. Medium pressure, neck focus..."
+                  className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium"
+                />
+              </div>
+
+              <div className="pt-2 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setEditingBooking(null)}
+                  className="flex-1 h-11 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs uppercase tracking-wider transition-all"
+                >
+                  Keep Current
+                </button>
+                <Button
+                  type="submit"
+                  disabled={editSubmitting}
+                  isLoading={editSubmitting}
+                  className="flex-1 h-11 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-black text-xs uppercase tracking-wider shadow-md"
+                >
+                  Save Changes
+                </Button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* GUEST CANCEL RESERVATION CONFIRMATION MODAL */}
+      {cancellingBooking && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="w-full max-w-sm bg-white rounded-3xl p-6 text-slate-900 space-y-4 shadow-2xl animate-in zoom-in-95">
+            <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center">
+                  <AlertTriangle className="w-4 h-4" />
+                </div>
+                <h3 className="text-sm font-black uppercase text-slate-900">
+                  Cancel Reservation
+                </h3>
+              </div>
+              <button
+                onClick={() => setCancellingBooking(null)}
+                className="p-1 rounded-full text-slate-400 hover:text-slate-600"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-600 leading-relaxed font-medium">
+              Are you sure you want to cancel your spa treatment reservation? This will immediately free up the slot in the facility schedule.
+            </p>
+
+            <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100 text-xs space-y-1">
+              <p className="font-black text-slate-900 uppercase">
+                {(cancellingBooking as any).type_name || 'Wellness Therapy'}
+              </p>
+              <p className="text-[11px] text-slate-500 font-medium">
+                📅 {cancellingBooking.date ? format(parseISO(cancellingBooking.date), 'EEEE, dd MMM yyyy') : 'Scheduled Date'}
+              </p>
+              <p className="text-[11px] text-slate-500 font-medium">
+                ⏰ {cancellingBooking.start_time?.substring(0, 5)} - {cancellingBooking.end_time?.substring(0, 5)}
+              </p>
+            </div>
+
+            <form onSubmit={handleCancelBookingSubmit} className="space-y-3">
+              <div className="space-y-1">
+                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                  Reason for Cancellation (Optional)
+                </label>
+                <textarea
+                  value={cancelReason}
+                  onChange={(e) => setCancelReason(e.target.value)}
+                  rows={2}
+                  placeholder="e.g. Schedule conflict, traveling..."
+                  className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium"
+                />
+              </div>
+
+              <div className="pt-1 flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setCancellingBooking(null)}
+                  className="flex-1 h-11 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-xs uppercase tracking-wider transition-all"
+                >
+                  Keep Booking
+                </button>
+                <Button
+                  type="submit"
+                  disabled={cancelSubmitting}
+                  isLoading={cancelSubmitting}
+                  className="flex-1 h-11 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-black text-xs uppercase tracking-wider shadow-md shadow-rose-600/20"
+                >
+                  Yes, Cancel
+                </Button>
+              </div>
+            </form>
           </div>
         </div>
       )}
