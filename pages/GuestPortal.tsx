@@ -59,7 +59,12 @@ import {
   Bell,
   Check,
   Edit3,
-  Trash2
+  Trash2,
+  ShoppingBag,
+  Printer,
+  Download,
+  CreditCard,
+  Tag
 } from 'lucide-react';
 import { Button } from '../components/ui';
 import { format, parseISO } from 'date-fns';
@@ -74,6 +79,16 @@ export default function GuestPortal() {
   const [account, setAccount] = useState<GuestAccount | null>(null);
   const [portalSettings, setPortalSettings] = useState<GuestPortalSettings | null>(null);
   const [activeTab, setActiveTab] = useState<ActiveTab>('card');
+
+  // Purchases & Receipts State
+  const [selectedReceiptForModal, setSelectedReceiptForModal] = useState<Sale | null>(null);
+  const [purchaseHistoryFilter, setPurchaseHistoryFilter] = useState<string>('all');
+  const [showPurchaseHistoryModal, setShowPurchaseHistoryModal] = useState(false);
+
+  const handleTabSwitch = (newTab: ActiveTab) => {
+    setActiveTab(newTab);
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  };
 
   // Associated Data
   const [member, setMember] = useState<Member | null>(null);
@@ -425,11 +440,45 @@ export default function GuestPortal() {
       setConsents(matchedConsents);
 
       // Match Sales transactions
+      const sessionNameClean = (session.name || '').trim().toLowerCase();
+      const matchedMemberNumbers = new Set(matchedMembers.map(m => (m.membership_number || '').trim().toLowerCase()).filter(Boolean));
+      const matchedMemberIds = new Set(matchedMembers.map(m => m.id));
+      const matchedPtMemberIds = new Set(matchedPT.map(p => p.id));
+      const matchedBookingIds = new Set(matchedBookings.map(b => b.id));
+      const consentSaleIds = new Set(matchedConsents.map(c => c.sale_id).filter(Boolean));
+
       const matchedSales = allSales.filter((s: any) => {
-        if (s.customer_name && s.customer_name.toLowerCase() === session.name.toLowerCase()) return true;
-        if (matchedMembers.some((m: any) => m.id === s.member_id)) return true;
+        if (!s) return false;
+        // Direct ID matching
+        if (s.guest_id && (s.guest_id === session.id || matchedMemberIds.has(s.guest_id) || matchedPtMemberIds.has(s.guest_id))) return true;
+        if (s.member_id && (matchedMemberIds.has(s.member_id) || s.member_id === session.id)) return true;
+        if (s.booking_id && matchedBookingIds.has(s.booking_id)) return true;
+        if (s.id && consentSaleIds.has(s.id)) return true;
+
+        // Name matching (support guest_name and customer_name)
+        const saleGuestName = (s.guest_name || s.customer_name || '').trim().toLowerCase();
+        if (saleGuestName && sessionNameClean) {
+          if (saleGuestName === sessionNameClean) return true;
+          // Strip honorific titles (Mr., Mrs., Ms., Dr.)
+          const nameA = saleGuestName.replace(/^(mr\.|mrs\.|ms\.|dr\.)\s*/i, '').trim();
+          const nameB = sessionNameClean.replace(/^(mr\.|mrs\.|ms\.|dr\.)\s*/i, '').trim();
+          if (nameA && nameB && (nameA.includes(nameB) || nameB.includes(nameA))) return true;
+        }
+
+        // Membership number matching in sale name or remarks
+        if (matchedMemberNumbers.size > 0) {
+          for (const mNum of matchedMemberNumbers) {
+            if (mNum && (saleGuestName.includes(mNum) || (s.remarks && s.remarks.toLowerCase().includes(mNum)))) {
+              return true;
+            }
+          }
+        }
+
         return false;
       });
+
+      // Sort sales newest first
+      matchedSales.sort((a: any, b: any) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
       setSales(matchedSales);
 
       // Smooth loading transition so property logo and animation are clearly seen
@@ -705,7 +754,7 @@ export default function GuestPortal() {
   const totalPtRemaining = ptMembers.reduce((acc, p) => acc + Math.max(0, (p.total_sessions || 0) - (p.used_sessions || 0)), 0);
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col max-w-lg mx-auto relative shadow-2xl pb-24 selection:bg-indigo-500">
+    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col max-w-lg mx-auto relative shadow-2xl pb-24 selection:bg-indigo-500 overflow-y-scroll [scrollbar-gutter:stable]">
       {/* Ambient Glows */}
       <div className="absolute top-0 right-0 w-72 h-72 bg-indigo-600/10 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute top-1/2 left-0 w-72 h-72 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
@@ -768,7 +817,7 @@ export default function GuestPortal() {
       </header>
 
       {/* MAIN CONTENT AREA */}
-      <main className="flex-1 p-4 space-y-5">
+      <main className="flex-1 p-4 space-y-5 min-h-[calc(100vh-140px)]">
         {/* TAB 1: MEMBERSHIP CARD & QR */}
         {activeTab === 'card' && (
           <div className="space-y-4 animate-in fade-in duration-300">
@@ -1058,25 +1107,50 @@ export default function GuestPortal() {
               </button>
             </div>
 
-            {/* QUICK STATS SUMMARY */}
-            <div className="grid grid-cols-2 gap-3">
-              <div className="bg-slate-900/80 border border-white/10 p-4 rounded-2xl">
-                <div className="flex items-center gap-2 mb-2 text-blue-400">
-                  <Dumbbell className="w-4 h-4" />
-                  <span className="text-[10px] font-black uppercase tracking-wider">PT Sessions</span>
+            {/* QUICK STATS & PURCHASES SUMMARY */}
+            <div className="grid grid-cols-3 gap-2">
+              <button
+                type="button"
+                onClick={() => handleTabSwitch('pt')}
+                className="bg-slate-900/80 hover:bg-slate-800/80 border border-white/10 p-3 rounded-2xl text-left transition-all group focus:outline-none"
+              >
+                <div className="flex items-center gap-1.5 mb-1.5 text-blue-400">
+                  <Dumbbell className="w-3.5 h-3.5 shrink-0" />
+                  <span className="text-[9px] font-black uppercase tracking-wider truncate">PT Sessions</span>
                 </div>
-                <p className="text-xl font-black text-white">{totalPtRemaining} <span className="text-xs text-slate-500 font-bold">/ {totalPtPurchased}</span></p>
-                <p className="text-[10px] text-slate-400 font-medium mt-1">Sessions Available</p>
-              </div>
+                <p className="text-base sm:text-lg font-black text-white leading-tight">
+                  {totalPtRemaining} <span className="text-[10px] text-slate-500 font-bold">/{totalPtPurchased}</span>
+                </p>
+                <p className="text-[9px] text-slate-400 font-medium mt-1 truncate">Available</p>
+              </button>
 
-              <div className="bg-slate-900/80 border border-white/10 p-4 rounded-2xl">
-                <div className="flex items-center gap-2 mb-2 text-purple-400">
-                  <Sparkles className="w-4 h-4" />
-                  <span className="text-[10px] font-black uppercase tracking-wider">Spa Treatments</span>
+              <button
+                type="button"
+                onClick={() => handleTabSwitch('spa')}
+                className="bg-slate-900/80 hover:bg-slate-800/80 border border-white/10 p-3 rounded-2xl text-left transition-all group focus:outline-none"
+              >
+                <div className="flex items-center gap-1.5 mb-1.5 text-purple-400">
+                  <Sparkles className="w-3.5 h-3.5 shrink-0" />
+                  <span className="text-[9px] font-black uppercase tracking-wider truncate">Spa</span>
                 </div>
-                <p className="text-xl font-black text-white">{bookings.length}</p>
-                <p className="text-[10px] text-slate-400 font-medium mt-1">Appointments Logged</p>
-              </div>
+                <p className="text-base sm:text-lg font-black text-white leading-tight">{bookings.length}</p>
+                <p className="text-[9px] text-slate-400 font-medium mt-1 truncate">Booked</p>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setShowPurchaseHistoryModal(true)}
+                className="bg-slate-900/80 hover:bg-amber-950/40 border border-amber-400/40 hover:border-amber-400/80 p-3 rounded-2xl text-left transition-all group focus:outline-none relative overflow-hidden"
+              >
+                <div className="flex items-center gap-1.5 mb-1.5 text-amber-400">
+                  <Receipt className="w-3.5 h-3.5 shrink-0" />
+                  <span className="text-[9px] font-black uppercase tracking-wider truncate">Purchases</span>
+                </div>
+                <p className="text-base sm:text-lg font-black text-amber-300 leading-tight">{sales.length}</p>
+                <p className="text-[9px] text-amber-300/80 font-bold mt-1 truncate flex items-center gap-0.5">
+                  History <ChevronRight className="w-2.5 h-2.5 inline group-hover:translate-x-0.5 transition-transform" />
+                </p>
+              </button>
             </div>
           </div>
         )}
@@ -1501,49 +1575,141 @@ export default function GuestPortal() {
               <Lock className="w-4 h-4 text-amber-400" /> Change Private Password
             </Button>
 
-            {/* BILLING & RECEIPTS SECTION (Inside Profile) */}
-            {portalSettings?.allow_financial_history && (
+            {/* GUEST PURCHASE & BILLING HISTORY SECTION */}
+            {portalSettings?.allow_financial_history !== false && (
               <div className="space-y-3 pt-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Receipt className="w-4 h-4 text-amber-400" />
                     <h4 className="text-xs font-black text-white uppercase tracking-wider">
-                      Billing &amp; Receipts ({sales.length})
+                      Purchase History ({sales.length})
                     </h4>
                   </div>
+                  {sales.length > 0 && (
+                    <span className="text-[10px] font-mono font-bold text-amber-300 bg-amber-400/10 px-2.5 py-0.5 rounded-full border border-amber-400/20">
+                      Total: {formatMoney(sales.reduce((acc, s) => acc + (s.net_amount || 0), 0))}
+                    </span>
+                  )}
                 </div>
 
                 {sales.length === 0 ? (
-                  <div className="p-6 text-center bg-slate-900/50 rounded-2xl border border-white/5 space-y-1.5">
-                    <Receipt className="w-6 h-6 text-slate-600 mx-auto" />
-                    <h5 className="text-xs font-bold text-slate-400 uppercase">No Transactions</h5>
-                    <p className="text-[10px] text-slate-500">Your purchases and payment receipts will appear here.</p>
+                  <div className="p-6 text-center bg-slate-900/50 rounded-2xl border border-white/5 space-y-2">
+                    <Receipt className="w-8 h-8 text-slate-600 mx-auto" />
+                    <h5 className="text-xs font-bold text-slate-400 uppercase">No Purchases Logged Yet</h5>
+                    <p className="text-[11px] text-slate-500 max-w-xs mx-auto">
+                      All your POS purchases, day passes, personal training packages, and treatments will automatically appear here with digital receipts.
+                    </p>
+                    {(ptMembers.length > 0 || bookings.length > 0 || consents.length > 0) && (
+                      <div className="pt-2 border-t border-white/5 text-left space-y-1.5">
+                        <span className="text-[9px] font-black uppercase tracking-widest text-indigo-400 block">
+                          Your Active Services &amp; Passes
+                        </span>
+                        {ptMembers.map(p => (
+                          <div key={p.id} className="text-xs text-slate-300 flex justify-between bg-slate-950/40 p-2 rounded-xl">
+                            <span>{(p as any).package_type || 'PT Package'}</span>
+                            <span className="text-amber-400 font-bold">{p.total_sessions} Sessions</span>
+                          </div>
+                        ))}
+                        {consents.map(c => (
+                          <div key={c.id} className="text-xs text-slate-300 flex justify-between bg-slate-950/40 p-2 rounded-xl">
+                            <span>{c.item_name || 'Entrance Pass'}</span>
+                            <span className="text-emerald-400 font-bold">Issued</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 ) : (
-                  <div className="space-y-2 max-h-[340px] overflow-y-auto pr-1">
-                    {sales.map((sale) => (
-                      <div
-                        key={sale.id}
-                        className="bg-slate-900/90 border border-white/10 rounded-2xl p-3.5 flex items-center justify-between"
-                      >
-                        <div className="space-y-0.5">
-                          <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest">
-                            {sale.category || 'Service'}
-                          </span>
-                          <h5 className="text-xs font-black text-white uppercase">
-                            {sale.item_name || 'Transaction'}
-                          </h5>
-                          <p className="text-[10px] text-slate-400">
-                            {sale.created_at ? format(parseISO(sale.created_at), 'dd MMM yyyy') : ''} &bull; {sale.payment_method || 'Paid'}
-                          </p>
-                        </div>
-                        <div className="text-right">
-                          <p className="text-xs font-black text-emerald-400">
-                            {formatMoney(sale.net_amount || 0)}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
+                  <div className="space-y-2">
+                    {/* Filter Chips */}
+                    <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-[10px] no-scrollbar">
+                      {['all', 'Personal Training', 'Massage', 'Entrance Fee', 'Retail'].map((catKey) => {
+                        const count = catKey === 'all'
+                          ? sales.length
+                          : sales.filter(s => (s.category || '').toLowerCase() === catKey.toLowerCase() || (catKey === 'Massage' && (s.category === 'Spa' || s.category === 'Massage'))).length;
+                        if (catKey !== 'all' && count === 0) return null;
+                        const label = catKey === 'all' ? 'All' : catKey === 'Personal Training' ? 'PT' : catKey === 'Entrance Fee' ? 'Passes' : catKey;
+                        const isSel = purchaseHistoryFilter === catKey;
+
+                        return (
+                          <button
+                            key={catKey}
+                            type="button"
+                            onClick={() => setPurchaseHistoryFilter(catKey)}
+                            className={`px-2.5 py-1 rounded-xl font-bold uppercase transition-all whitespace-nowrap shrink-0 border ${
+                              isSel
+                                ? 'bg-amber-400 text-slate-950 border-amber-400 shadow-sm'
+                                : 'bg-slate-900 text-slate-400 border-white/10 hover:text-white'
+                            }`}
+                          >
+                            {label} ({count})
+                          </button>
+                        );
+                      })}
+                    </div>
+
+                    <div className="space-y-2 max-h-[380px] overflow-y-auto pr-1">
+                      {sales
+                        .filter(s => {
+                          if (purchaseHistoryFilter === 'all') return true;
+                          if (purchaseHistoryFilter === 'Massage') return s.category === 'Massage' || s.category === 'Spa';
+                          return (s.category || '').toLowerCase() === purchaseHistoryFilter.toLowerCase();
+                        })
+                        .map((sale) => (
+                          <div
+                            key={sale.id}
+                            onClick={() => setSelectedReceiptForModal(sale)}
+                            className="bg-slate-900/90 hover:bg-slate-850 border border-white/10 hover:border-amber-400/40 rounded-2xl p-3.5 transition-all cursor-pointer group space-y-2"
+                          >
+                            <div className="flex items-start justify-between gap-2">
+                              <div className="space-y-0.5 min-w-0">
+                                <div className="flex items-center gap-1.5">
+                                  <span className={`text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border ${
+                                    sale.category === 'Personal Training'
+                                      ? 'bg-blue-500/10 text-blue-300 border-blue-500/20'
+                                      : sale.category === 'Massage' || sale.category === 'Spa'
+                                      ? 'bg-purple-500/10 text-purple-300 border-purple-500/20'
+                                      : sale.category === 'Entrance Fee'
+                                      ? 'bg-amber-500/10 text-amber-300 border-amber-500/20'
+                                      : 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
+                                  }`}>
+                                    {sale.category || 'Purchase'}
+                                  </span>
+                                  {sale.payment_method && (
+                                    <span className="text-[8px] font-mono text-slate-400 uppercase">
+                                      &bull; {sale.payment_method}
+                                    </span>
+                                  )}
+                                </div>
+                                <h5 className="text-xs font-black text-white uppercase truncate mt-1">
+                                  {sale.item_name || 'Purchase Item'}
+                                </h5>
+                                <p className="text-[10px] text-slate-400">
+                                  {sale.created_at ? format(parseISO(sale.created_at), 'dd MMM yyyy, HH:mm') : 'Recorded Transaction'}
+                                </p>
+                              </div>
+
+                              <div className="text-right shrink-0">
+                                <p className="text-xs font-black text-emerald-400 font-mono">
+                                  {formatMoney(sale.net_amount || 0)}
+                                </p>
+                                <span className="text-[9px] font-black uppercase text-amber-400 group-hover:underline flex items-center justify-end gap-0.5 mt-1">
+                                  Receipt <ChevronRight className="w-2.5 h-2.5" />
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setShowPurchaseHistoryModal(true)}
+                      className="w-full py-2 bg-slate-900/60 hover:bg-slate-900 text-slate-300 hover:text-white rounded-xl border border-white/5 text-[10px] font-black uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all"
+                    >
+                      <Receipt className="w-3.5 h-3.5 text-amber-400" />
+                      View Full Itemized Purchase History
+                    </button>
                   </div>
                 )}
               </div>
@@ -1569,12 +1735,13 @@ export default function GuestPortal() {
         )}
       </main>
 
-      {/* BOTTOM MOBILE NAVIGATION BAR WITH ANIMATED CENTER 'P' BUTTON */}
-      <nav className="fixed bottom-0 left-0 right-0 max-w-lg mx-auto bg-slate-900/95 backdrop-blur-xl border-t border-white/10 px-2 py-1.5 z-40 flex items-center justify-around shadow-2xl">
+      {/* BOTTOM MOBILE NAVIGATION BAR WITH RE-ALIGNED CENTER 'P' BUTTON */}
+      <nav className="fixed bottom-0 left-0 right-0 max-w-lg mx-auto bg-slate-900/95 backdrop-blur-xl border-t border-white/10 px-2 py-2 z-40 flex items-center justify-between shadow-2xl">
         {portalSettings?.allow_pt_tracking && (
           <button
-            onClick={() => setActiveTab('pt')}
-            className={`flex flex-col items-center gap-1 p-2 rounded-2xl transition-all ${
+            type="button"
+            onClick={() => handleTabSwitch('pt')}
+            className={`flex-1 flex flex-col items-center justify-center gap-1 py-1 rounded-2xl transition-all ${
               activeTab === 'pt' ? 'text-amber-400 font-black' : 'text-slate-400 hover:text-slate-200'
             }`}
           >
@@ -1585,8 +1752,9 @@ export default function GuestPortal() {
 
         {portalSettings?.allow_massage_bookings && (
           <button
-            onClick={() => setActiveTab('spa')}
-            className={`flex flex-col items-center gap-1 p-2 rounded-2xl transition-all ${
+            type="button"
+            onClick={() => handleTabSwitch('spa')}
+            className={`flex-1 flex flex-col items-center justify-center gap-1 py-1 rounded-2xl transition-all ${
               activeTab === 'spa' ? 'text-amber-400 font-black' : 'text-slate-400 hover:text-slate-200'
             }`}
           >
@@ -1595,49 +1763,48 @@ export default function GuestPortal() {
           </button>
         )}
 
-        {/* CENTER ELEVATED "P" PERFECTION DIGITAL PASS BUTTON */}
-        <button
-          onClick={() => setActiveTab('card')}
-          className="relative -top-4 flex flex-col items-center group focus:outline-none transition-transform active:scale-95 z-20"
-        >
-          {/* Glowing Ambient Halo */}
-          <div className={`absolute -inset-1.5 rounded-full blur-md transition-all duration-500 ${
-            activeTab === 'card' 
-              ? 'bg-amber-400/70 animate-pulse' 
-              : 'bg-amber-500/30 group-hover:bg-amber-400/50'
-          }`} />
+        {/* CENTER ELEVATED "P" PERFECTION DIGITAL PASS BUTTON (Realigned, Zero Text) */}
+        <div className="flex-1 flex items-center justify-center relative h-10">
+          <button
+            type="button"
+            onClick={() => handleTabSwitch('card')}
+            aria-label="Digital Pass & Membership Card"
+            className="absolute -top-6 flex items-center justify-center group focus:outline-none transition-transform active:scale-95 z-20"
+          >
+            {/* Glowing Ambient Halo */}
+            <div className={`absolute -inset-1.5 rounded-full blur-md transition-all duration-500 ${
+              activeTab === 'card' 
+                ? 'bg-amber-400/80 animate-pulse' 
+                : 'bg-amber-500/25 group-hover:bg-amber-400/50'
+            }`} />
 
-          {/* Golden Pulse Ping Ring */}
-          <div className="absolute inset-0 rounded-full border border-amber-400/60 animate-ping opacity-40 pointer-events-none" />
+            {/* Golden Pulse Ping Ring */}
+            <div className="absolute inset-0 rounded-full border border-amber-400/60 animate-ping opacity-30 pointer-events-none" />
 
-          {/* Golden Circle Emblem */}
-          <div className={`relative w-14 h-14 rounded-full p-[2.5px] bg-gradient-to-tr from-amber-600 via-amber-300 to-yellow-100 shadow-[0_0_20px_rgba(245,158,11,0.7)] transition-all duration-300 ${
-            activeTab === 'card' 
-              ? 'scale-110 shadow-[0_0_30px_rgba(245,158,11,1)] ring-2 ring-amber-400/80 ring-offset-2 ring-offset-slate-900' 
-              : 'group-hover:scale-105'
-          }`}>
-            <div className="w-full h-full rounded-full bg-gradient-to-b from-slate-900 via-amber-950/80 to-black flex items-center justify-center border border-amber-400/50 relative overflow-hidden">
-              {/* Shimmer light effect */}
-              <div className="absolute -top-3 -left-3 w-7 h-7 bg-white/20 rounded-full blur-sm pointer-events-none animate-pulse" />
-              
-              {/* Iconic Golden 'P' with Animation */}
-              <span className="font-serif font-black text-2xl text-transparent bg-clip-text bg-gradient-to-b from-amber-100 via-amber-300 to-yellow-500 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] select-none transform transition-transform group-hover:scale-110">
-                P
-              </span>
+            {/* Golden Circle Emblem */}
+            <div className={`relative w-14 h-14 rounded-full p-[2.5px] bg-gradient-to-tr from-amber-600 via-amber-300 to-yellow-100 shadow-[0_0_20px_rgba(245,158,11,0.7)] transition-all duration-300 ${
+              activeTab === 'card' 
+                ? 'scale-105 shadow-[0_0_30px_rgba(245,158,11,1)] ring-2 ring-amber-400/90 ring-offset-2 ring-offset-slate-900' 
+                : 'group-hover:scale-105'
+            }`}>
+              <div className="w-full h-full rounded-full bg-gradient-to-b from-slate-900 via-amber-950/80 to-black flex items-center justify-center border border-amber-400/50 relative overflow-hidden">
+                {/* Shimmer light effect */}
+                <div className="absolute -top-3 -left-3 w-7 h-7 bg-white/20 rounded-full blur-sm pointer-events-none animate-pulse" />
+                
+                {/* Iconic Golden 'P' with Animation */}
+                <span className="font-serif font-black text-2xl text-transparent bg-clip-text bg-gradient-to-b from-amber-100 via-amber-300 to-yellow-500 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] select-none transform transition-transform group-hover:scale-110">
+                  P
+                </span>
+              </div>
             </div>
-          </div>
-
-          <span className={`text-[9px] font-black uppercase tracking-wider mt-1 transition-colors ${
-            activeTab === 'card' ? 'text-amber-400 font-black' : 'text-slate-400 group-hover:text-slate-200'
-          }`}>
-            Pass
-          </span>
-        </button>
+          </button>
+        </div>
 
         {portalSettings?.allow_entrance_passes && (
           <button
-            onClick={() => setActiveTab('passes')}
-            className={`flex flex-col items-center gap-1 p-2 rounded-2xl transition-all ${
+            type="button"
+            onClick={() => handleTabSwitch('passes')}
+            className={`flex-1 flex flex-col items-center justify-center gap-1 py-1 rounded-2xl transition-all ${
               activeTab === 'passes' ? 'text-amber-400 font-black' : 'text-slate-400 hover:text-slate-200'
             }`}
           >
@@ -1647,8 +1814,9 @@ export default function GuestPortal() {
         )}
 
         <button
-          onClick={() => setActiveTab('profile')}
-          className={`flex flex-col items-center gap-1 p-2 rounded-2xl transition-all ${
+          type="button"
+          onClick={() => handleTabSwitch('profile')}
+          className={`flex-1 flex flex-col items-center justify-center gap-1 py-1 rounded-2xl transition-all ${
             activeTab === 'profile' ? 'text-amber-400 font-black' : 'text-slate-400 hover:text-slate-200'
           }`}
         >
@@ -2187,6 +2355,294 @@ export default function GuestPortal() {
                 </Button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* DIGITAL RECEIPT MODAL */}
+      {selectedReceiptForModal && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in">
+          <div className="w-full max-w-sm bg-white rounded-3xl p-6 text-slate-900 space-y-4 shadow-2xl animate-in zoom-in-95 max-h-[92vh] overflow-y-auto">
+            {/* Receipt Header */}
+            <div className="flex justify-between items-start border-b border-slate-100 pb-3">
+              <div>
+                <span className="text-[9px] font-black uppercase tracking-widest text-indigo-600">
+                  {propertyName}
+                </span>
+                <h3 className="text-base font-black text-slate-900 uppercase tracking-tight">
+                  Official Digital Receipt
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedReceiptForModal(null)}
+                className="p-1 rounded-full text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Receipt Summary Card */}
+            <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100 space-y-3 text-center">
+              <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block">
+                Total Amount Paid
+              </span>
+              <p className="text-2xl font-black text-slate-900 font-mono">
+                {formatMoney(selectedReceiptForModal.net_amount || 0)}
+              </p>
+              <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[9px] font-black uppercase">
+                <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Payment Confirmed
+              </span>
+            </div>
+
+            {/* Transaction Metadata */}
+            <div className="space-y-2 text-xs divide-y divide-slate-100 pt-1">
+              <div className="flex justify-between py-1.5">
+                <span className="text-slate-400 font-medium uppercase text-[10px]">Receipt No.</span>
+                <span className="font-mono font-bold text-slate-800">
+                  #{selectedReceiptForModal.id.slice(0, 8).toUpperCase()}
+                </span>
+              </div>
+
+              <div className="flex justify-between py-1.5">
+                <span className="text-slate-400 font-medium uppercase text-[10px]">Date &amp; Time</span>
+                <span className="font-bold text-slate-800">
+                  {selectedReceiptForModal.created_at
+                    ? format(parseISO(selectedReceiptForModal.created_at), 'dd MMM yyyy, HH:mm')
+                    : 'Recorded Date'}
+                </span>
+              </div>
+
+              <div className="flex justify-between py-1.5">
+                <span className="text-slate-400 font-medium uppercase text-[10px]">Guest Name</span>
+                <span className="font-bold text-slate-800 uppercase">
+                  {selectedReceiptForModal.guest_name || account?.name}
+                </span>
+              </div>
+
+              <div className="flex justify-between py-1.5">
+                <span className="text-slate-400 font-medium uppercase text-[10px]">Category</span>
+                <span className="font-black text-indigo-600 uppercase text-[10px]">
+                  {selectedReceiptForModal.category || 'Service'}
+                </span>
+              </div>
+
+              <div className="flex justify-between py-1.5">
+                <span className="text-slate-400 font-medium uppercase text-[10px]">Item / Package</span>
+                <span className="font-black text-slate-900 text-right max-w-[180px] truncate uppercase">
+                  {selectedReceiptForModal.item_name}
+                </span>
+              </div>
+
+              <div className="flex justify-between py-1.5">
+                <span className="text-slate-400 font-medium uppercase text-[10px]">Quantity</span>
+                <span className="font-bold text-slate-800">
+                  {selectedReceiptForModal.quantity || 1}
+                </span>
+              </div>
+
+              {(selectedReceiptForModal.discount_amount || 0) > 0 && (
+                <div className="flex justify-between py-1.5 text-rose-600">
+                  <span className="font-medium uppercase text-[10px]">
+                    Discount {selectedReceiptForModal.discount_reason ? `(${selectedReceiptForModal.discount_reason})` : ''}
+                  </span>
+                  <span className="font-mono font-bold">
+                    -{formatMoney(selectedReceiptForModal.discount_amount || 0)}
+                  </span>
+                </div>
+              )}
+
+              <div className="flex justify-between py-1.5">
+                <span className="text-slate-400 font-medium uppercase text-[10px]">Payment Method</span>
+                <span className="font-bold text-slate-800">
+                  {selectedReceiptForModal.payment_method || 'Verified Payment'}
+                </span>
+              </div>
+
+              {selectedReceiptForModal.remarks && (
+                <div className="flex justify-between py-1.5">
+                  <span className="text-slate-400 font-medium uppercase text-[10px]">Notes</span>
+                  <span className="text-[11px] text-slate-600 font-medium max-w-[180px] text-right">
+                    {selectedReceiptForModal.remarks}
+                  </span>
+                </div>
+              )}
+            </div>
+
+            {/* Authenticity Stamp */}
+            <div className="p-3 bg-slate-50 rounded-2xl border border-slate-100 flex items-center justify-between text-[10px] text-slate-400">
+              <div className="flex items-center gap-1.5">
+                <ShieldCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                <span>Authentic Perfection e-Receipt</span>
+              </div>
+              <span className="font-mono font-bold text-slate-600">Verified ✓</span>
+            </div>
+
+            {/* Actions */}
+            <div className="pt-2 flex gap-2 no-print">
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="flex-1 h-11 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all"
+              >
+                <Printer className="w-3.5 h-3.5 text-slate-600" /> Print
+              </button>
+              <button
+                type="button"
+                onClick={() => setSelectedReceiptForModal(null)}
+                className="flex-1 h-11 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs uppercase tracking-wider transition-all"
+              >
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* FULL PURCHASE HISTORY MODAL */}
+      {showPurchaseHistoryModal && (
+        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in">
+          <div className="w-full max-w-md bg-slate-900 border border-white/10 rounded-3xl p-5 text-white space-y-4 shadow-2xl animate-in zoom-in-95 max-h-[90vh] flex flex-col">
+            {/* Modal Header */}
+            <div className="flex justify-between items-start border-b border-white/10 pb-3 shrink-0">
+              <div>
+                <span className="text-[9px] font-black uppercase tracking-widest text-amber-400">
+                  Guest Billing Account
+                </span>
+                <h3 className="text-base font-black text-white uppercase tracking-tight">
+                  Purchase &amp; Receipt History
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowPurchaseHistoryModal(false)}
+                className="p-1 rounded-full text-slate-400 hover:text-white transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Overall Spend Summary Banner */}
+            <div className="p-4 bg-gradient-to-br from-amber-500/10 via-slate-800/80 to-slate-900 rounded-2xl border border-amber-400/20 flex items-center justify-between shrink-0">
+              <div>
+                <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block">
+                  Total Spend
+                </span>
+                <p className="text-xl font-black text-amber-300 font-mono">
+                  {formatMoney(sales.reduce((acc, s) => acc + (s.net_amount || 0), 0))}
+                </p>
+              </div>
+              <div className="text-right">
+                <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block">
+                  Completed Transactions
+                </span>
+                <p className="text-lg font-black text-white">{sales.length}</p>
+              </div>
+            </div>
+
+            {/* Filter Tabs */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-[10px] shrink-0 no-scrollbar">
+              {['all', 'Personal Training', 'Massage', 'Entrance Fee', 'Retail'].map((catKey) => {
+                const count = catKey === 'all'
+                  ? sales.length
+                  : sales.filter(s => (s.category || '').toLowerCase() === catKey.toLowerCase() || (catKey === 'Massage' && (s.category === 'Spa' || s.category === 'Massage'))).length;
+                if (catKey !== 'all' && count === 0) return null;
+                const label = catKey === 'all' ? 'All' : catKey === 'Personal Training' ? 'PT' : catKey === 'Entrance Fee' ? 'Passes' : catKey;
+                const isSel = purchaseHistoryFilter === catKey;
+
+                return (
+                  <button
+                    key={catKey}
+                    type="button"
+                    onClick={() => setPurchaseHistoryFilter(catKey)}
+                    className={`px-3 py-1.5 rounded-xl font-bold uppercase transition-all whitespace-nowrap shrink-0 border ${
+                      isSel
+                        ? 'bg-amber-400 text-slate-950 border-amber-400 shadow-sm'
+                        : 'bg-slate-850 text-slate-400 border-white/10 hover:text-white'
+                    }`}
+                  >
+                    {label} ({count})
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Scrollable Purchases List */}
+            <div className="flex-1 overflow-y-auto space-y-2 pr-1 min-h-[160px]">
+              {sales.length === 0 ? (
+                <div className="p-8 text-center bg-slate-950/50 rounded-2xl border border-white/5 space-y-2">
+                  <Receipt className="w-8 h-8 text-slate-600 mx-auto" />
+                  <h5 className="text-sm font-bold text-slate-400 uppercase">No Purchases Logged</h5>
+                  <p className="text-xs text-slate-500">
+                    Day passes, personal training packages, and treatments will automatically appear here.
+                  </p>
+                </div>
+              ) : (
+                sales
+                  .filter(s => {
+                    if (purchaseHistoryFilter === 'all') return true;
+                    if (purchaseHistoryFilter === 'Massage') return s.category === 'Massage' || s.category === 'Spa';
+                    return (s.category || '').toLowerCase() === purchaseHistoryFilter.toLowerCase();
+                  })
+                  .map((sale) => (
+                    <div
+                      key={sale.id}
+                      onClick={() => {
+                        setShowPurchaseHistoryModal(false);
+                        setSelectedReceiptForModal(sale);
+                      }}
+                      className="bg-slate-800/80 hover:bg-slate-750 border border-white/10 hover:border-amber-400/50 rounded-2xl p-4 transition-all cursor-pointer group flex items-start justify-between gap-3"
+                    >
+                      <div className="space-y-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className={`text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border ${
+                            sale.category === 'Personal Training'
+                              ? 'bg-blue-500/10 text-blue-300 border-blue-500/20'
+                              : sale.category === 'Massage' || sale.category === 'Spa'
+                              ? 'bg-purple-500/10 text-purple-300 border-purple-500/20'
+                              : sale.category === 'Entrance Fee'
+                              ? 'bg-amber-500/10 text-amber-300 border-amber-500/20'
+                              : 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
+                          }`}>
+                            {sale.category || 'Purchase'}
+                          </span>
+                          {sale.payment_method && (
+                            <span className="text-[8px] font-mono text-slate-400 uppercase">
+                              &bull; {sale.payment_method}
+                            </span>
+                          )}
+                        </div>
+                        <h4 className="text-sm font-black text-white uppercase truncate">
+                          {sale.item_name || 'Purchase Item'}
+                        </h4>
+                        <p className="text-[11px] text-slate-400">
+                          {sale.created_at ? format(parseISO(sale.created_at), 'dd MMM yyyy, HH:mm') : 'Recorded Transaction'}
+                        </p>
+                      </div>
+
+                      <div className="text-right shrink-0">
+                        <p className="text-sm font-black text-emerald-400 font-mono">
+                          {formatMoney(sale.net_amount || 0)}
+                        </p>
+                        <span className="text-[9px] font-black uppercase text-amber-400 group-hover:underline flex items-center justify-end gap-0.5 mt-1">
+                          Receipt <ChevronRight className="w-2.5 h-2.5" />
+                        </span>
+                      </div>
+                    </div>
+                  ))
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="pt-2 border-t border-white/10 shrink-0">
+              <button
+                type="button"
+                onClick={() => setShowPurchaseHistoryModal(false)}
+                className="w-full h-11 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-black text-xs uppercase tracking-wider transition-all"
+              >
+                Close History
+              </button>
+            </div>
           </div>
         </div>
       )}

@@ -4000,8 +4000,9 @@ class DatabaseService {
                     query = query.eq('property_id', scopeId);
                 }
             }
+        } else if (scopeId && scopeId !== 'all') {
+            query = query.eq('outlet_id', scopeId);
         }
-        else query = query.eq('outlet_id', scopeId);
 
         if (startDate) {
             query = query.gte('created_at', startDate);
