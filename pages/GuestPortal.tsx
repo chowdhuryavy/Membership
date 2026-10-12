@@ -1866,18 +1866,19 @@ export default function GuestPortal() {
               </button>
             )
           };
-          const renderedButtons = order.map(key => buttons[key]).filter(Boolean);
+          // Ensure all buttons in order array are attempted to be rendered
+          const renderedButtons = order.map(key => buttons[key]).filter(b => b !== null && b !== false && b !== undefined);
           const mid = Math.ceil(renderedButtons.length / 2);
           const leftButtons = renderedButtons.slice(0, mid);
           const rightButtons = renderedButtons.slice(mid);
           
           return (
             <>
-              <div className="flex-1 flex items-center">
+              <div className="flex-1 flex items-center justify-around">
                 {leftButtons}
               </div>
               <div className="w-16" /> {/* Spacer for P button */}
-              <div className="flex-1 flex items-center">
+              <div className="flex-1 flex items-center justify-around">
                 {rightButtons}
               </div>
             </>
