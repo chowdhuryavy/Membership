@@ -69,7 +69,7 @@ import {
 import { Button } from '../components/ui';
 import { format, parseISO } from 'date-fns';
 
-type ActiveTab = 'card' | 'pt' | 'spa' | 'passes' | 'finances' | 'profile';
+type ActiveTab = 'card' | 'pt' | 'spa' | 'passes' | 'finances' | 'profile' | 'retail';
 
 export default function GuestPortal() {
   const navigate = useNavigate();
@@ -136,6 +136,12 @@ export default function GuestPortal() {
   const [requestTime, setRequestTime] = useState('14:00');
   const [requestNotes, setRequestNotes] = useState('');
   const [bookingSubmitting, setBookingSubmitting] = useState(false);
+
+  // Retail & Inventory Catalog State
+  const [inventoryList, setInventoryList] = useState<any[]>([]);
+  const [selectedRetailItem, setSelectedRetailItem] = useState<any | null>(null);
+  const [retailOrderQty, setRetailOrderQty] = useState(1);
+  const [retailOrderSubmitting, setRetailOrderSubmitting] = useState(false);
 
   // Edit / Reschedule state
   const [editingBooking, setEditingBooking] = useState<MassageBooking | null>(null);
@@ -334,7 +340,7 @@ export default function GuestPortal() {
 
     try {
       const activeScopeId = session.outlet_id || session.property_id;
-      const [ps, props, outlets, allMembers, allPtMembers, allPtSessions, allBookings, allConsents, allSales, therapistsData, roomsData, typesData] =
+      const [ps, props, outlets, allMembers, allPtMembers, allPtSessions, allBookings, allConsents, allSales, therapistsData, roomsData, typesData, invData] =
         await Promise.all([
           guestAuth.getPortalSettings(activeScopeId).catch(() => DEFAULT_GUEST_PORTAL_SETTINGS),
           db.getProperties().catch(() => []),
@@ -347,7 +353,8 @@ export default function GuestPortal() {
           db.getSales('').catch(() => []),
           db.getTherapists('all').catch(() => []),
           db.getMassageRooms().catch(() => []),
-          db.getMassageTypes('all').catch(() => [])
+          db.getMassageTypes('all').catch(() => []),
+          db.getInventory('all').catch(() => [])
         ]);
 
       setPortalSettings(ps);
@@ -356,6 +363,7 @@ export default function GuestPortal() {
       setTherapistsList(therapistsData || []);
       setRoomsList(roomsData || []);
       setMassageTypesList(typesData || []);
+      setInventoryList(invData || []);
 
       if (session.email) {
         const notifs = await guestAuth.getGuestNotifications(session.email);
@@ -973,6 +981,31 @@ export default function GuestPortal() {
                         </span>
                       </div>
                     </div>
+
+                    {/* MEMBERSHIP PRIVILEGES & ALLOCATED PERKS */}
+                    <div className="mt-3 pt-3 border-t border-white/10 space-y-1.5">
+                      <span className="text-[8px] font-black uppercase tracking-widest text-indigo-300 block">
+                        Included Privileges &amp; Entitlements
+                      </span>
+                      <div className="flex flex-wrap gap-1">
+                        {ptMembers.length > 0 && (
+                          <span className="px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 text-[9px] font-bold border border-blue-500/30">
+                            🏋️ {totalPtRemaining} PT Sessions Active
+                          </span>
+                        )}
+                        {bookings.length > 0 && (
+                          <span className="px-2 py-0.5 rounded-full bg-purple-500/20 text-purple-300 text-[9px] font-bold border border-purple-500/30">
+                            💆 {bookings.filter(b => b.status === 'confirmed' || b.status === 'completed').length} Spa Treatments
+                          </span>
+                        )}
+                        <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[9px] font-bold border border-emerald-500/30">
+                          🏊 Full Facility Access
+                        </span>
+                        <span className="px-2 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[9px] font-bold border border-amber-500/30">
+                          ✨ Priority Concierge
+                        </span>
+                      </div>
+                    </div>
                   </div>
 
                   {/* QR CODE */}
@@ -1483,49 +1516,68 @@ export default function GuestPortal() {
           </div>
         )}
 
-        {/* TAB 4: ENTRANCE PASSES & WAIVERS */}
-        {activeTab === 'passes' && portalSettings?.allow_entrance_passes && (
+        {/* TAB: RETAIL SHOP & PRE-ORDER */}
+        {activeTab === 'retail' && (
           <div className="space-y-4 animate-in fade-in duration-300">
-            <div>
-              <h3 className="text-base font-black text-white uppercase tracking-tight">
-                Passes &amp; Waivers
-              </h3>
-              <p className="text-xs text-slate-400 font-medium">
-                Day pass entries, pool access, and signed liability consents
-              </p>
+            <div className="flex justify-between items-center px-1">
+              <div>
+                <h3 className="text-base font-black text-white uppercase tracking-tight">
+                  Pro Shop &amp; Retail Catalog
+                </h3>
+                <p className="text-xs text-slate-400 font-medium">
+                  Browse items &amp; request concierge pre-order for pickup
+                </p>
+              </div>
             </div>
 
-            {consents.length === 0 ? (
+            {inventoryList.filter(i => i.category === 'Retail' || (i as any).stock_quantity > 0 || (i as any).price > 0).length === 0 ? (
               <div className="p-8 text-center bg-slate-900/50 rounded-3xl border border-white/5 space-y-2">
-                <Ticket className="w-8 h-8 text-slate-600 mx-auto" />
-                <h4 className="text-sm font-bold text-slate-400 uppercase">No Entrance Passes Found</h4>
-                <p className="text-xs text-slate-500">Day passes and signed waivers will appear here.</p>
+                <ShoppingBag className="w-8 h-8 text-slate-600 mx-auto" />
+                <h4 className="text-sm font-bold text-slate-400 uppercase">No Retail Items Available</h4>
+                <p className="text-xs text-slate-500">Pro shop items and accessories will appear here when stocked.</p>
               </div>
             ) : (
-              consents.map((c) => (
-                <div
-                  key={c.id}
-                  className="bg-slate-900/90 border border-white/10 rounded-3xl p-5 space-y-2"
-                >
-                  <div className="flex justify-between items-start">
-                    <div>
-                      <span className="text-[9px] font-black uppercase tracking-widest text-amber-400">
-                        {c.item_name || 'Facility Day Pass'}
-                      </span>
-                      <h4 className="text-sm font-black text-white uppercase mt-0.5">
-                        {c.room_number ? `Room ${c.room_number}` : 'Guest Day Pass'}
-                      </h4>
-                    </div>
-                    <span className="px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 text-[10px] font-black uppercase flex items-center gap-1">
-                      <ShieldCheck className="w-3 h-3" /> Signed
-                    </span>
-                  </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {inventoryList
+                  .filter(i => i.category === 'Retail' || (i as any).price > 0)
+                  .map((item) => (
+                    <div
+                      key={item.id}
+                      className="bg-slate-900/90 border border-white/10 rounded-2xl p-4 flex flex-col justify-between space-y-3 group hover:border-amber-400/40 transition-all"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <span className="text-[8px] font-black uppercase tracking-widest text-amber-400 block">
+                            {item.category || 'Retail'}
+                          </span>
+                          <h4 className="text-sm font-black text-white uppercase mt-0.5">
+                            {item.name}
+                          </h4>
+                        </div>
+                        <span className="text-sm font-black text-emerald-400 font-mono shrink-0">
+                          {formatMoney(item.price || 0)}
+                        </span>
+                      </div>
 
-                  <p className="text-[11px] text-slate-400">
-                    Logged on {c.created_at ? format(parseISO(c.created_at), 'dd MMM yyyy, HH:mm') : 'Recently'}
-                  </p>
-                </div>
-              ))
+                      <div className="flex items-center justify-between pt-2 border-t border-white/5 text-[10px]">
+                        <span className={`font-bold uppercase ${
+                          (item.stock_quantity || 0) > 0 ? 'text-emerald-400' : 'text-slate-500'
+                        }`}>
+                          {(item.stock_quantity || 0) > 0 ? `In Stock (${item.stock_quantity})` : 'Available to Order'}
+                        </span>
+                        <Button
+                          onClick={() => {
+                            setSelectedRetailItem(item);
+                            setRetailOrderQty(1);
+                          }}
+                          className="h-8 px-3 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-[10px] uppercase tracking-wider flex items-center gap-1 shadow-md shadow-amber-400/20 active:scale-95"
+                        >
+                          <ShoppingBag className="w-3 h-3" /> Pre-Order
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+              </div>
             )}
           </div>
         )}
@@ -2642,6 +2694,109 @@ export default function GuestPortal() {
               >
                 Close History
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* RETAIL PRE-ORDER MODAL */}
+      {selectedRetailItem && (
+        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in">
+          <div className="w-full max-w-sm bg-slate-900 border border-white/10 rounded-3xl p-6 text-white space-y-4 shadow-2xl animate-in zoom-in-95">
+            <div className="flex justify-between items-start border-b border-white/10 pb-3">
+              <div>
+                <span className="text-[9px] font-black uppercase tracking-widest text-amber-400">
+                  Concierge Pre-Order
+                </span>
+                <h3 className="text-base font-black text-white uppercase tracking-tight">
+                  {selectedRetailItem.name}
+                </h3>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedRetailItem(null)}
+                className="p-1 rounded-full text-slate-400 hover:text-white transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-4 bg-slate-800/80 rounded-2xl border border-white/5 space-y-2">
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-400 uppercase font-bold">Unit Price</span>
+                <span className="font-mono font-black text-emerald-400">{formatMoney(selectedRetailItem.price || 0)}</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-slate-400 uppercase font-bold">Availability</span>
+                <span className="font-bold text-slate-200">
+                  {(selectedRetailItem.stock_quantity || 0) > 0 ? `In Stock (${selectedRetailItem.stock_quantity})` : 'Available for Order'}
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                Quantity
+              </label>
+              <div className="flex items-center gap-3">
+                <button
+                  type="button"
+                  onClick={() => setRetailOrderQty(Math.max(1, retailOrderQty - 1))}
+                  className="w-10 h-10 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-black text-lg flex items-center justify-center border border-white/10"
+                >
+                  -
+                </button>
+                <span className="text-lg font-black font-mono w-8 text-center">{retailOrderQty}</span>
+                <button
+                  type="button"
+                  onClick={() => setRetailOrderQty(retailOrderQty + 1)}
+                  className="w-10 h-10 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-black text-lg flex items-center justify-center border border-white/10"
+                >
+                  +
+                </button>
+              </div>
+            </div>
+
+            <div className="p-3 bg-amber-500/10 rounded-2xl border border-amber-500/20 text-xs flex justify-between items-center">
+              <span className="font-bold text-amber-300">Total Pre-Order:</span>
+              <span className="font-mono font-black text-amber-300 text-base">
+                {formatMoney((selectedRetailItem.price || 0) * retailOrderQty)}
+              </span>
+            </div>
+
+            <div className="pt-2 flex gap-2">
+              <button
+                type="button"
+                onClick={() => setSelectedRetailItem(null)}
+                className="flex-1 h-11 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-black text-xs uppercase tracking-wider transition-all"
+              >
+                Cancel
+              </button>
+              <Button
+                type="button"
+                disabled={retailOrderSubmitting}
+                isLoading={retailOrderSubmitting}
+                onClick={async () => {
+                  try {
+                    setRetailOrderSubmitting(true);
+                    // Create notification for front desk concierge
+                    await db.addNotification({
+                      title: 'Retail Pre-Order Request',
+                      message: `${account?.name || 'Guest'} requested pre-order for ${retailOrderQty}x ${selectedRetailItem.name} (${formatMoney((selectedRetailItem.price || 0) * retailOrderQty)}).`,
+                      type: 'success',
+                      outlet_id: selectedRetailItem.outlet_id || member?.outlet_id || sessionOutletId()
+                    });
+                    toast.success('Pre-order submitted successfully! Front desk concierge has been notified for pickup.');
+                    setSelectedRetailItem(null);
+                  } catch (e: any) {
+                    toast.error(e?.message || 'Failed to submit pre-order.');
+                  } finally {
+                    setRetailOrderSubmitting(false);
+                  }
+                }}
+                className="flex-1 h-11 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs uppercase tracking-wider shadow-md shadow-amber-400/20"
+              >
+                Submit Pre-Order
+              </Button>
             </div>
           </div>
         </div>
