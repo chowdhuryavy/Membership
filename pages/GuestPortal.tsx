@@ -1627,10 +1627,10 @@ export default function GuestPortal() {
             </div>
           </div>
 
-          <span className={`text-[10px] font-serif font-black uppercase tracking-widest mt-0.5 transition-colors ${
-            activeTab === 'card' ? 'text-amber-300 drop-shadow-[0_0_8px_rgba(245,158,11,0.9)]' : 'text-slate-400 group-hover:text-amber-300'
+          <span className={`text-[9px] font-black uppercase tracking-wider mt-1 transition-colors ${
+            activeTab === 'card' ? 'text-amber-400 font-black' : 'text-slate-400 group-hover:text-slate-200'
           }`}>
-            P
+            Pass
           </span>
         </button>
 
