@@ -22,7 +22,8 @@ export const DEFAULT_GUEST_PORTAL_SETTINGS: GuestPortalSettings = {
   welcome_message: 'Welcome to your luxury wellness portal.',
   support_phone: '+60 3-1234 5678',
   support_email: 'support@perfection.my',
-  nav_bar_position: 'left'
+  nav_bar_position: 'left',
+  nav_bar_order: ['pt', 'spa', 'card', 'shop', 'history', 'profile']
 };
 
 /**

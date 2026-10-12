@@ -607,6 +607,46 @@ export const GuestPortalSettingsTab: React.FC = () => {
         </form>
       </Card>
 
+      <Card className="rounded-[2.5rem] p-6 sm:p-8 border-slate-200/80 shadow-sm bg-white space-y-5">
+        <div>
+          <h3 className="text-base font-black uppercase text-slate-900 tracking-tight">
+            Navigation Button Order
+          </h3>
+          <p className="text-xs text-slate-500 font-medium">
+            Use arrows to reorder navigation buttons
+          </p>
+        </div>
+        <div className="space-y-2">
+          {(portalSettings.nav_bar_order || ['pt', 'spa', 'passes', 'retail', 'finances', 'profile']).map((item, index) => (
+            <div key={item} className="flex items-center justify-between bg-slate-50 p-3 rounded-xl border border-slate-200">
+              <span className="text-xs font-bold capitalize text-slate-700">{item}</span>
+              <div className="flex gap-2">
+                <button type="button" onClick={async () => {
+                  const newOrder = [...(portalSettings.nav_bar_order || ['pt', 'spa', 'passes', 'retail', 'finances', 'profile'])];
+                  const temp = newOrder[index];
+                  newOrder[index] = newOrder[index - 1];
+                  newOrder[index - 1] = temp;
+                  const updated = { ...portalSettings, nav_bar_order: newOrder };
+                  setPortalSettings(updated);
+                  await guestAuth.savePortalSettings(updated, activeScopeId);
+                  toast.success('Order updated');
+                }} disabled={index === 0} className="p-2 rounded-lg bg-white border border-slate-200 text-slate-500 hover:text-indigo-600 disabled:opacity-50">↑</button>
+                <button type="button" onClick={async () => {
+                  const newOrder = [...(portalSettings.nav_bar_order || ['pt', 'spa', 'passes', 'retail', 'finances', 'profile'])];
+                  const temp = newOrder[index];
+                  newOrder[index] = newOrder[index + 1];
+                  newOrder[index + 1] = temp;
+                  const updated = { ...portalSettings, nav_bar_order: newOrder };
+                  setPortalSettings(updated);
+                  await guestAuth.savePortalSettings(updated, activeScopeId);
+                  toast.success('Order updated');
+                }} disabled={index === (portalSettings.nav_bar_order || ['pt', 'spa', 'passes', 'retail', 'finances', 'profile']).length - 1} className="p-2 rounded-lg bg-white border border-slate-200 text-slate-500 hover:text-indigo-600 disabled:opacity-50">↓</button>
+              </div>
+            </div>
+          ))}
+        </div>
+      </Card>
+
       {/* GUEST ACCOUNTS DIRECTORY */}
       <Card className="rounded-[2.5rem] border-slate-200/80 shadow-sm bg-white overflow-hidden">
         <div className="p-6 sm:p-8 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
