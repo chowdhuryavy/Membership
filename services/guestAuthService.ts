@@ -16,6 +16,7 @@ export const DEFAULT_GUEST_PORTAL_SETTINGS: GuestPortalSettings = {
   allow_waiver_signing: true,
   allow_financial_history: true,
   allow_profile_editing: true,
+  allow_shop: true,
   require_mandatory_waiver: false,
   show_therapist_name_to_guests: false,
   welcome_message: 'Welcome to your luxury wellness portal.',

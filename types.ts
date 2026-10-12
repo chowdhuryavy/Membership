@@ -393,6 +393,7 @@ export interface GuestPortalSettings {
   allow_waiver_signing: boolean;
   allow_financial_history: boolean;
   allow_profile_editing: boolean;
+  allow_shop?: boolean;
   require_mandatory_waiver: boolean;
   show_therapist_name_to_guests?: boolean;
   welcome_message?: string;

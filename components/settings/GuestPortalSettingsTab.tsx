@@ -32,7 +32,8 @@ import {
   Lock,
   Trash2,
   UserPlus,
-  Copy
+  Copy,
+  ShoppingBag
 } from 'lucide-react';
 import { Button, Input, Card } from '../ui';
 import { format, parseISO } from 'date-fns';
@@ -492,6 +493,38 @@ export const GuestPortalSettingsTab: React.FC = () => {
             <div className="pt-2 border-t border-slate-100 flex items-center gap-2">
               <span className={`text-[10px] font-black uppercase tracking-wider ${portalSettings.allow_profile_editing ? 'text-emerald-600' : 'text-slate-400'}`}>
                 {portalSettings.allow_profile_editing ? '● Enabled for Guests' : '○ Hidden from Guests'}
+              </span>
+            </div>
+          </div>
+
+          {/* 7. PRO SHOP & RETAIL CATALOG */}
+          <div className="p-5 rounded-3xl bg-white border border-slate-200/80 shadow-sm space-y-3 flex flex-col justify-between">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="p-2.5 rounded-2xl bg-amber-50 text-amber-600">
+                  <ShoppingBag className="w-5 h-5" />
+                </div>
+                <button
+                  onClick={() => handleToggleSetting('allow_shop')}
+                  className="text-2xl"
+                >
+                  {portalSettings.allow_shop !== false ? (
+                    <ToggleRight className="w-8 h-8 text-indigo-600" />
+                  ) : (
+                    <ToggleLeft className="w-8 h-8 text-slate-300" />
+                  )}
+                </button>
+              </div>
+              <h4 className="text-sm font-black text-slate-900 uppercase">
+                Pro Shop &amp; Retail Catalog
+              </h4>
+              <p className="text-xs text-slate-500 leading-relaxed font-medium">
+                Enables guests to browse venue retail items, fitness gear, supplements, and equipment with pricing and submit pre-orders.
+              </p>
+            </div>
+            <div className="pt-2 border-t border-slate-100 flex items-center gap-2">
+              <span className={`text-[10px] font-black uppercase tracking-wider ${portalSettings.allow_shop !== false ? 'text-emerald-600' : 'text-slate-400'}`}>
+                {portalSettings.allow_shop !== false ? '● Enabled for Guests' : '○ Hidden from Guests'}
               </span>
             </div>
           </div>

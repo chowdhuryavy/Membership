@@ -142,6 +142,7 @@ export default function GuestPortal() {
   const [selectedRetailItem, setSelectedRetailItem] = useState<any | null>(null);
   const [retailOrderQty, setRetailOrderQty] = useState(1);
   const [retailOrderSubmitting, setRetailOrderSubmitting] = useState(false);
+  const [showPrivilegesModal, setShowPrivilegesModal] = useState(false);
 
   // Edit / Reschedule state
   const [editingBooking, setEditingBooking] = useState<MassageBooking | null>(null);
@@ -753,6 +754,37 @@ export default function GuestPortal() {
     toast.info('Please select your preferred alternative slot, or choose Cancel.');
   };
 
+  const handlePreOrderSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!selectedRetailItem || !account) return;
+    setRetailOrderSubmitting(true);
+    try {
+      const totalAmount = (selectedRetailItem.price || 0) * retailOrderQty;
+      await db.addSale({
+        outlet_id: member?.outlet_id || account.outlet_id || '',
+        guest_id: account.id,
+        guest_name: account.name,
+        item_name: selectedRetailItem.name,
+        category: 'Retail',
+        quantity: retailOrderQty,
+        unit_price: selectedRetailItem.price || 0,
+        net_amount: totalAmount,
+        gross_amount: totalAmount,
+        payment_method: 'Pre-Order / Front Desk Charge',
+        status: 'completed',
+        created_at: new Date().toISOString()
+      });
+      toast.success(`Pre-order submitted for ${selectedRetailItem.name} (${retailOrderQty}x). Ready for pickup!`);
+      setSelectedRetailItem(null);
+      setRetailOrderQty(1);
+      await loadPortalData();
+    } catch (e: any) {
+      toast.error(e?.message || 'Failed to submit pre-order.');
+    } finally {
+      setRetailOrderSubmitting(false);
+    }
+  };
+
   if (loading) {
     return <GuestLoadingScreen propertyName={propertyName} logoUrl={logoUrl} message="Retrieving your private privileges..." />;
   }
@@ -784,7 +816,7 @@ export default function GuestPortal() {
           )}
           <div>
             <span className="text-[9px] font-black uppercase tracking-[0.25em] text-amber-400">
-              Member Portal
+              HCM Guest Portal
             </span>
             <h2 className="text-sm font-black text-white uppercase truncate max-w-[180px]">
               {account?.name || 'Valued Guest'}
@@ -1005,6 +1037,13 @@ export default function GuestPortal() {
                           ✨ Priority Concierge
                         </span>
                       </div>
+                      <button
+                        type="button"
+                        onClick={() => setShowPrivilegesModal(true)}
+                        className="w-full mt-2 py-2 px-3 rounded-xl bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-200 text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 border border-indigo-500/40"
+                      >
+                        <Award className="w-3.5 h-3.5 text-amber-400" /> View Privileges &amp; Usage Details
+                      </button>
                     </div>
                   </div>
 
@@ -2809,6 +2848,88 @@ export default function GuestPortal() {
                 Submit Pre-Order
               </Button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* PRIVILEGES & TIER BENEFITS DETAIL MODAL */}
+      {showPrivilegesModal && (
+        <div className="fixed inset-0 z-50 bg-black/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-slate-900 border border-amber-500/30 rounded-3xl p-6 text-slate-100 space-y-5 shadow-2xl animate-in zoom-in-95">
+            <div className="flex justify-between items-center pb-3 border-b border-white/10">
+              <div className="flex items-center gap-2">
+                <div className="p-2 rounded-xl bg-amber-500/20 text-amber-400">
+                  <Award className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black uppercase tracking-tight text-white">Membership Privileges &amp; Quota</h3>
+                  <span className="text-[10px] font-mono text-slate-400">{member?.package_type || 'VIP Tier'}</span>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowPrivilegesModal(false)}
+                className="p-1 rounded-full text-slate-400 hover:text-white"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-3 max-h-[65vh] overflow-y-auto pr-1">
+              <div className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black uppercase tracking-wider text-amber-400">Personal Training (PT) Sessions</span>
+                  <span className="text-xs font-mono font-bold text-emerald-400">
+                    {totalPtRemaining} Remaining / {totalPtPurchased} Total
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400">
+                  Complimentary or purchased personal training workout sessions with certified instructors.
+                </p>
+                {ptMembers.map(pt => (
+                  <div key={pt.id} className="pt-2 border-t border-white/5 flex justify-between text-[11px]">
+                    <span className="font-bold text-slate-300">{pt.trainer_name || 'Assigned Trainer'}</span>
+                    <span className="font-mono text-indigo-300">{pt.used_sessions || 0} / {pt.total_sessions || 0} Used</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black uppercase tracking-wider text-purple-400">Spa &amp; Massage Treatments</span>
+                  <span className="text-xs font-mono font-bold text-emerald-400">
+                    {bookings.filter(b => b.status === 'confirmed' || b.status === 'completed').length} Bookings
+                  </span>
+                </div>
+                <p className="text-[11px] text-slate-400">
+                  Relaxation massages, aromatherapy, and wellness therapeutic sessions.
+                </p>
+                {bookings.slice(0, 3).map(b => (
+                  <div key={b.id} className="pt-2 border-t border-white/5 flex justify-between text-[11px]">
+                    <span className="font-bold text-slate-300">{b.type_name || 'Massage Therapy'}</span>
+                    <span className="font-mono text-slate-400">{b.date} ({b.status})</span>
+                  </div>
+                ))}
+              </div>
+
+              <div className="p-4 rounded-2xl bg-white/5 border border-white/10 space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-black uppercase tracking-wider text-emerald-400">Facility Access &amp; Amenities</span>
+                  <span className="text-xs font-mono font-bold text-emerald-400">Unlimited</span>
+                </div>
+                <p className="text-[11px] text-slate-400">
+                  Includes full access to swimming pools, fitness gymnasium, sauna rooms, locker facilities, and towel service.
+                </p>
+              </div>
+            </div>
+
+            <Button
+              type="button"
+              onClick={() => setShowPrivilegesModal(false)}
+              className="w-full h-11 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs uppercase tracking-wider"
+            >
+              Close Privileges Details
+            </Button>
           </div>
         </div>
       )}
