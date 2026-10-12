@@ -30,11 +30,12 @@ const Profile = () => {
     const isMatchValid = passwords.new !== '' && passwords.new === passwords.confirm;
     const isFormReady = passwords.current.trim() !== '' && isLengthValid && isMatchValid;
 
-    const isSystemAdmin = isSuperAdmin || user?.role_id === 'system_admin' || user?.role_id === 'super_admin';
+    const isSystemAdmin = isSuperAdmin || user?.role_id?.toLowerCase() === 'system_admin' || user?.role_id?.toLowerCase() === 'admin';
 
     const roleName = React.useMemo(() => {
         if (!user?.role_id) return 'No Role';
-        const role = roles.find(r => r.id === user.role_id);
+        const normalized = user.role_id.toLowerCase().trim();
+        const role = roles.find(r => r.id === user.role_id || r.id.toLowerCase() === normalized);
         return role ? role.name : user.role_id;
     }, [user?.role_id, roles]);
 

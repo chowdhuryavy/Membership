@@ -17,6 +17,7 @@ export const DEFAULT_GUEST_PORTAL_SETTINGS: GuestPortalSettings = {
   allow_financial_history: true,
   allow_profile_editing: true,
   require_mandatory_waiver: false,
+  show_therapist_name_to_guests: false,
   welcome_message: 'Welcome to your luxury wellness portal.',
   support_phone: '+60 3-1234 5678',
   support_email: 'support@perfection.my'
@@ -108,11 +109,12 @@ export class GuestAuthService {
   public async getAccounts(): Promise<GuestAccount[]> {
     try {
       const companySettings = await db.getSettings().catch(() => null);
-      if (companySettings?.guest_accounts && Array.isArray(companySettings.guest_accounts)) {
+      const dbAccounts = companySettings?.guest_accounts || companySettings?.staff_portal_settings?.guest_accounts;
+      if (dbAccounts && Array.isArray(dbAccounts) && dbAccounts.length > 0) {
         if (typeof localStorage !== 'undefined') {
-          localStorage.setItem(GUEST_ACCOUNTS_STORAGE_KEY, JSON.stringify(companySettings.guest_accounts));
+          localStorage.setItem(GUEST_ACCOUNTS_STORAGE_KEY, JSON.stringify(dbAccounts));
         }
-        return companySettings.guest_accounts;
+        return dbAccounts;
       }
       if (typeof localStorage !== 'undefined') {
         const raw = localStorage.getItem(GUEST_ACCOUNTS_STORAGE_KEY);
@@ -291,8 +293,8 @@ export class GuestAuthService {
 
       accounts.push(account);
       await this.saveAccounts(accounts);
-    } else if (params.forceResend || account.must_change_password || !account.temp_password || account.temp_password.includes('594510')) {
-      // Whenever resending, or if still on temporary password, or if stuck on old default, generate a fresh unique password!
+    } else if (params.forceResend || params.member_id || account.must_change_password || !account.temp_password || account.temp_password.includes('594510')) {
+      // Whenever resending, or enrolling a member, or if still on temporary password, generate a fresh unique password!
       tempPass = generateDynamicTemporaryPassword();
       account.temp_password = tempPass;
       account.password = tempPass;
@@ -303,9 +305,16 @@ export class GuestAuthService {
       if (params.outlet_id) account.outlet_id = params.outlet_id;
       if (params.member_id) account.member_id = params.member_id;
       if (params.guest_id) account.guest_id = params.guest_id;
+      account.is_active = true;
       await this.saveAccounts(accounts);
     } else {
-      tempPass = account.temp_password || '';
+      tempPass = account.temp_password || generateDynamicTemporaryPassword();
+      account.temp_password = tempPass;
+      account.password = tempPass;
+      account.must_change_password = true;
+      if (params.name) account.name = params.name;
+      if (params.member_id) account.member_id = params.member_id;
+      await this.saveAccounts(accounts);
     }
 
     // Dispatch welcome email if new or explicitly requested (unless included in member welcome agreement email)

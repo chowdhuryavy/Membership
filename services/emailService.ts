@@ -1252,7 +1252,7 @@ export const emailService = {
       if (purchasedRecipients.length > 0) {
         const adminEmails = Array.from(new Set(
           purchasedRecipients.flatMap(r => r.email.split(',').map(e => e.trim()))
-            .filter(e => e && e.toLowerCase() !== memberEmail.toLowerCase())
+            .filter(e => e && e.includes('@'))
         ));
 
         if (adminEmails.length > 0) {

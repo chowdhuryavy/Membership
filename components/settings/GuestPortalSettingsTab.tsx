@@ -15,6 +15,7 @@ import {
   Receipt,
   FileText,
   User,
+  Users,
   Mail,
   KeyRound,
   RefreshCw,
@@ -362,6 +363,39 @@ export const GuestPortalSettingsTab: React.FC = () => {
             <div className="pt-2 border-t border-slate-100 flex items-center gap-2">
               <span className={`text-[10px] font-black uppercase tracking-wider ${portalSettings.allow_massage_bookings ? 'text-emerald-600' : 'text-slate-400'}`}>
                 {portalSettings.allow_massage_bookings ? '● Enabled for Guests' : '○ Hidden from Guests'}
+              </span>
+            </div>
+          </div>
+
+          {/* 3B. THERAPIST NAME PRIVACY */}
+          <div className="p-5 rounded-3xl bg-white border border-slate-200/80 shadow-sm space-y-3 flex flex-col justify-between">
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <div className="p-2.5 rounded-2xl bg-amber-50 text-amber-600">
+                  <Users className="w-5 h-5" />
+                </div>
+                <button
+                  onClick={() => handleToggleSetting('show_therapist_name_to_guests')}
+                  className="text-2xl"
+                  title="Toggle therapist name visibility"
+                >
+                  {portalSettings.show_therapist_name_to_guests ? (
+                    <ToggleRight className="w-8 h-8 text-indigo-600" />
+                  ) : (
+                    <ToggleLeft className="w-8 h-8 text-slate-300" />
+                  )}
+                </button>
+              </div>
+              <h4 className="text-sm font-black text-slate-900 uppercase">
+                Show Therapist Names to Guests
+              </h4>
+              <p className="text-xs text-slate-500 leading-relaxed font-medium">
+                When disabled (default), guests only see the specialist's nationality (e.g. Thai Specialist, Balinese Specialist) to safeguard staff privacy. When enabled, therapist names are shown.
+              </p>
+            </div>
+            <div className="pt-2 border-t border-slate-100 flex items-center gap-2">
+              <span className={`text-[10px] font-black uppercase tracking-wider ${portalSettings.show_therapist_name_to_guests ? 'text-indigo-600' : 'text-amber-600'}`}>
+                {portalSettings.show_therapist_name_to_guests ? '● Names Revealed to Guests' : '🛡 Nationality Only (Staff Names Hidden)'}
               </span>
             </div>
           </div>

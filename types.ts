@@ -394,6 +394,7 @@ export interface GuestPortalSettings {
   allow_financial_history: boolean;
   allow_profile_editing: boolean;
   require_mandatory_waiver: boolean;
+  show_therapist_name_to_guests?: boolean;
   welcome_message?: string;
   support_phone?: string;
   support_email?: string;
@@ -531,6 +532,8 @@ export interface MassageBooking {
   guest_id: string;
   guest_name?: string;
   guest_phone?: string;
+  guest_email?: string;
+  type_name?: string;
   therapist_id: string;
   date: string;
   start_time: string;

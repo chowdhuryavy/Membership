@@ -104,7 +104,15 @@ const BookingForm: React.FC<BookingFormProps> = ({
       });
 
       const guest = guests.find(g => g.id === initialBooking.guest_id);
-      if (guest) setGuestData({ name: guest.name, phone: guest.phone, email: guest.email || '' });
+      if (guest) {
+        setGuestData({ name: guest.name, phone: guest.phone, email: guest.email || '' });
+      } else {
+        setGuestData({
+          name: initialBooking.guest_name || '',
+          phone: (initialBooking as any).guest_phone || (initialBooking as any).phone || '',
+          email: (initialBooking as any).guest_email || ''
+        });
+      }
       
       // Determine service ID - check both MTID and Inventory ID to be resilient to cross-category rescheduling
       const serviceId = initialBooking.massage_type_id || initialBooking.inventory_item_id || '';
@@ -313,13 +321,17 @@ const BookingForm: React.FC<BookingFormProps> = ({
       const isActuallyPT = isPT || (selectedService && selectedService.category === 'Personal Training');
 
       const payload: any = {
-        guest_id: guest.id,
-        therapist_id: bookingData.therapist_id,
+        guest_id: guest?.id || initialBooking?.guest_id || null,
+        guest_name: guestData.name || guest?.name || initialBooking?.guest_name || 'Guest',
+        guest_email: guestData.email || guest?.email || (initialBooking as any)?.guest_email || null,
+        guest_phone: guestData.phone || guest?.phone || (initialBooking as any)?.guest_phone || null,
+        therapist_id: bookingData.therapist_id || null,
         room_id: bookingData.room_id || null,
         date: bookingData.date,
         start_time: bookingData.start_time,
         end_time: bookingData.end_time,
         massage_type_id: !isActuallyPT ? (bookingData.massage_type_id || null) : null,
+        type_name: selectedService?.name || (initialBooking as any)?.type_name || null,
         inventory_item_id: isActuallyPT ? (bookingData.massage_type_id || null) : null,
         additional_service_ids: bookingData.additional_service_ids.filter(Boolean),
         price: netPrice,

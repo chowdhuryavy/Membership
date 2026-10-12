@@ -973,8 +973,14 @@ const SettingsPage = () => {
 
     setIsSaving(true);
     try {
-      if (editingId) await db.updateRole(editingId, roleForm);
-      else await db.addRole(roleForm);
+      const restricted = settings?.restricted_permissions || [];
+      const sanitizedPermissions = isSuperUser 
+        ? roleForm.permissions 
+        : roleForm.permissions.filter(p => !restricted.includes(p));
+
+      const payload = { ...roleForm, permissions: sanitizedPermissions };
+      if (editingId) await db.updateRole(editingId, payload);
+      else await db.addRole(payload);
       await refreshSettings();
       setShowForm(false);
       showStatus('Role Saved.');
@@ -1630,7 +1636,7 @@ const SettingsPage = () => {
                               }).map(r => (
                                   <tr key={r.id} className="hover:bg-indigo-50/20 group">
                                       <td className="px-10 py-8"><div className="font-black text-slate-900 text-lg uppercase flex items-center gap-3">{r.name} {r.is_system && <ShieldCheck className="w-4 h-4 text-emerald-500"/>}</div></td>
-                                      <td className="px-10 py-8"><span className="bg-slate-100 px-3 py-1 rounded-lg text-[10px] font-black uppercase text-slate-500">{r.permissions.length} Privileges</span></td>
+                                      <td className="px-10 py-8"><span className="bg-slate-100 px-3 py-1 rounded-lg text-[10px] font-black uppercase text-slate-500">{isSuperAdmin ? r.permissions.length : r.permissions.filter(p => !(settings?.restricted_permissions || []).includes(p as any)).length} Privileges</span></td>
                                       <td className="px-10 py-8">
                                           {r.requires_2fa ? (
                                               <div className="flex items-center gap-2 text-indigo-600 font-black text-[10px] uppercase tracking-widest bg-indigo-50 px-3 py-1.5 rounded-xl border border-indigo-100 w-fit">
@@ -1641,7 +1647,7 @@ const SettingsPage = () => {
                                               <div className="text-slate-400 font-bold text-[10px] uppercase tracking-widest">Standard</div>
                                           )}
                                       </td>
-                                      <td className="px-10 py-8 text-right"><div className="flex justify-end gap-2 opacity-100 transition-all"><button onClick={()=>{setEditingId(r.id); setRoleForm(r); setShowForm(true);}} className="p-2 text-slate-400 hover:text-indigo-600"><Edit2 className="w-4 h-4"/></button>{!r.is_system && <button onClick={()=>setItemToDelete({type:'role', id:r.id, name:r.name})} className="p-2 text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4"/></button>}</div></td>
+                                      <td className="px-10 py-8 text-right"><div className="flex justify-end gap-2 opacity-100 transition-all"><button onClick={()=>{setEditingId(r.id); setRoleForm(isSuperAdmin ? r : { ...r, permissions: r.permissions.filter(p => !(settings?.restricted_permissions || []).includes(p as any)) }); setShowForm(true);}} className="p-2 text-slate-400 hover:text-indigo-600"><Edit2 className="w-4 h-4"/></button>{!r.is_system && <button onClick={()=>setItemToDelete({type:'role', id:r.id, name:r.name})} className="p-2 text-slate-400 hover:text-red-500"><Trash2 className="w-4 h-4"/></button>}</div></td>
                                   </tr>
                               ))}</tbody>
                           </table>

@@ -844,7 +844,7 @@ class DatabaseService {
             id: crypto.randomUUID(),
             email: cleanEmail,
             name: isMasterEmail ? 'Chowdhury Avy' : cleanEmail.split('@')[0],
-            role_id: isMasterEmail ? 'super_admin' : 'member',
+            role_id: isMasterEmail ? 'admin' : 'member',
             allowed_outlets: [],
             is_active: true,
             failed_login_attempts: 0,
@@ -945,7 +945,7 @@ class DatabaseService {
             id: 'master-super-admin-id',
             email: 'chowdhuryavy@gmail.com',
             name: 'Chowdhury Avy (Master Admin)',
-            role_id: 'super_admin',
+            role_id: 'admin',
             allowed_outlets: [],
             is_active: true,
             failed_login_attempts: 0,
@@ -1719,7 +1719,7 @@ class DatabaseService {
       });
     }
 
-    // Automatically trigger member purchase email notification
+    // Automatically trigger member enrollment email notification with Guest Portal credentials
     import('./emailService').then(({ emailService }) => {
       emailService.sendMemberPurchaseEmail(member).catch(err => {
         console.error('[Automatic Member Purchase Email Error]:', err);
@@ -1727,23 +1727,6 @@ class DatabaseService {
     }).catch(err => {
       console.error('[Email Service Dynamic Import Error]:', err);
     });
-
-    // Automatically provision Guest Mobile Portal account if email is present
-    if (member.email && member.email.includes('@')) {
-      import('./guestAuthService').then(({ guestAuth }) => {
-        guestAuth.provisionGuestAccount({
-          email: member.email!,
-          name: member.guest_name,
-          phone: member.phone,
-          property_id: member.property_id,
-          outlet_id: member.outlet_id,
-          member_id: member.id,
-          skipSeparateEmail: true
-        }).catch(err => {
-          console.error('[Automatic Guest Portal Provisioning Error]:', err);
-        });
-      }).catch(console.error);
-    }
   }
 
   async syncGoogleWalletPassForMember(memberId: string, memberData?: Partial<Member>): Promise<void> {
@@ -4733,11 +4716,13 @@ class DatabaseService {
         if (isPropertyScope) {
             if (limitToOutletIds && limitToOutletIds.length > 0) {
                 query = query.in('outlet_id', limitToOutletIds);
-            } else {
+            } else if (scopeId && scopeId !== 'all') {
                 query = query.eq('property_id', scopeId);
             }
         }
-        else query = query.eq('outlet_id', scopeId);
+        else if (scopeId && scopeId !== 'all') {
+            query = query.eq('outlet_id', scopeId);
+        }
 
         const { data, error } = await query;
         if (error) throw error;
@@ -4963,7 +4948,9 @@ class DatabaseService {
                 }
             }
         }
-        else query = query.eq('outlet_id', scopeId);
+        else if (scopeId && scopeId !== 'all') {
+            query = query.eq('outlet_id', scopeId);
+        }
 
         if (startDate) {
             query = query.gte('date', startDate);
@@ -5158,25 +5145,50 @@ class DatabaseService {
             });
           }
         }
+
+        // Notify Guest in Guest Portal when booking is updated/rescheduled
+        const targetGuestEmail = (updates as any).guest_email || booking?.guest_email || (booking as any)?.email;
+        if (targetGuestEmail) {
+          const finalDate = updates.date || booking?.date || '';
+          const finalStart = (updates.start_time || booking?.start_time || '').substring(0, 5);
+          const finalEnd = (updates.end_time || booking?.end_time || '').substring(0, 5);
+          const finalStatus = updates.status || booking?.status || 'confirmed';
+          const statusText = finalStatus.charAt(0).toUpperCase() + finalStatus.slice(1);
+          
+          let alertMsg = `Your spa appointment for ${finalDate} at ${finalStart} - ${finalEnd} has been updated (${statusText}).`;
+          if (updates.status === 'confirmed' && booking?.status === 'pending') {
+            alertMsg = `Your spa appointment request for ${finalDate} at ${finalStart} has been CONFIRMED by the front desk concierge!`;
+          }
+
+          import('./guestAuthService').then(({ guestAuth }) => {
+            guestAuth.addGuestNotification(
+              targetGuestEmail,
+              `Spa Appointment Update (${statusText})`,
+              alertMsg,
+              finalStatus === 'cancelled' ? 'warning' : 'success'
+            ).catch(console.error);
+          }).catch(console.error);
+        }
       }, null);
     }
     
-    // Trigger local event
-    if (updates.outlet_id || booking?.outlet_id) {
-      const oid = updates.outlet_id || booking?.outlet_id;
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('booking_updated', { detail: { outlet_id: oid } }));
-      }
-      
-      if (this.isSupabase()) {
-        supabase.channel(`massage-bookings-${oid}`).send({
-          type: 'broadcast',
-          event: 'sync',
-          payload: { type: 'booking_updated', outlet_id: oid }
-        });
-      }
-    } else {
-      window.dispatchEvent(new CustomEvent('booking_updated', { detail: {} }));
+    // Trigger local and global sync events for real-time reflection in Guest Portal and Admin
+    const oid = updates.outlet_id || booking?.outlet_id || 'all';
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('booking_updated', { detail: { id, outlet_id: oid, updates } }));
+    }
+    
+    if (this.isSupabase()) {
+      supabase.channel(`massage-bookings-${oid}`).send({
+        type: 'broadcast',
+        event: 'sync',
+        payload: { type: 'booking_updated', id, outlet_id: oid, updates }
+      });
+      supabase.channel('global-massage-bookings').send({
+        type: 'broadcast',
+        event: 'sync',
+        payload: { type: 'booking_updated', id, updates }
+      });
     }
   }
 

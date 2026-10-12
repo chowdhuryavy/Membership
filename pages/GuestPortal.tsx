@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '../services/supabase';
 import { guestAuth, DEFAULT_GUEST_PORTAL_SETTINGS } from '../services/guestAuthService';
 import { db } from '../services/mockSupabase';
 import {
@@ -112,7 +113,8 @@ export default function GuestPortal() {
   const [passLoading, setPassLoading] = useState(false);
 
   // Booking request form state
-  const [requestService, setRequestService] = useState('Swedish Massage (60 min)');
+  const [requestServiceId, setRequestServiceId] = useState('');
+  const [requestTherapistId, setRequestTherapistId] = useState('');
   const [requestDate, setRequestDate] = useState(format(new Date(), 'yyyy-MM-dd'));
   const [requestTime, setRequestTime] = useState('14:00');
   const [requestNotes, setRequestNotes] = useState('');
@@ -252,6 +254,41 @@ export default function GuestPortal() {
     return realProp || propertiesList[0];
   }, [propertiesList, matchedOutlet, effectiveMember]);
 
+  // Dynamically filter treatments strictly available for this facility (NO HARDCODING)
+  const facilityMassageTypes = useMemo(() => {
+    const targetOutletId = matchedOutlet?.id || account?.outlet_id || member?.outlet_id;
+    const targetPropertyId = matchedProperty?.id || account?.property_id || member?.property_id;
+    return massageTypesList.filter((t: any) => {
+      if (targetOutletId && t.outlet_id === targetOutletId) return true;
+      if (targetPropertyId && t.property_id === targetPropertyId) return true;
+      if (!t.outlet_id && !t.property_id) return true;
+      return false;
+    });
+  }, [massageTypesList, matchedOutlet, matchedProperty, account, member]);
+
+  // Dynamically filter therapists available for this facility
+  const facilityTherapists = useMemo(() => {
+    const targetOutletId = matchedOutlet?.id || account?.outlet_id || member?.outlet_id;
+    const targetPropertyId = matchedProperty?.id || account?.property_id || member?.property_id;
+    return therapistsList.filter((t: any) => {
+      if (targetOutletId && t.outlet_id === targetOutletId) return true;
+      if (targetPropertyId && t.property_id === targetPropertyId) return true;
+      if (!t.outlet_id && !t.property_id) return true;
+      return false;
+    });
+  }, [therapistsList, matchedOutlet, matchedProperty, account, member]);
+
+  // Automatically select the first available treatment once loaded
+  useEffect(() => {
+    if (facilityMassageTypes.length > 0) {
+      if (!facilityMassageTypes.some(t => t.id === requestServiceId)) {
+        setRequestServiceId(facilityMassageTypes[0].id);
+      }
+    } else {
+      setRequestServiceId('');
+    }
+  }, [facilityMassageTypes, requestServiceId]);
+
   // Validation for changing password
   const passValidation = validatePasswordComplexity(newPassword, confirmPassword);
 
@@ -274,12 +311,12 @@ export default function GuestPortal() {
           db.getMembers('').catch(() => []),
           db.getPTMembers('').catch(() => []),
           db.getPTSessions('').catch(() => []),
-          db.getMassageBookings('').catch(() => []),
+          db.getMassageBookings('all').catch(() => []),
           db.getEntranceFeeConsents().catch(() => []),
           db.getSales('').catch(() => []),
-          db.getTherapists(activeScopeId || '').catch(() => []),
+          db.getTherapists('all').catch(() => []),
           db.getMassageRooms().catch(() => []),
-          db.getMassageTypes().catch(() => [])
+          db.getMassageTypes('all').catch(() => [])
         ]);
 
       setPortalSettings(ps);
@@ -344,11 +381,21 @@ export default function GuestPortal() {
       const ptSessionsList = allPtSessions.filter((s: any) => matchedPtIds.has(s.pt_member_id));
       setPtSessions(ptSessionsList);
 
-      // Match Spa bookings
+      // Match Spa bookings accurately across guest email, phone, name, member id, notes
       const matchedBookings = allBookings.filter((b: any) => {
         if (b.guest_email && b.guest_email.toLowerCase() === emailLower) return true;
         if (b.guest_name && b.guest_name.toLowerCase() === session.name.toLowerCase()) return true;
+        if (session.id && (b.guest_id === session.id || b.member_id === session.id)) return true;
+        if (phoneClean && b.guest_phone && b.guest_phone.replace(/\D/g, '') === phoneClean) return true;
+        if (b.notes && b.notes.toLowerCase().includes(emailLower)) return true;
+        if (matchedMembers.some(m => m.id === b.member_id || m.id === b.guest_id)) return true;
         return false;
+      });
+      // Sort newest bookings first
+      matchedBookings.sort((a: any, b: any) => {
+        const timeA = new Date(`${a.date || '1970-01-01'}T${a.start_time || '00:00'}`).getTime();
+        const timeB = new Date(`${b.date || '1970-01-01'}T${b.start_time || '00:00'}`).getTime();
+        return timeB - timeA;
       });
       setBookings(matchedBookings);
 
@@ -381,14 +428,27 @@ export default function GuestPortal() {
   useEffect(() => {
     loadPortalData();
 
-    // Listen for real-time booking confirmation and database updates
+    // Listen for local and cross-component updates
     const handleSync = () => {
       loadPortalData();
     };
 
     window.addEventListener('booking_updated', handleSync);
+
+    // Live Supabase real-time sync: triggers immediately when admin changes timing, date, therapist or status
+    const channel = supabase
+      .channel('guest-portal-live-bookings')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'massage_bookings' }, () => {
+        loadPortalData();
+      })
+      .on('broadcast', { event: 'sync' }, () => {
+        loadPortalData();
+      })
+      .subscribe();
+
     return () => {
       window.removeEventListener('booking_updated', handleSync);
+      supabase.removeChannel(channel);
     };
   }, [navigate]);
 
@@ -428,33 +488,53 @@ export default function GuestPortal() {
   const handleBookingRequestSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!account) return;
+    if (facilityMassageTypes.length === 0) {
+      toast.error('No massage or spa treatments are currently configured for this facility.');
+      return;
+    }
+
+    const selectedType = facilityMassageTypes.find(t => t.id === requestServiceId) || facilityMassageTypes[0];
+    if (!selectedType) {
+      toast.error('Please select an available treatment.');
+      return;
+    }
+
     setBookingSubmitting(true);
     try {
       const mOutlet = outletsList.find(o => o.id === (account.outlet_id || member?.outlet_id)) || outletsList[0];
       const mProp = propertiesList.find(p => p.id === mOutlet?.property_id) || propertiesList[0];
 
+      const duration = selectedType.duration_minutes || 60;
       const [hours, minutes] = (requestTime || '14:00').split(':').map(Number);
-      const endHour = (hours + 1) % 24;
-      const endTime = `${String(endHour).padStart(2, '0')}:${String(minutes || 0).padStart(2, '0')}`;
+      const startMinutes = (hours || 0) * 60 + (minutes || 0);
+      const endTotalMinutes = (startMinutes + duration) % (24 * 60);
+      const endHours = Math.floor(endTotalMinutes / 60);
+      const endMins = endTotalMinutes % 60;
+      const endTime = `${String(endHours).padStart(2, '0')}:${String(endMins).padStart(2, '0')}`;
 
       await db.addMassageBooking({
         outlet_id: mOutlet?.id || account.outlet_id || 'default',
         property_id: mProp?.id || account.property_id || '',
+        guest_id: member?.id || account?.member_id || null,
         guest_name: account.name || member?.guest_name || 'Guest',
         guest_email: account.email || member?.email || '',
         phone: account.phone || member?.phone || '',
-        type_name: requestService,
+        guest_phone: account.phone || member?.phone || '',
+        massage_type_id: selectedType.id,
+        type_name: selectedType.name,
+        therapist_id: requestTherapistId || null,
         date: requestDate,
         start_time: requestTime,
         end_time: endTime,
         status: 'pending',
         notes: requestNotes,
-        price: 0
+        price: selectedType.price || 0
       } as any);
 
       toast.success('Spa appointment request submitted! Awaiting front desk confirmation.');
       setShowBookingRequestModal(false);
       setRequestNotes('');
+      setRequestTherapistId('');
 
       await loadPortalData();
     } catch (err: any) {
@@ -1000,8 +1080,22 @@ export default function GuestPortal() {
                 const bStatus = (b.status || 'pending').toLowerCase();
                 const matchedTherapist = therapistsList.find(t => t.id === b.therapist_id);
                 const matchedRoom = roomsList.find(r => r.id === b.room_id);
-                const matchedType = massageTypesList.find(t => t.id === b.massage_type_id);
-                const specialistName = matchedTherapist?.name || (b as any).therapist_name;
+                const matchedType = massageTypesList.find(t => t.id === (b.massage_type_id || (b as any).inventory_item_id));
+
+                // THERAPIST NAME PRIVACY ENFORCEMENT:
+                // Only show real personal name if admin explicitly turned on 'show_therapist_name_to_guests' from settings!
+                const showNames = Boolean(portalSettings?.show_therapist_name_to_guests);
+                let specialistLabel = 'To be assigned';
+                if (matchedTherapist) {
+                  if (showNames) {
+                    specialistLabel = `${matchedTherapist.name}${matchedTherapist.country ? ` (${matchedTherapist.country})` : ''}`;
+                  } else {
+                    specialistLabel = matchedTherapist.country ? `${matchedTherapist.country} Specialist` : (matchedTherapist.specialty || 'Certified Specialist');
+                  }
+                } else if ((b as any).therapist_name) {
+                  specialistLabel = showNames ? (b as any).therapist_name : 'Assigned Specialist';
+                }
+
                 const roomName = matchedRoom?.name || (b as any).room_name;
                 const serviceName = (b as any).type_name || matchedType?.name || (b.notes?.match(/\[Service: ([^\]]+)\]/i)?.[1]) || 'Wellness Therapy';
 
@@ -1013,10 +1107,12 @@ export default function GuestPortal() {
                         ? 'border-amber-500/40 shadow-lg shadow-amber-500/5'
                         : bStatus === 'confirmed'
                         ? 'border-emerald-500/40 shadow-lg shadow-emerald-500/5'
+                        : bStatus === 'completed'
+                        ? 'border-blue-500/30'
                         : 'border-white/10'
                     }`}
                   >
-                    <div className="flex justify-between items-start">
+                    <div className="flex justify-between items-start gap-2">
                       <div>
                         <span className="text-[9px] font-black uppercase tracking-widest text-purple-400">
                           {serviceName}
@@ -1026,25 +1122,25 @@ export default function GuestPortal() {
                         </h4>
                       </div>
 
-                      {/* Dynamic Status Badge */}
+                      {/* Real-time Dynamic Status Badge */}
                       {bStatus === 'pending' && (
-                        <span className="px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-black uppercase flex items-center gap-1.5">
+                        <span className="px-3 py-1 rounded-full bg-amber-500/20 text-amber-300 border border-amber-500/30 text-[10px] font-black uppercase flex items-center gap-1.5 shrink-0">
                           <Clock className="w-3 h-3 text-amber-400 animate-spin" /> Pending Confirmation
                         </span>
                       )}
                       {bStatus === 'confirmed' && (
-                        <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-black uppercase flex items-center gap-1.5">
+                        <span className="px-3 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30 text-[10px] font-black uppercase flex items-center gap-1.5 shrink-0">
                           <CheckCircle2 className="w-3 h-3 text-emerald-400" /> Confirmed
                         </span>
                       )}
                       {bStatus === 'completed' && (
-                        <span className="px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 text-[10px] font-black uppercase flex items-center gap-1.5">
+                        <span className="px-3 py-1 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30 text-[10px] font-black uppercase flex items-center gap-1.5 shrink-0">
                           <CheckCircle2 className="w-3 h-3 text-blue-400" /> Completed
                         </span>
                       )}
                       {bStatus === 'cancelled' && (
-                        <span className="px-3 py-1 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[10px] font-black uppercase">
-                          Cancelled
+                        <span className="px-3 py-1 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30 text-[10px] font-black uppercase shrink-0">
+                          Cancelled / Declined
                         </span>
                       )}
                     </div>
@@ -1052,11 +1148,16 @@ export default function GuestPortal() {
                     <div className="flex flex-wrap items-center gap-4 text-xs text-slate-300 pt-2 border-t border-white/5">
                       <div className="flex items-center gap-1.5">
                         <Clock className="w-3.5 h-3.5 text-purple-400" />
-                        <span>{b.start_time || '14:00'} - {b.end_time || '15:00'}</span>
+                        <span className="font-bold">{b.start_time ? b.start_time.substring(0, 5) : '14:00'} - {b.end_time ? b.end_time.substring(0, 5) : '15:00'}</span>
                       </div>
                       <div className="flex items-center gap-1.5">
                         <User className="w-3.5 h-3.5 text-purple-400" />
-                        <span>{specialistName || (bStatus === 'pending' ? 'To be assigned' : 'Specialist')}</span>
+                        <span className="font-bold">{specialistLabel}</span>
+                        {!showNames && matchedTherapist && (
+                          <span className="text-[8px] bg-purple-500/20 text-purple-300 border border-purple-500/30 px-1.5 py-0.5 rounded-full font-mono uppercase">
+                            Nationality
+                          </span>
+                        )}
                       </div>
                       {roomName && (
                         <div className="flex items-center gap-1.5">
@@ -1066,9 +1167,21 @@ export default function GuestPortal() {
                       )}
                     </div>
 
+                    {(b as any).notes && (
+                      <p className="text-[10px] text-slate-400 bg-white/5 p-2.5 rounded-xl border border-white/5 leading-relaxed">
+                        <span className="text-amber-400 font-bold uppercase tracking-wider text-[8px] mr-1.5">Special Requests:</span>
+                        {(b as any).notes.replace(/\[(?:Email|Service): [^\]]+\]\s*/g, '')}
+                      </p>
+                    )}
+
                     {bStatus === 'pending' && (
                       <p className="text-[10px] text-amber-400/80 font-medium italic">
                         Front desk concierge will confirm your specialist &amp; room shortly.
+                      </p>
+                    )}
+                    {bStatus === 'confirmed' && (
+                      <p className="text-[10px] text-emerald-400 font-medium">
+                        ✓ Your reservation is confirmed. Please arrive 10 minutes prior to your treatment.
                       </p>
                     )}
                   </div>
@@ -1449,72 +1562,132 @@ export default function GuestPortal() {
               </button>
             </div>
 
-            <form onSubmit={handleBookingRequestSubmit} className="space-y-3">
-              <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                  Treatment / Service
-                </label>
-                <select
-                  value={requestService}
-                  onChange={(e) => setRequestService(e.target.value)}
-                  className="w-full h-11 px-3 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold"
+            {facilityMassageTypes.length === 0 ? (
+              <div className="p-5 bg-amber-50 rounded-2xl border border-amber-200 text-center space-y-3">
+                <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center mx-auto text-amber-700">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <h4 className="text-xs font-black uppercase text-amber-950 tracking-wider">
+                  No Spa Treatments Configured
+                </h4>
+                <p className="text-[11px] text-amber-800 font-medium leading-relaxed">
+                  Online spa &amp; massage treatments have not been added to the portfolio for {matchedOutlet?.name || propertyName} yet. Please speak directly with the concierge desk.
+                </p>
+                <div className="pt-1 flex justify-center">
+                  <button
+                    type="button"
+                    onClick={() => setShowBookingRequestModal(false)}
+                    className="px-4 py-2 bg-slate-900 text-white rounded-xl text-xs font-black uppercase"
+                  >
+                    Close
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <form onSubmit={handleBookingRequestSubmit} className="space-y-3">
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                    Treatment / Service *
+                  </label>
+                  <select
+                    value={requestServiceId}
+                    onChange={(e) => setRequestServiceId(e.target.value)}
+                    className="w-full h-11 px-3 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold"
+                    required
+                  >
+                    {facilityMassageTypes.map((t) => (
+                      <option key={t.id} value={t.id}>
+                        {t.name} ({t.duration_minutes} min){t.price ? ` - ${formatMoney(t.price)}` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Available Therapist (Nationality Wise) */}
+                <div className="space-y-1">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                      Available Specialist
+                    </label>
+                    <span className="text-[8px] font-mono uppercase text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full border border-indigo-100">
+                      {portalSettings?.show_therapist_name_to_guests ? 'Names Revealed' : '🛡 Nationality Mode'}
+                    </span>
+                  </div>
+                  <select
+                    value={requestTherapistId}
+                    onChange={(e) => setRequestTherapistId(e.target.value)}
+                    className="w-full h-11 px-3 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold"
+                  >
+                    <option value="">Any Available Specialist (No Preference)</option>
+                    {facilityTherapists.map((t) => {
+                      const showNames = Boolean(portalSettings?.show_therapist_name_to_guests);
+                      const label = showNames
+                        ? `${t.name} (${t.country || 'Specialist'})`
+                        : (t.country ? `${t.country} Specialist` : (t.specialty || 'Certified Specialist'));
+                      return (
+                        <option key={t.id} value={t.id}>
+                          {label}
+                        </option>
+                      );
+                    })}
+                  </select>
+                  {!portalSettings?.show_therapist_name_to_guests && (
+                    <p className="text-[9px] text-slate-400 font-medium italic">
+                      Therapist real names are hidden by hotel administration. You can choose by therapist nationality or specialty.
+                    </p>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                      Preferred Date
+                    </label>
+                    <input
+                      type="date"
+                      value={requestDate}
+                      onChange={(e) => setRequestDate(e.target.value)}
+                      className="w-full h-11 px-3 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                      Preferred Time
+                    </label>
+                    <input
+                      type="time"
+                      value={requestTime}
+                      onChange={(e) => setRequestTime(e.target.value)}
+                      className="w-full h-11 px-3 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold"
+                      required
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-1">
+                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                    Special Requests / Notes
+                  </label>
+                  <textarea
+                    value={requestNotes}
+                    onChange={(e) => setRequestNotes(e.target.value)}
+                    rows={2}
+                    placeholder="e.g. Focus on shoulders, gentle pressure..."
+                    className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium"
+                  />
+                </div>
+
+                <Button
+                  type="submit"
+                  disabled={bookingSubmitting}
+                  isLoading={bookingSubmitting}
+                  className="w-full h-12 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-black text-xs uppercase tracking-wider"
                 >
-                  <option>Swedish Massage (60 min)</option>
-                  <option>Deep Tissue Massage (90 min)</option>
-                  <option>Aromatherapy Spa (60 min)</option>
-                  <option>Hot Stone Therapy (90 min)</option>
-                </select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                    Preferred Date
-                  </label>
-                  <input
-                    type="date"
-                    value={requestDate}
-                    onChange={(e) => setRequestDate(e.target.value)}
-                    className="w-full h-11 px-3 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold"
-                    required
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                    Preferred Time
-                  </label>
-                  <input
-                    type="time"
-                    value={requestTime}
-                    onChange={(e) => setRequestTime(e.target.value)}
-                    className="w-full h-11 px-3 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold"
-                    required
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-1">
-                <label className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                  Special Notes / Therapist Preference
-                </label>
-                <textarea
-                  value={requestNotes}
-                  onChange={(e) => setRequestNotes(e.target.value)}
-                  rows={2}
-                  placeholder="e.g. Focus on shoulders..."
-                  className="w-full p-3 rounded-xl bg-slate-50 border border-slate-200 text-xs font-medium"
-                />
-              </div>
-
-              <Button
-                type="submit"
-                disabled={bookingSubmitting}
-                isLoading={bookingSubmitting}
-                className="w-full h-12 rounded-xl bg-purple-600 hover:bg-purple-700 text-white font-black text-xs uppercase tracking-wider"
-              >
-                Submit Request
-              </Button>
-            </form>
+                  Submit Request
+                </Button>
+              </form>
+            )}
           </div>
         </div>
       )}

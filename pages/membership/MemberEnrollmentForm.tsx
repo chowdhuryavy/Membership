@@ -428,9 +428,6 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
 
         if (isUpdate) {
             await db.updateMember(existingMember!.id, enrichedPayload);
-            emailService.sendMemberPurchaseEmail(enrichedPayload).catch(err => {
-                console.warn('[Enrollment Email] Purchase notification failed:', err);
-            });
         } else {
             await db.addMember(enrichedPayload);
         }
