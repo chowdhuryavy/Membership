@@ -576,7 +576,17 @@ export const GuestPortalSettingsTab: React.FC = () => {
               </label>
               <button
                 type="button"
-                onClick={() => setPortalSettings({ ...portalSettings, nav_bar_position: portalSettings.nav_bar_position === 'right' ? 'left' : 'right' })}
+                onClick={async () => {
+                  const newPosition = portalSettings.nav_bar_position === 'right' ? 'left' : 'right';
+                  const updated = { ...portalSettings, nav_bar_position: newPosition };
+                  setPortalSettings(updated);
+                  try {
+                    await guestAuth.savePortalSettings(updated, activeScopeId);
+                    toast.success('Navigation bar position updated');
+                  } catch (e) {
+                    toast.error('Failed to save preferences');
+                  }
+                }}
                 className="w-full h-11 px-4 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold flex items-center justify-between"
               >
                 {portalSettings.nav_bar_position === 'right' ? 'Right Side' : 'Left Side'}
