@@ -569,6 +569,20 @@ export const GuestPortalSettingsTab: React.FC = () => {
                 className="w-full h-11 px-4 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold"
               />
             </div>
+
+            <div className="space-y-1">
+              <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">
+                Nav Bar Icon Position
+              </label>
+              <button
+                type="button"
+                onClick={() => setPortalSettings({ ...portalSettings, nav_bar_position: portalSettings.nav_bar_position === 'right' ? 'left' : 'right' })}
+                className="w-full h-11 px-4 rounded-xl bg-slate-50 border border-slate-200 text-xs font-bold flex items-center justify-between"
+              >
+                {portalSettings.nav_bar_position === 'right' ? 'Right Side' : 'Left Side'}
+                {portalSettings.nav_bar_position === 'right' ? <ToggleRight className="w-5 h-5 text-indigo-600" /> : <ToggleLeft className="w-5 h-5 text-slate-400" />}
+              </button>
+            </div>
           </div>
 
           <div className="flex justify-end pt-2">

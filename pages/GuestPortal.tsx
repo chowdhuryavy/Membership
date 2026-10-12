@@ -1829,7 +1829,7 @@ export default function GuestPortal() {
       </main>
 
       {/* BOTTOM MOBILE NAVIGATION BAR WITH RE-ALIGNED CENTER 'P' BUTTON */}
-      <nav className="fixed bottom-0 left-0 right-0 max-w-lg mx-auto bg-slate-900/95 backdrop-blur-xl border-t border-white/10 px-2 py-2 z-40 flex items-center justify-between shadow-2xl">
+      <nav className={`fixed bottom-0 left-0 right-0 max-w-lg mx-auto bg-slate-900/95 backdrop-blur-xl border-t border-white/10 px-2 py-2 z-40 flex items-center ${portalSettings?.nav_bar_position === 'right' ? 'flex-row-reverse' : 'flex-row'} justify-between shadow-2xl`}>
         {portalSettings?.allow_pt_tracking && (
           <button
             type="button"
