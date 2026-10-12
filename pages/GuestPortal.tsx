@@ -1867,6 +1867,17 @@ export default function GuestPortal() {
 
         <button
           type="button"
+          onClick={() => handleTabSwitch('retail')}
+          className={`flex-1 flex flex-col items-center justify-center gap-1 py-1 rounded-2xl transition-all ${
+            activeTab === 'retail' ? 'text-amber-400 font-black' : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <ShoppingBag className="w-5 h-5" />
+          <span className="text-[9px] uppercase tracking-wider">Shop</span>
+        </button>
+
+        <button
+          type="button"
           onClick={() => handleTabSwitch('profile')}
           className={`flex-1 flex flex-col items-center justify-center gap-1 py-1 rounded-2xl transition-all ${
             activeTab === 'profile' ? 'text-amber-400 font-black' : 'text-slate-400 hover:text-slate-200'
