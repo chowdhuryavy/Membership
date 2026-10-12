@@ -1829,9 +1829,7 @@ export default function GuestPortal() {
       </main>
 
       {/* BOTTOM MOBILE NAVIGATION BAR WITH RE-ALIGNED CENTER 'P' BUTTON */}
-      <nav className={`fixed bottom-0 left-0 right-0 max-w-lg mx-auto bg-slate-900/95 backdrop-blur-xl border-t border-white/10 px-2 py-2 z-40 flex items-center ${portalSettings?.nav_bar_position === 'right' ? 'flex-row-reverse' : 'flex-row'} justify-between shadow-2xl relative`}>
-        {/* Spacer for absolute-positioned P button */}
-        <div className="w-16"></div>
+      <nav className={`fixed bottom-0 left-0 right-0 max-w-lg mx-auto bg-slate-900/95 backdrop-blur-xl border-t border-white/10 px-2 py-2 z-40 flex items-center shadow-2xl`}>
 
         {/* Dynamic Buttons */}
         {(() => {
@@ -1868,7 +1866,22 @@ export default function GuestPortal() {
               </button>
             )
           };
-          return order.map(key => buttons[key]).filter(Boolean);
+          const renderedButtons = order.map(key => buttons[key]).filter(Boolean);
+          const mid = Math.ceil(renderedButtons.length / 2);
+          const leftButtons = renderedButtons.slice(0, mid);
+          const rightButtons = renderedButtons.slice(mid);
+          
+          return (
+            <>
+              <div className="flex-1 flex items-center">
+                {leftButtons}
+              </div>
+              <div className="w-16" /> {/* Spacer for P button */}
+              <div className="flex-1 flex items-center">
+                {rightButtons}
+              </div>
+            </>
+          );
         })()}
 
         {/* CENTER ELEVATED "P" PERFECTION DIGITAL PASS BUTTON */}
