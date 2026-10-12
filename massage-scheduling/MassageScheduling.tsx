@@ -755,10 +755,6 @@ NOTIFY pgrst, 'reload schema';`}
   const [assignTherapistId, setAssignTherapistId] = useState<string>('');
   const [assignRoomId, setAssignRoomId] = useState<string>('');
 
-  const pendingBookings = useMemo(() => {
-    return bookings.filter(b => (b.status || '').toLowerCase() === 'pending');
-  }, [bookings]);
-
   const allowedOutletsInProperty = useMemo(() => {
     if (!currentProperty || !user || !outlets) return [];
     if (isSuperAdmin || user.role_id?.toLowerCase() === 'admin' || user.role_id?.toLowerCase() === 'system_admin') {
@@ -769,6 +765,21 @@ NOTIFY pgrst, 'reload schema';`}
         user.allowed_outlets?.includes(o.id)
     );
   }, [currentProperty, user, outlets, isSuperAdmin]);
+
+  const pendingBookings = useMemo(() => {
+    return bookings.filter(b => {
+      const isPending = (b.status || '').toLowerCase() === 'pending';
+      if (!isPending) return false;
+      if (viewScope === 'property') {
+        const outletIds = allowedOutletsInProperty.map(o => o.id);
+        if (b.property_id && currentProperty && b.property_id !== currentProperty.id) return false;
+        if (b.outlet_id && outletIds.length > 0 && !outletIds.includes(b.outlet_id)) return false;
+        return b.property_id === currentProperty?.id || (b.outlet_id && outletIds.includes(b.outlet_id));
+      } else {
+        return Boolean(currentOutlet?.id && b.outlet_id === currentOutlet.id);
+      }
+    });
+  }, [bookings, viewScope, currentProperty, currentOutlet, allowedOutletsInProperty]);
 
   const selectedBookingDetails = useMemo(() => {
       if (!selectedBooking) return null;
@@ -811,7 +822,7 @@ NOTIFY pgrst, 'reload schema';`}
 
   useEffect(() => {
     if (currentOutlet) loadData();
-  }, [currentOutlet, viewDate, viewScope]);
+  }, [currentOutlet?.id, currentProperty?.id, viewDate, viewScope]);
 
   // Real-time synchronization subscription
   useEffect(() => {
@@ -922,6 +933,14 @@ NOTIFY pgrst, 'reload schema';`}
             setLoading(false);
             setPageLoading(false);
         }, 100);
+    } else if (!isSilent) {
+        // Clear bookings immediately so previous outlet data does not leak across header switches
+        setBookings([]);
+        setGuests([]);
+        setTherapists([]);
+        setMassageRooms([]);
+        setMassageTypes([]);
+        setMembers([]);
     }
 
     try {
@@ -1142,8 +1161,18 @@ NOTIFY pgrst, 'reload schema';`}
 
   const filteredTodayBookings = useMemo(() => {
     const dateStr = format(viewDate, 'yyyy-MM-dd');
-    return bookings.filter(b => b.date === dateStr);
-  }, [bookings, viewDate]);
+    return bookings.filter(b => {
+      if (b.date !== dateStr) return false;
+      if (viewScope === 'property') {
+        const outletIds = allowedOutletsInProperty.map(o => o.id);
+        if (b.property_id && currentProperty && b.property_id !== currentProperty.id) return false;
+        if (b.outlet_id && outletIds.length > 0 && !outletIds.includes(b.outlet_id)) return false;
+        return b.property_id === currentProperty?.id || (b.outlet_id && outletIds.includes(b.outlet_id));
+      } else {
+        return Boolean(currentOutlet?.id && b.outlet_id === currentOutlet.id);
+      }
+    });
+  }, [bookings, viewDate, viewScope, currentProperty, currentOutlet, allowedOutletsInProperty]);
 
   const getStatusStyles = (status: MassageBooking['status'], type?: string) => {
     const base = 'border-l-[6px] shadow-2xl transition-all hover:z-50 overflow-hidden group hover:scale-[1.04] hover:-translate-y-1 flex flex-col justify-between backdrop-blur-xl rounded-2xl border-white/20';
@@ -2301,23 +2330,41 @@ NOTIFY pgrst, 'reload schema';`}
                       </div>
                     </div>
 
-                    <div className="flex gap-2 justify-end pt-2">
-                      <button
-                        onClick={() => handleUpdateStatus(b.id, 'cancelled')}
-                        className="h-10 px-5 rounded-xl border border-red-200 hover:bg-red-50 text-red-600 font-black text-xs uppercase transition-all"
-                      >
-                        Decline
-                      </button>
-                      <button
-                        onClick={() => {
-                          const chosenTherapist = confirmingBookingId === b.id ? assignTherapistId : (b.therapist_id || therapists[0]?.id);
-                          const chosenRoom = confirmingBookingId === b.id ? assignRoomId : b.room_id;
-                          handleConfirmPendingBooking(b.id, chosenTherapist, chosenRoom);
-                        }}
-                        className="h-10 px-6 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wider flex items-center gap-2 shadow-md shadow-emerald-600/20 transition-all active:scale-95"
-                      >
-                        <CheckCircle className="w-4 h-4" /> Approve &amp; Confirm
-                      </button>
+                    <div className="flex items-center justify-between pt-2">
+                      {canDelete && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setItemToDelete({
+                              id: b.id,
+                              type: 'booking',
+                              name: `Appointment Request for ${b.guest_name || 'Guest'}`
+                            });
+                          }}
+                          className="h-10 px-4 rounded-xl border border-red-200/80 hover:bg-red-50 text-red-600 font-black text-xs uppercase transition-all flex items-center gap-1.5"
+                          title="Permanently remove this request from the database"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" /> Purge
+                        </button>
+                      )}
+                      <div className="flex gap-2 ml-auto">
+                        <button
+                          onClick={() => handleUpdateStatus(b.id, 'cancelled')}
+                          className="h-10 px-5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-600 font-black text-xs uppercase transition-all"
+                        >
+                          Decline
+                        </button>
+                        <button
+                          onClick={() => {
+                            const chosenTherapist = confirmingBookingId === b.id ? assignTherapistId : (b.therapist_id || therapists[0]?.id);
+                            const chosenRoom = confirmingBookingId === b.id ? assignRoomId : b.room_id;
+                            handleConfirmPendingBooking(b.id, chosenTherapist, chosenRoom);
+                          }}
+                          className="h-10 px-6 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-xs uppercase tracking-wider flex items-center gap-2 shadow-md shadow-emerald-600/20 transition-all active:scale-95"
+                        >
+                          <CheckCircle className="w-4 h-4" /> Approve &amp; Confirm
+                        </button>
+                      </div>
                     </div>
                   </div>
                 ))

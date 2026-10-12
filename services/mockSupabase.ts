@@ -4937,19 +4937,19 @@ class DatabaseService {
             query = query.eq('guest_id', guestId).limit(2000);
         } else if (isPropertyScope) {
             if (limitToOutletIds && limitToOutletIds.length > 0) {
-                query = query.or(`outlet_id.in.(${limitToOutletIds.join(',')}),property_id.eq.${scopeId},property_id.is.null`);
+                query = query.or(`outlet_id.in.(${limitToOutletIds.join(',')}),property_id.eq.${scopeId}`);
             } else {
                 const { data: outlets } = await supabase.from('outlets').select('id').eq('property_id', scopeId);
                 const oIds = (outlets || []).map((o: any) => o.id);
                 if (oIds.length > 0) {
-                    query = query.or(`property_id.eq.${scopeId},outlet_id.in.(${oIds.join(',')}),property_id.is.null`);
+                    query = query.or(`property_id.eq.${scopeId},outlet_id.in.(${oIds.join(',')})`);
                 } else {
-                    query = query.or(`property_id.eq.${scopeId},property_id.is.null`);
+                    query = query.eq('property_id', scopeId);
                 }
             }
         }
         else if (scopeId && scopeId !== 'all') {
-            query = query.or(`outlet_id.eq.${scopeId},outlet_id.is.null`);
+            query = query.eq('outlet_id', scopeId);
         }
 
         if (startDate) {
@@ -5535,7 +5535,7 @@ class DatabaseService {
     if (this.isSupabase()) {
       await this.safeCall(async () => {
         // Get booking info to notify therapist before deletion
-        const { data: b } = await supabase.from('massage_bookings').select('*, guests(name)').eq('id', id).single();
+        const { data: b } = await supabase.from('massage_bookings').select('*, guests(name)').eq('id', id).maybeSingle();
         booking = b;
         
         // Also delete any associated sales
@@ -5544,10 +5544,10 @@ class DatabaseService {
         if (error) throw error;
         await this.logAction('DELETE_BOOKING', `Deleted booking ID: ${id}`);
 
-        if (booking) {
+        if (booking && booking.therapist_id) {
           await this.addNotification({
             title: 'Booking Cancelled',
-            message: `Booking for ${booking.guests?.name || 'Guest'} on ${booking.date} has been cancelled.`,
+            message: `Booking for ${booking.guest_name || booking.guests?.name || 'Guest'} on ${booking.date} has been cancelled.`,
             type: 'warning',
             outlet_id: booking.outlet_id,
             user_id: booking.therapist_id
@@ -5556,21 +5556,40 @@ class DatabaseService {
       }, null);
     }
     
-    // Trigger local event
-    const oid = booking?.outlet_id;
-    window.dispatchEvent(new CustomEvent('booking_updated', { detail: { outlet_id: oid, action: 'deleted', booking_id: id } }));
+    // Trigger local and broadcast events
+    const oid = booking?.outlet_id || 'all';
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('booking_updated', { detail: { outlet_id: oid, action: 'deleted', booking_id: id } }));
+    }
 
-    if (this.isSupabase() && oid) {
-      supabase.channel(`massage-bookings-${oid}`).send({
+    if (this.isSupabase()) {
+      if (booking?.outlet_id) {
+        supabase.channel(`massage-bookings-${booking.outlet_id}`).send({
+          type: 'broadcast',
+          event: 'sync',
+          payload: { type: 'booking_deleted', outlet_id: booking.outlet_id, id }
+        }).catch(() => {});
+        supabase.channel(`staff-schedule-${booking.outlet_id}`).send({
+          type: 'broadcast',
+          event: 'sync',
+          payload: { type: 'booking_deleted', outlet_id: booking.outlet_id, id }
+        }).catch(() => {});
+      }
+      supabase.channel('global-massage-bookings').send({
         type: 'broadcast',
         event: 'sync',
-        payload: { type: 'booking_deleted', outlet_id: oid, id }
-      });
-      supabase.channel(`staff-schedule-${oid}`).send({
+        payload: { type: 'booking_deleted', id }
+      }).catch(() => {});
+      supabase.channel('guest-portal-live-bookings').send({
         type: 'broadcast',
         event: 'sync',
-        payload: { type: 'booking_deleted', outlet_id: oid, id }
-      });
+        payload: { type: 'booking_deleted', id }
+      }).catch(() => {});
+      supabase.channel('massage-scheduling-realtime').send({
+        type: 'broadcast',
+        event: 'sync',
+        payload: { type: 'booking_deleted', id }
+      }).catch(() => {});
     }
   }
 

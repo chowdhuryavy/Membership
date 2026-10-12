@@ -565,7 +565,8 @@ export default function GuestPortal() {
 
   const handleOpenEditBooking = (b: MassageBooking) => {
     setEditingBooking(b);
-    setEditServiceId(b.massage_type_id || (b as any).inventory_item_id || facilityMassageTypes[0]?.id || '');
+    const matchedTypeByName = facilityMassageTypes.find(t => t.name === (b as any).type_name) || massageTypesList.find(t => t.name === (b as any).type_name);
+    setEditServiceId(b.massage_type_id || (b as any).inventory_item_id || matchedTypeByName?.id || facilityMassageTypes[0]?.id || '');
     setEditTherapistId(b.therapist_id || '');
     setEditDate(b.date || format(new Date(), 'yyyy-MM-dd'));
     setEditTime(b.start_time ? b.start_time.substring(0, 5) : '14:00');
