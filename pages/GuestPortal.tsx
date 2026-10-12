@@ -1037,13 +1037,15 @@ export default function GuestPortal() {
                           ✨ Priority Concierge
                         </span>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => setShowPrivilegesModal(true)}
-                        className="w-full mt-2 py-2 px-3 rounded-xl bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-200 text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 border border-indigo-500/40"
-                      >
-                        <Award className="w-3.5 h-3.5 text-amber-400" /> View Privileges &amp; Usage Details
-                      </button>
+                      {(ptMembers.length > 0 || bookings.length > 0) && (
+                        <button
+                          type="button"
+                          onClick={() => setShowPrivilegesModal(true)}
+                          className="w-full mt-2 py-2 px-3 rounded-xl bg-indigo-600/30 hover:bg-indigo-600/50 text-indigo-200 text-[10px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1.5 border border-indigo-500/40"
+                        >
+                          <Award className="w-3.5 h-3.5 text-amber-400" /> View Privileges &amp; Usage Details
+                        </button>
+                      )}
                     </div>
                   </div>
 
@@ -1569,7 +1571,7 @@ export default function GuestPortal() {
               </div>
             </div>
 
-            {inventoryList.filter(i => i.category === 'Retail' || (i as any).stock_quantity > 0 || (i as any).price > 0).length === 0 ? (
+            {inventoryList.filter(i => i.category === 'Retail' && ((matchedOutlet && i.outlet_id === matchedOutlet.id) || (matchedProperty && i.property_id === matchedProperty.id))).length === 0 ? (
               <div className="p-8 text-center bg-slate-900/50 rounded-3xl border border-white/5 space-y-2">
                 <ShoppingBag className="w-8 h-8 text-slate-600 mx-auto" />
                 <h4 className="text-sm font-bold text-slate-400 uppercase">No Retail Items Available</h4>
@@ -1578,7 +1580,7 @@ export default function GuestPortal() {
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {inventoryList
-                  .filter(i => i.category === 'Retail' || (i as any).price > 0)
+                  .filter(i => i.category === 'Retail' && ((matchedOutlet && i.outlet_id === matchedOutlet.id) || (matchedProperty && i.property_id === matchedProperty.id)))
                   .map((item) => (
                     <div
                       key={item.id}
@@ -1913,6 +1915,17 @@ export default function GuestPortal() {
         >
           <ShoppingBag className="w-5 h-5" />
           <span className="text-[9px] uppercase tracking-wider">Shop</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => handleTabSwitch('finances')}
+          className={`flex-1 flex flex-col items-center justify-center gap-1 py-1 rounded-2xl transition-all ${
+            activeTab === 'finances' ? 'text-amber-400 font-black' : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <Clock className="w-5 h-5" />
+          <span className="text-[9px] uppercase tracking-wider">History</span>
         </button>
 
         <button
