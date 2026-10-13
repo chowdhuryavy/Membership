@@ -75,16 +75,52 @@ export class GuestAuthService {
     const key = scopeId ? `${GUEST_PORTAL_SETTINGS_KEY}_${scopeId}` : GUEST_PORTAL_SETTINGS_KEY;
     try {
       const companySettings = await db.getSettings().catch(() => null);
-      if (companySettings?.guest_portal_settings_map && scopeId && companySettings.guest_portal_settings_map[scopeId]) {
-        return { ...DEFAULT_GUEST_PORTAL_SETTINGS, ...companySettings.guest_portal_settings_map[scopeId] };
+
+      // Base global configuration from database or default
+      const rawGlobal = companySettings?.guest_portal_settings || companySettings?.staff_portal_settings?.guest_portal_settings;
+      const globalSettings: GuestPortalSettings = rawGlobal
+        ? {
+            ...DEFAULT_GUEST_PORTAL_SETTINGS,
+            ...rawGlobal,
+            nav_button_order: Array.isArray(rawGlobal.nav_button_order) && rawGlobal.nav_button_order.length > 0
+              ? rawGlobal.nav_button_order
+              : DEFAULT_NAV_BUTTON_ORDER
+          }
+        : DEFAULT_GUEST_PORTAL_SETTINGS;
+
+      // Check facility-specific map
+      const rawMap = companySettings?.guest_portal_settings_map || companySettings?.staff_portal_settings?.guest_portal_settings_map;
+      if (scopeId && rawMap && rawMap[scopeId]) {
+        const facilitySettings = rawMap[scopeId];
+        const effectiveOrder = Array.isArray(facilitySettings.nav_button_order) && facilitySettings.nav_button_order.length > 0
+          ? facilitySettings.nav_button_order
+          : globalSettings.nav_button_order || DEFAULT_NAV_BUTTON_ORDER;
+
+        return {
+          ...DEFAULT_GUEST_PORTAL_SETTINGS,
+          ...globalSettings,
+          ...facilitySettings,
+          nav_button_order: effectiveOrder
+        };
       }
-      if (companySettings?.guest_portal_settings) {
-        return { ...DEFAULT_GUEST_PORTAL_SETTINGS, ...companySettings.guest_portal_settings };
+
+      // If global settings exist in database, return them
+      if (rawGlobal) {
+        return globalSettings;
       }
+
+      // Local storage fallback
       if (typeof localStorage !== 'undefined') {
         const local = localStorage.getItem(key) || localStorage.getItem(GUEST_PORTAL_SETTINGS_KEY);
         if (local) {
-          return { ...DEFAULT_GUEST_PORTAL_SETTINGS, ...JSON.parse(local) };
+          const parsed = JSON.parse(local);
+          return {
+            ...DEFAULT_GUEST_PORTAL_SETTINGS,
+            ...parsed,
+            nav_button_order: Array.isArray(parsed.nav_button_order) && parsed.nav_button_order.length > 0
+              ? parsed.nav_button_order
+              : DEFAULT_NAV_BUTTON_ORDER
+          };
         }
       }
     } catch (e) {
@@ -93,21 +129,51 @@ export class GuestAuthService {
     return DEFAULT_GUEST_PORTAL_SETTINGS;
   }
 
-  public async savePortalSettings(settings: Partial<GuestPortalSettings>, scopeId?: string): Promise<GuestPortalSettings> {
+  public async savePortalSettings(
+    settings: Partial<GuestPortalSettings>,
+    scopeId?: string,
+    syncOrderToAllFacilities: boolean = true
+  ): Promise<GuestPortalSettings> {
     const current = await this.getPortalSettings(scopeId);
     const updated = { ...current, ...settings };
     const key = scopeId ? `${GUEST_PORTAL_SETTINGS_KEY}_${scopeId}` : GUEST_PORTAL_SETTINGS_KEY;
+
     try {
       if (typeof localStorage !== 'undefined') {
         localStorage.setItem(key, JSON.stringify(updated));
+        localStorage.setItem(GUEST_PORTAL_SETTINGS_KEY, JSON.stringify(updated));
       }
+
       const companySettings = await db.getSettings().catch(() => null);
       if (companySettings) {
-        const existingMap = companySettings.guest_portal_settings_map || {};
-        const updatedMap = scopeId ? { ...existingMap, [scopeId]: updated } : existingMap;
+        const existingMap = companySettings.guest_portal_settings_map ||
+          companySettings.staff_portal_settings?.guest_portal_settings_map ||
+          {};
+
+        const updatedMap: Record<string, GuestPortalSettings> = { ...existingMap };
+
+        if (scopeId) {
+          updatedMap[scopeId] = updated;
+        }
+
+        // If nav_button_order is updated, sync it across all facilities so guest portal always sees the desired order
+        if (settings.nav_button_order && Array.isArray(settings.nav_button_order)) {
+          Object.keys(updatedMap).forEach(sId => {
+            updatedMap[sId] = {
+              ...updatedMap[sId],
+              nav_button_order: settings.nav_button_order
+            };
+          });
+        }
+
+        const globalSettings: GuestPortalSettings = {
+          ...(companySettings.guest_portal_settings || companySettings.staff_portal_settings?.guest_portal_settings || DEFAULT_GUEST_PORTAL_SETTINGS),
+          ...updated
+        };
+
         await db.updateSettings({
           ...companySettings,
-          guest_portal_settings: scopeId ? (companySettings.guest_portal_settings || updated) : updated,
+          guest_portal_settings: globalSettings,
           guest_portal_settings_map: updatedMap
         });
       }

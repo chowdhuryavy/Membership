@@ -41,7 +41,11 @@ import {
   RotateCcw,
   SlidersHorizontal,
   Layers,
-  GripVertical
+  GripVertical,
+  Database,
+  Save,
+  Code,
+  FileCode
 } from 'lucide-react';
 import { Button, Input, Card } from '../ui';
 import { format, parseISO } from 'date-fns';
@@ -185,6 +189,8 @@ export const GuestPortalSettingsTab: React.FC = () => {
   const [members, setMembers] = useState<any[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null);
+  const [lastSavedTime, setLastSavedTime] = useState<string | null>(null);
+  const [showSqlModal, setShowSqlModal] = useState(false);
 
   const loadData = async () => {
     setLoading(true);
@@ -221,9 +227,11 @@ export const GuestPortalSettingsTab: React.FC = () => {
     setPortalSettings(updated);
     setSaving(true);
     try {
-      await guestAuth.savePortalSettings(updated, activeScopeId);
+      const saved = await guestAuth.savePortalSettings(updated, activeScopeId);
       await refreshSettings();
-      toast.success(`Guest portal settings updated for ${activeScopeName}.`);
+      setPortalSettings(saved);
+      setLastSavedTime(format(new Date(), 'hh:mm:ss a'));
+      toast.success(`Guest portal settings updated & saved to database.`);
     } catch (e) {
       toast.error('Failed to save settings');
     } finally {
@@ -256,12 +264,29 @@ export const GuestPortalSettingsTab: React.FC = () => {
     setPortalSettings(updated);
     setSaving(true);
     try {
-      await guestAuth.savePortalSettings(updated, activeScopeId);
+      const saved = await guestAuth.savePortalSettings(updated, activeScopeId);
       await refreshSettings();
+      setPortalSettings(saved);
+      setLastSavedTime(format(new Date(), 'hh:mm:ss a'));
       const meta = NAV_BUTTON_CONFIG_MAP[moved];
-      toast.success(`Moved "${meta.shortLabel}" ${direction === 'up' ? 'left / up' : 'right / down'}.`);
+      toast.success(`Moved "${meta.shortLabel}" ${direction === 'up' ? 'left / up' : 'right / down'} & saved to database.`);
     } catch (e) {
       toast.error('Failed to update navigation order');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleManualSaveNavOrder = async () => {
+    setSaving(true);
+    try {
+      const saved = await guestAuth.savePortalSettings({ nav_button_order: navOrder }, activeScopeId);
+      await refreshSettings();
+      setPortalSettings(saved);
+      setLastSavedTime(format(new Date(), 'hh:mm:ss a'));
+      toast.success(`Navigation order successfully saved to database for ${activeScopeName}!`);
+    } catch (e) {
+      toast.error('Failed to save navigation order to database');
     } finally {
       setSaving(false);
     }
@@ -272,9 +297,11 @@ export const GuestPortalSettingsTab: React.FC = () => {
     setPortalSettings(updated);
     setSaving(true);
     try {
-      await guestAuth.savePortalSettings(updated, activeScopeId);
+      const saved = await guestAuth.savePortalSettings(updated, activeScopeId);
       await refreshSettings();
-      toast.success(`Navigation order reset to default for ${activeScopeName}.`);
+      setPortalSettings(saved);
+      setLastSavedTime(format(new Date(), 'hh:mm:ss a'));
+      toast.success(`Navigation order reset to default & saved to database.`);
     } catch (e) {
       toast.error('Failed to reset navigation order');
     } finally {
@@ -731,19 +758,80 @@ export const GuestPortalSettingsTab: React.FC = () => {
             </p>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              onClick={handleManualSaveNavOrder}
+              isLoading={saving}
+              className="h-10 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-black text-xs uppercase tracking-wider flex items-center gap-1.5 shadow-md active:scale-95 cursor-pointer"
+              title="Commit and save navigation order to database"
+            >
+              <Save className="w-3.5 h-3.5" />
+              Save Order to Database
+            </Button>
+
+            <button
+              type="button"
+              onClick={() => setShowSqlModal(!showSqlModal)}
+              className="h-10 px-3.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs uppercase tracking-wider flex items-center gap-1.5 border border-slate-200 transition-all active:scale-95 cursor-pointer"
+              title="View SQL migration script"
+            >
+              <FileCode className="w-3.5 h-3.5 text-indigo-600" />
+              SQL Schema
+            </button>
+
             <button
               type="button"
               onClick={handleResetNavOrder}
               disabled={saving}
-              className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-[10px] uppercase tracking-wider flex items-center gap-1.5 transition-all active:scale-95 border border-slate-200/80 cursor-pointer"
+              className="h-10 px-3.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-[10px] uppercase tracking-wider flex items-center gap-1.5 transition-all active:scale-95 border border-slate-200 cursor-pointer"
               title="Reset buttons to default order"
             >
               <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
-              Reset Default Order
+              Reset Default
             </button>
           </div>
         </div>
+
+        {/* OPTIONAL SQL MIGRATION CODE ACCORDION */}
+        {showSqlModal && (
+          <div className="p-6 rounded-3xl bg-slate-900 border border-slate-800 text-white space-y-4 animate-in fade-in">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <Database className="w-5 h-5 text-indigo-400" />
+                <h4 className="text-sm font-black uppercase tracking-wider text-white">
+                  Database Persistence &amp; Optional SQL Code
+                </h4>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  const sql = `ALTER TABLE company_settings\nADD COLUMN IF NOT EXISTS guest_portal_settings JSONB DEFAULT '{}'::jsonb,\nADD COLUMN IF NOT EXISTS guest_portal_settings_map JSONB DEFAULT '{}'::jsonb;\n\nUPDATE company_settings\nSET\n  guest_portal_settings = COALESCE(guest_portal_settings, staff_portal_settings->'guest_portal_settings', '{}'::jsonb),\n  guest_portal_settings_map = COALESCE(guest_portal_settings_map, staff_portal_settings->'guest_portal_settings_map', '{}'::jsonb)\nWHERE id = 'global';`;
+                  navigator.clipboard.writeText(sql);
+                  toast.success('SQL migration copied to clipboard!');
+                }}
+                className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs flex items-center gap-1.5 transition-all"
+              >
+                <Copy className="w-3.5 h-3.5" /> Copy SQL Script
+              </button>
+            </div>
+            <p className="text-xs text-slate-300 leading-relaxed font-medium">
+              The application already persists your guest portal navigation order directly to the <span className="text-amber-300 font-mono">company_settings</span> table in Supabase. If you wish to provision dedicated columns in Postgres for direct SQL querying, execute the statement below in your <span className="text-indigo-300 font-bold">Supabase SQL Editor</span>:
+            </p>
+            <pre className="p-4 rounded-2xl bg-black/60 border border-slate-800 text-indigo-300 font-mono text-[11px] overflow-x-auto leading-relaxed">
+{`-- Optional SQL Migration for Supabase
+ALTER TABLE company_settings 
+ADD COLUMN IF NOT EXISTS guest_portal_settings JSONB DEFAULT '{}'::jsonb,
+ADD COLUMN IF NOT EXISTS guest_portal_settings_map JSONB DEFAULT '{}'::jsonb;
+
+UPDATE company_settings 
+SET 
+  guest_portal_settings = COALESCE(guest_portal_settings, staff_portal_settings->'guest_portal_settings', '{}'::jsonb),
+  guest_portal_settings_map = COALESCE(guest_portal_settings_map, staff_portal_settings->'guest_portal_settings_map', '{}'::jsonb)
+WHERE id = 'global';`}
+            </pre>
+          </div>
+        )}
 
         <Card className="rounded-[2.5rem] border-slate-200/80 shadow-sm bg-white overflow-hidden p-6 sm:p-8 space-y-6">
           <div className="p-4 rounded-2xl bg-indigo-50/70 border border-indigo-100 text-xs text-indigo-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -760,9 +848,15 @@ export const GuestPortalSettingsTab: React.FC = () => {
                 </p>
               </div>
             </div>
-            <div className="flex items-center gap-1 text-[10px] font-black uppercase tracking-wider text-indigo-700 bg-white/80 px-3 py-1.5 rounded-xl border border-indigo-200 self-start sm:self-auto shrink-0">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-              Auto-saved for {activeScopeName}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="flex items-center gap-1 text-[10px] font-black uppercase tracking-wider text-indigo-700 bg-white/80 px-3 py-1.5 rounded-xl border border-indigo-200 shrink-0">
+                <Database className="w-3.5 h-3.5 text-indigo-600" />
+                <span>Scope: {activeScopeName}</span>
+              </div>
+              <div className="flex items-center gap-1 text-[10px] font-black uppercase tracking-wider text-emerald-700 bg-emerald-50 px-3 py-1.5 rounded-xl border border-emerald-200 shrink-0">
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                <span>{lastSavedTime ? `Saved: ${lastSavedTime}` : 'Database Live'}</span>
+              </div>
             </div>
           </div>
 

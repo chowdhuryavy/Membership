@@ -2614,11 +2614,11 @@ class DatabaseService {
         ...settings, 
         session_timeout_minutes: timeout,
         staff_portal_settings: staffPortalSettings,
+        guest_portal_settings: guestPortalSettings,
+        guest_portal_settings_map: guestPortalSettingsMap,
         id: 'global' 
       };
-      // Strip client-only or dynamic metadata fields not present in Supabase table
-      delete payload.guest_portal_settings;
-      delete payload.guest_portal_settings_map;
+      // Strip guest_accounts (managed separately)
       delete payload.guest_accounts;
 
       let attempts = 0;
