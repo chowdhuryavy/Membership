@@ -11,7 +11,8 @@ import {
   MassageBooking,
   EntranceFeeConsent,
   Sale,
-  GuestPortalSettings
+  GuestPortalSettings,
+  GuestPortalNavButtonId
 } from '../types';
 import { useSettings } from '../contexts/SettingsContext';
 import { GuestLoadingScreen } from '../components/GuestLoadingScreen';
@@ -315,6 +316,41 @@ export default function GuestPortal() {
       return false;
     });
   }, [therapistsList, matchedOutlet, matchedProperty, account, member]);
+
+  // Navigation button order configured by admin in Guest Portal Settings
+  const orderedNavButtons = useMemo<GuestPortalNavButtonId[]>(() => {
+    const baseOrder = portalSettings?.nav_button_order && Array.isArray(portalSettings.nav_button_order) && portalSettings.nav_button_order.length > 0
+      ? portalSettings.nav_button_order
+      : (['pt', 'spa', 'card', 'passes', 'retail', 'finances', 'profile'] as GuestPortalNavButtonId[]);
+
+    const allIds: GuestPortalNavButtonId[] = ['pt', 'spa', 'card', 'passes', 'retail', 'finances', 'profile'];
+    const unique = Array.from(new Set(baseOrder.filter(id => allIds.includes(id))));
+    allIds.forEach(id => {
+      if (!unique.includes(id)) unique.push(id);
+    });
+
+    return unique.filter(id => {
+      if (!portalSettings) return true;
+      switch (id) {
+        case 'card':
+          return portalSettings.allow_digital_card !== false;
+        case 'pt':
+          return portalSettings.allow_pt_tracking !== false;
+        case 'spa':
+          return portalSettings.allow_massage_bookings !== false;
+        case 'passes':
+          return portalSettings.allow_entrance_passes !== false;
+        case 'retail':
+          return portalSettings.allow_shop !== false;
+        case 'finances':
+          return portalSettings.allow_financial_history !== false;
+        case 'profile':
+          return portalSettings.allow_profile_editing !== false;
+        default:
+          return true;
+      }
+    });
+  }, [portalSettings]);
 
   // Automatically select the first available treatment once loaded
   useEffect(() => {
@@ -1828,116 +1864,151 @@ export default function GuestPortal() {
         )}
       </main>
 
-      {/* BOTTOM MOBILE NAVIGATION BAR WITH RE-ALIGNED CENTER 'P' BUTTON */}
+      {/* BOTTOM MOBILE NAVIGATION BAR WITH RE-ORDERABLE BUTTONS & SIGNATURE CENTER 'P' BUTTON */}
       <nav className="fixed bottom-0 left-0 right-0 max-w-lg mx-auto bg-slate-900/95 backdrop-blur-xl border-t border-white/10 px-2 py-2 z-40 flex items-center justify-between shadow-2xl">
-        {portalSettings?.allow_pt_tracking && (
-          <button
-            type="button"
-            onClick={() => handleTabSwitch('pt')}
-            className={`flex-1 flex flex-col items-center justify-center gap-1 py-1 rounded-2xl transition-all ${
-              activeTab === 'pt' ? 'text-amber-400 font-black' : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Dumbbell className="w-5 h-5" />
-            <span className="text-[9px] uppercase tracking-wider">PT</span>
-          </button>
-        )}
+        {orderedNavButtons.map((buttonId) => {
+          if (buttonId === 'card') {
+            return (
+              <div key="card" className="flex-1 flex items-center justify-center relative h-10">
+                <button
+                  type="button"
+                  onClick={() => handleTabSwitch('card')}
+                  aria-label="Digital Pass & Membership Card"
+                  className="absolute -top-6 flex items-center justify-center group focus:outline-none transition-transform active:scale-95 z-20"
+                >
+                  {/* Glowing Ambient Halo */}
+                  <div
+                    className={`absolute -inset-1.5 rounded-full blur-md transition-all duration-500 ${
+                      activeTab === 'card'
+                        ? 'bg-amber-400/80 animate-pulse'
+                        : 'bg-amber-500/25 group-hover:bg-amber-400/50'
+                    }`}
+                  />
 
-        {portalSettings?.allow_massage_bookings && (
-          <button
-            type="button"
-            onClick={() => handleTabSwitch('spa')}
-            className={`flex-1 flex flex-col items-center justify-center gap-1 py-1 rounded-2xl transition-all ${
-              activeTab === 'spa' ? 'text-amber-400 font-black' : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Sparkles className="w-5 h-5" />
-            <span className="text-[9px] uppercase tracking-wider">Spa</span>
-          </button>
-        )}
+                  {/* Golden Pulse Ping Ring */}
+                  <div className="absolute inset-0 rounded-full border border-amber-400/60 animate-ping opacity-30 pointer-events-none" />
 
-        {/* CENTER ELEVATED "P" PERFECTION DIGITAL PASS BUTTON (Realigned, Zero Text) */}
-        <div className="flex-1 flex items-center justify-center relative h-10">
-          <button
-            type="button"
-            onClick={() => handleTabSwitch('card')}
-            aria-label="Digital Pass & Membership Card"
-            className="absolute -top-6 flex items-center justify-center group focus:outline-none transition-transform active:scale-95 z-20"
-          >
-            {/* Glowing Ambient Halo */}
-            <div className={`absolute -inset-1.5 rounded-full blur-md transition-all duration-500 ${
-              activeTab === 'card' 
-                ? 'bg-amber-400/80 animate-pulse' 
-                : 'bg-amber-500/25 group-hover:bg-amber-400/50'
-            }`} />
+                  {/* Golden Circle Emblem */}
+                  <div
+                    className={`relative w-14 h-14 rounded-full p-[2.5px] bg-gradient-to-tr from-amber-600 via-amber-300 to-yellow-100 shadow-[0_0_20px_rgba(245,158,11,0.7)] transition-all duration-300 ${
+                      activeTab === 'card'
+                        ? 'scale-105 shadow-[0_0_30px_rgba(245,158,11,1)] ring-2 ring-amber-400/90 ring-offset-2 ring-offset-slate-900'
+                        : 'group-hover:scale-105'
+                    }`}
+                  >
+                    <div className="w-full h-full rounded-full bg-gradient-to-b from-slate-900 via-amber-950/80 to-black flex items-center justify-center border border-amber-400/50 relative overflow-hidden">
+                      {/* Shimmer light effect */}
+                      <div className="absolute -top-3 -left-3 w-7 h-7 bg-white/20 rounded-full blur-sm pointer-events-none animate-pulse" />
 
-            {/* Golden Pulse Ping Ring */}
-            <div className="absolute inset-0 rounded-full border border-amber-400/60 animate-ping opacity-30 pointer-events-none" />
-
-            {/* Golden Circle Emblem */}
-            <div className={`relative w-14 h-14 rounded-full p-[2.5px] bg-gradient-to-tr from-amber-600 via-amber-300 to-yellow-100 shadow-[0_0_20px_rgba(245,158,11,0.7)] transition-all duration-300 ${
-              activeTab === 'card' 
-                ? 'scale-105 shadow-[0_0_30px_rgba(245,158,11,1)] ring-2 ring-amber-400/90 ring-offset-2 ring-offset-slate-900' 
-                : 'group-hover:scale-105'
-            }`}>
-              <div className="w-full h-full rounded-full bg-gradient-to-b from-slate-900 via-amber-950/80 to-black flex items-center justify-center border border-amber-400/50 relative overflow-hidden">
-                {/* Shimmer light effect */}
-                <div className="absolute -top-3 -left-3 w-7 h-7 bg-white/20 rounded-full blur-sm pointer-events-none animate-pulse" />
-                
-                {/* Iconic Golden 'P' with Animation */}
-                <span className="font-serif font-black text-2xl text-transparent bg-clip-text bg-gradient-to-b from-amber-100 via-amber-300 to-yellow-500 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] select-none transform transition-transform group-hover:scale-110">
-                  P
-                </span>
+                      {/* Iconic Golden 'P' with Animation */}
+                      <span className="font-serif font-black text-2xl text-transparent bg-clip-text bg-gradient-to-b from-amber-100 via-amber-300 to-yellow-500 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] select-none transform transition-transform group-hover:scale-110">
+                        P
+                      </span>
+                    </div>
+                  </div>
+                </button>
               </div>
-            </div>
-          </button>
-        </div>
+            );
+          }
 
-        {portalSettings?.allow_entrance_passes && (
-          <button
-            type="button"
-            onClick={() => handleTabSwitch('passes')}
-            className={`flex-1 flex flex-col items-center justify-center gap-1 py-1 rounded-2xl transition-all ${
-              activeTab === 'passes' ? 'text-amber-400 font-black' : 'text-slate-400 hover:text-slate-200'
-            }`}
-          >
-            <Ticket className="w-5 h-5" />
-            <span className="text-[9px] uppercase tracking-wider">Passes</span>
-          </button>
-        )}
+          if (buttonId === 'pt') {
+            return (
+              <button
+                key="pt"
+                type="button"
+                onClick={() => handleTabSwitch('pt')}
+                className={`flex-1 flex flex-col items-center justify-center gap-1 py-1 rounded-2xl transition-all ${
+                  activeTab === 'pt' ? 'text-amber-400 font-black' : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Dumbbell className="w-5 h-5" />
+                <span className="text-[9px] uppercase tracking-wider">PT</span>
+              </button>
+            );
+          }
 
-        <button
-          type="button"
-          onClick={() => handleTabSwitch('retail')}
-          className={`flex-1 flex flex-col items-center justify-center gap-1 py-1 rounded-2xl transition-all ${
-            activeTab === 'retail' ? 'text-amber-400 font-black' : 'text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          <ShoppingBag className="w-5 h-5" />
-          <span className="text-[9px] uppercase tracking-wider">Shop</span>
-        </button>
+          if (buttonId === 'spa') {
+            return (
+              <button
+                key="spa"
+                type="button"
+                onClick={() => handleTabSwitch('spa')}
+                className={`flex-1 flex flex-col items-center justify-center gap-1 py-1 rounded-2xl transition-all ${
+                  activeTab === 'spa' ? 'text-amber-400 font-black' : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Sparkles className="w-5 h-5" />
+                <span className="text-[9px] uppercase tracking-wider">Spa</span>
+              </button>
+            );
+          }
 
-        <button
-          type="button"
-          onClick={() => handleTabSwitch('finances')}
-          className={`flex-1 flex flex-col items-center justify-center gap-1 py-1 rounded-2xl transition-all ${
-            activeTab === 'finances' ? 'text-amber-400 font-black' : 'text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          <Clock className="w-5 h-5" />
-          <span className="text-[9px] uppercase tracking-wider">History</span>
-        </button>
+          if (buttonId === 'passes') {
+            return (
+              <button
+                key="passes"
+                type="button"
+                onClick={() => handleTabSwitch('passes')}
+                className={`flex-1 flex flex-col items-center justify-center gap-1 py-1 rounded-2xl transition-all ${
+                  activeTab === 'passes' ? 'text-amber-400 font-black' : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Ticket className="w-5 h-5" />
+                <span className="text-[9px] uppercase tracking-wider">Passes</span>
+              </button>
+            );
+          }
 
-        <button
-          type="button"
-          onClick={() => handleTabSwitch('profile')}
-          className={`flex-1 flex flex-col items-center justify-center gap-1 py-1 rounded-2xl transition-all ${
-            activeTab === 'profile' ? 'text-amber-400 font-black' : 'text-slate-400 hover:text-slate-200'
-          }`}
-        >
-          <User className="w-5 h-5" />
-          <span className="text-[9px] uppercase tracking-wider">Profile</span>
-        </button>
+          if (buttonId === 'retail') {
+            return (
+              <button
+                key="retail"
+                type="button"
+                onClick={() => handleTabSwitch('retail')}
+                className={`flex-1 flex flex-col items-center justify-center gap-1 py-1 rounded-2xl transition-all ${
+                  activeTab === 'retail' ? 'text-amber-400 font-black' : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <ShoppingBag className="w-5 h-5" />
+                <span className="text-[9px] uppercase tracking-wider">Shop</span>
+              </button>
+            );
+          }
+
+          if (buttonId === 'finances') {
+            return (
+              <button
+                key="finances"
+                type="button"
+                onClick={() => handleTabSwitch('finances')}
+                className={`flex-1 flex flex-col items-center justify-center gap-1 py-1 rounded-2xl transition-all ${
+                  activeTab === 'finances' ? 'text-amber-400 font-black' : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Clock className="w-5 h-5" />
+                <span className="text-[9px] uppercase tracking-wider">History</span>
+              </button>
+            );
+          }
+
+          if (buttonId === 'profile') {
+            return (
+              <button
+                key="profile"
+                type="button"
+                onClick={() => handleTabSwitch('profile')}
+                className={`flex-1 flex flex-col items-center justify-center gap-1 py-1 rounded-2xl transition-all ${
+                  activeTab === 'profile' ? 'text-amber-400 font-black' : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <User className="w-5 h-5" />
+                <span className="text-[9px] uppercase tracking-wider">Profile</span>
+              </button>
+            );
+          }
+
+          return null;
+        })}
       </nav>
 
       {/* FULLSCREEN QR MODAL */}

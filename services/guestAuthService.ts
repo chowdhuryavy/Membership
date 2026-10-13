@@ -1,4 +1,4 @@
-import { GuestAccount, GuestPortalSettings } from '../types';
+import { GuestAccount, GuestPortalSettings, GuestPortalNavButtonId } from '../types';
 import { db } from './mockSupabase';
 import { emailService } from './emailService';
 import { getDeviceSessionItem, setDeviceSessionItem, removeDeviceSessionItem } from './deviceStorage';
@@ -6,6 +6,16 @@ import { getDeviceSessionItem, setDeviceSessionItem, removeDeviceSessionItem } f
 const GUEST_ACCOUNTS_STORAGE_KEY = 'hcm_guest_accounts_store';
 const GUEST_SESSION_STORAGE_KEY = 'hcm_guest_session';
 const GUEST_PORTAL_SETTINGS_KEY = 'hcm_guest_portal_settings';
+
+export const DEFAULT_NAV_BUTTON_ORDER: GuestPortalNavButtonId[] = [
+  'pt',
+  'spa',
+  'card',
+  'passes',
+  'retail',
+  'finances',
+  'profile'
+];
 
 export const DEFAULT_GUEST_PORTAL_SETTINGS: GuestPortalSettings = {
   is_enabled: true,
@@ -21,7 +31,8 @@ export const DEFAULT_GUEST_PORTAL_SETTINGS: GuestPortalSettings = {
   show_therapist_name_to_guests: false,
   welcome_message: 'Welcome to your luxury wellness portal.',
   support_phone: '+60 3-1234 5678',
-  support_email: 'support@perfection.my'
+  support_email: 'support@perfection.my',
+  nav_button_order: DEFAULT_NAV_BUTTON_ORDER
 };
 
 /**

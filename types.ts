@@ -384,6 +384,8 @@ export interface CompanySettings {
   whatsapp_disabled_outlets?: string[];
 }
 
+export type GuestPortalNavButtonId = 'card' | 'pt' | 'spa' | 'passes' | 'retail' | 'finances' | 'profile';
+
 export interface GuestPortalSettings {
   is_enabled: boolean;
   allow_digital_card: boolean;
@@ -399,6 +401,7 @@ export interface GuestPortalSettings {
   welcome_message?: string;
   support_phone?: string;
   support_email?: string;
+  nav_button_order?: GuestPortalNavButtonId[];
 }
 
 export interface GuestAccount {

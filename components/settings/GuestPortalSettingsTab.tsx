@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { guestAuth, DEFAULT_GUEST_PORTAL_SETTINGS } from '../../services/guestAuthService';
+import { guestAuth, DEFAULT_GUEST_PORTAL_SETTINGS, DEFAULT_NAV_BUTTON_ORDER } from '../../services/guestAuthService';
 import { db } from '../../services/mockSupabase';
-import { GuestAccount, GuestPortalSettings } from '../../types';
+import { GuestAccount, GuestPortalSettings, GuestPortalNavButtonId } from '../../types';
 import { useSettings } from '../../contexts/SettingsContext';
 import { useAuth } from '../../contexts/AuthContext';
 import {
@@ -33,11 +33,143 @@ import {
   Trash2,
   UserPlus,
   Copy,
-  ShoppingBag
+  ShoppingBag,
+  Award,
+  ArrowUp,
+  ArrowDown,
+  ArrowUpDown,
+  RotateCcw,
+  SlidersHorizontal,
+  Layers,
+  GripVertical
 } from 'lucide-react';
 import { Button, Input, Card } from '../ui';
 import { format, parseISO } from 'date-fns';
 import toast from 'react-hot-toast';
+
+const NAV_BUTTON_CONFIG_MAP: Record<GuestPortalNavButtonId, {
+  id: GuestPortalNavButtonId;
+  label: string;
+  shortLabel: string;
+  settingKey: keyof GuestPortalSettings;
+  description: string;
+  icon: (cls?: string) => React.ReactNode;
+  tag: string;
+  colorClasses: {
+    bg: string;
+    text: string;
+    border: string;
+    badge: string;
+  };
+  isSignatureP?: boolean;
+}> = {
+  card: {
+    id: 'card',
+    label: "Digital Pass ('P' Emblem)",
+    shortLabel: 'Pass (P)',
+    settingKey: 'allow_digital_card',
+    description: 'Elevated golden "P" emblem, holographic VIP membership pass, turnstile barcode & Apple/Google Wallet pass.',
+    icon: (cls = 'w-5 h-5') => <Award className={cls} />,
+    tag: 'Signature Pass',
+    colorClasses: {
+      bg: 'bg-amber-50',
+      text: 'text-amber-700',
+      border: 'border-amber-200',
+      badge: 'bg-amber-100 text-amber-800 border-amber-300'
+    },
+    isSignatureP: true
+  },
+  pt: {
+    id: 'pt',
+    label: 'Personal Training (PT)',
+    shortLabel: 'PT',
+    settingKey: 'allow_pt_tracking',
+    description: 'Enables guests to track remaining personal training sessions, instructor assignments & workout history.',
+    icon: (cls = 'w-5 h-5') => <Dumbbell className={cls} />,
+    tag: 'Fitness',
+    colorClasses: {
+      bg: 'bg-blue-50',
+      text: 'text-blue-700',
+      border: 'border-blue-200',
+      badge: 'bg-blue-100 text-blue-800 border-blue-300'
+    }
+  },
+  spa: {
+    id: 'spa',
+    label: 'Spa & Wellness (Spa)',
+    shortLabel: 'Spa',
+    settingKey: 'allow_massage_bookings',
+    description: 'Displays spa treatments, therapy schedules, and lets guests book massage appointment slots.',
+    icon: (cls = 'w-5 h-5') => <Sparkles className={cls} />,
+    tag: 'Wellness',
+    colorClasses: {
+      bg: 'bg-purple-50',
+      text: 'text-purple-700',
+      border: 'border-purple-200',
+      badge: 'bg-purple-100 text-purple-800 border-purple-300'
+    }
+  },
+  passes: {
+    id: 'passes',
+    label: 'Day Passes & Pool (Passes)',
+    shortLabel: 'Passes',
+    settingKey: 'allow_entrance_passes',
+    description: 'Shows active entrance day fees (e.g. Ground Floor Pool, Gym entry) and signed digital liability waivers.',
+    icon: (cls = 'w-5 h-5') => <Ticket className={cls} />,
+    tag: 'Day Passes',
+    colorClasses: {
+      bg: 'bg-emerald-50',
+      text: 'text-emerald-700',
+      border: 'border-emerald-200',
+      badge: 'bg-emerald-100 text-emerald-800 border-emerald-300'
+    }
+  },
+  retail: {
+    id: 'retail',
+    label: 'Pro Shop & Retail (Shop)',
+    shortLabel: 'Shop',
+    settingKey: 'allow_shop',
+    description: 'Displays venue retail items, sports merchandise, nutritional supplements & allows pre-orders for pickup.',
+    icon: (cls = 'w-5 h-5') => <ShoppingBag className={cls} />,
+    tag: 'Pro Shop',
+    colorClasses: {
+      bg: 'bg-amber-50',
+      text: 'text-amber-700',
+      border: 'border-amber-200',
+      badge: 'bg-amber-100 text-amber-800 border-amber-300'
+    }
+  },
+  finances: {
+    id: 'finances',
+    label: 'Billing & Receipts (History)',
+    shortLabel: 'History',
+    settingKey: 'allow_financial_history',
+    description: 'Enables guests to review itemized purchase transactions, payment methods & view printable receipts.',
+    icon: (cls = 'w-5 h-5') => <Clock className={cls} />,
+    tag: 'Finances',
+    colorClasses: {
+      bg: 'bg-indigo-50',
+      text: 'text-indigo-700',
+      border: 'border-indigo-200',
+      badge: 'bg-indigo-100 text-indigo-800 border-indigo-300'
+    }
+  },
+  profile: {
+    id: 'profile',
+    label: 'Guest Profile & Security (Profile)',
+    shortLabel: 'Profile',
+    settingKey: 'allow_profile_editing',
+    description: 'Allows guests to edit phone numbers, emergency contact details and update their portal password.',
+    icon: (cls = 'w-5 h-5') => <User className={cls} />,
+    tag: 'Security',
+    colorClasses: {
+      bg: 'bg-teal-50',
+      text: 'text-teal-700',
+      border: 'border-teal-200',
+      badge: 'bg-teal-100 text-teal-800 border-teal-300'
+    }
+  }
+};
 
 export const GuestPortalSettingsTab: React.FC = () => {
   const { currentOutlet, currentProperty, settings, refreshSettings, outlets, properties } = useSettings();
@@ -94,6 +226,57 @@ export const GuestPortalSettingsTab: React.FC = () => {
       toast.success(`Guest portal settings updated for ${activeScopeName}.`);
     } catch (e) {
       toast.error('Failed to save settings');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const navOrder: GuestPortalNavButtonId[] = useMemo(() => {
+    const baseOrder = portalSettings.nav_button_order && Array.isArray(portalSettings.nav_button_order) && portalSettings.nav_button_order.length > 0
+      ? portalSettings.nav_button_order
+      : DEFAULT_NAV_BUTTON_ORDER;
+
+    const allIds: GuestPortalNavButtonId[] = ['pt', 'spa', 'card', 'passes', 'retail', 'finances', 'profile'];
+    const unique = Array.from(new Set(baseOrder.filter(id => allIds.includes(id))));
+    allIds.forEach(id => {
+      if (!unique.includes(id)) unique.push(id);
+    });
+    return unique;
+  }, [portalSettings.nav_button_order]);
+
+  const handleMoveNavButton = async (index: number, direction: 'up' | 'down') => {
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= navOrder.length) return;
+
+    const newOrder = [...navOrder];
+    const [moved] = newOrder.splice(index, 1);
+    newOrder.splice(targetIndex, 0, moved);
+
+    const updated = { ...portalSettings, nav_button_order: newOrder };
+    setPortalSettings(updated);
+    setSaving(true);
+    try {
+      await guestAuth.savePortalSettings(updated, activeScopeId);
+      await refreshSettings();
+      const meta = NAV_BUTTON_CONFIG_MAP[moved];
+      toast.success(`Moved "${meta.shortLabel}" ${direction === 'up' ? 'left / up' : 'right / down'}.`);
+    } catch (e) {
+      toast.error('Failed to update navigation order');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleResetNavOrder = async () => {
+    const updated = { ...portalSettings, nav_button_order: [...DEFAULT_NAV_BUTTON_ORDER] };
+    setPortalSettings(updated);
+    setSaving(true);
+    try {
+      await guestAuth.savePortalSettings(updated, activeScopeId);
+      await refreshSettings();
+      toast.success(`Navigation order reset to default for ${activeScopeName}.`);
+    } catch (e) {
+      toast.error('Failed to reset navigation order');
     } finally {
       setSaving(false);
     }
@@ -529,6 +712,225 @@ export const GuestPortalSettingsTab: React.FC = () => {
             </div>
           </div>
         </div>
+      </div>
+
+      {/* NAVIGATION BUTTON ORDER & REORDERING CONTROLS */}
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-1">
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="text-lg font-black uppercase text-slate-900 tracking-tight">
+                Navigation Button Order
+              </h3>
+              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-amber-50 text-amber-700 border border-amber-200">
+                Mobile Bottom Bar
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 font-medium mt-0.5">
+              Use arrows to reorder navigation buttons
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handleResetNavOrder}
+              disabled={saving}
+              className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-black text-[10px] uppercase tracking-wider flex items-center gap-1.5 transition-all active:scale-95 border border-slate-200/80 cursor-pointer"
+              title="Reset buttons to default order"
+            >
+              <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
+              Reset Default Order
+            </button>
+          </div>
+        </div>
+
+        <Card className="rounded-[2.5rem] border-slate-200/80 shadow-sm bg-white overflow-hidden p-6 sm:p-8 space-y-6">
+          <div className="p-4 rounded-2xl bg-indigo-50/70 border border-indigo-100 text-xs text-indigo-950 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-start sm:items-center gap-3">
+              <div className="p-2 rounded-xl bg-indigo-600 text-white shrink-0">
+                <SlidersHorizontal className="w-4 h-4" />
+              </div>
+              <div>
+                <p className="font-bold">
+                  Use arrows to reorder navigation buttons
+                </p>
+                <p className="text-indigo-700 text-[11px] mt-0.5">
+                  Click the <span className="font-bold">▲ Up</span> and <span className="font-bold">▼ Down</span> arrows to move buttons left or right on the mobile guest bar. All buttons can be enabled or hidden directly from this list.
+                </p>
+              </div>
+            </div>
+            <div className="flex items-center gap-1 text-[10px] font-black uppercase tracking-wider text-indigo-700 bg-white/80 px-3 py-1.5 rounded-xl border border-indigo-200 self-start sm:self-auto shrink-0">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+              Auto-saved for {activeScopeName}
+            </div>
+          </div>
+
+          {/* ORDERED BUTTONS LIST */}
+          <div className="space-y-3">
+            {navOrder.map((buttonId, index) => {
+              const meta = NAV_BUTTON_CONFIG_MAP[buttonId];
+              const isEnabled = portalSettings[meta.settingKey] !== false;
+              const isFirst = index === 0;
+              const isLast = index === navOrder.length - 1;
+
+              return (
+                <div
+                  key={buttonId}
+                  className={`p-4 rounded-2xl border transition-all flex flex-col sm:flex-row sm:items-center justify-between gap-4 ${
+                    isEnabled
+                      ? 'bg-slate-50/80 hover:bg-slate-50 border-slate-200/80 shadow-xs'
+                      : 'bg-slate-100/50 border-slate-200/50 opacity-60'
+                  }`}
+                >
+                  <div className="flex items-center gap-3.5 min-w-0">
+                    {/* ORDER BADGE */}
+                    <div className="flex flex-col items-center justify-center w-8 h-8 rounded-xl bg-white border border-slate-200 font-mono font-black text-xs text-slate-700 shadow-xs shrink-0">
+                      #{index + 1}
+                    </div>
+
+                    {/* BUTTON ICON */}
+                    <div
+                      className={`w-11 h-11 rounded-2xl flex items-center justify-center border shadow-xs shrink-0 ${meta.colorClasses.bg} ${meta.colorClasses.border}`}
+                    >
+                      {meta.icon('w-5 h-5')}
+                    </div>
+
+                    {/* DETAILS */}
+                    <div className="min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h4 className="text-sm font-black text-slate-900 uppercase tracking-tight">
+                          {meta.label}
+                        </h4>
+                        <span
+                          className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full border ${meta.colorClasses.badge}`}
+                        >
+                          {meta.tag}
+                        </span>
+                        {meta.isSignatureP && (
+                          <span className="text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-full bg-amber-500 text-slate-950 font-bold shadow-xs">
+                            Center 'P' Emblem
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-500 font-medium truncate mt-0.5 max-w-xl">
+                        {meta.description}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* CONTROLS: TOGGLE & ARROWS */}
+                  <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-200/60">
+                    {/* VISIBILITY TOGGLE */}
+                    <div className="flex items-center gap-2 mr-2">
+                      <button
+                        type="button"
+                        onClick={() => handleToggleSetting(meta.settingKey)}
+                        className="text-2xl transition-transform active:scale-95 cursor-pointer"
+                        title={isEnabled ? 'Click to hide button from guest portal' : 'Click to show button in guest portal'}
+                      >
+                        {isEnabled ? (
+                          <ToggleRight className="w-8 h-8 text-indigo-600" />
+                        ) : (
+                          <ToggleLeft className="w-8 h-8 text-slate-300" />
+                        )}
+                      </button>
+                      <span className={`text-[10px] font-black uppercase tracking-wider w-16 ${isEnabled ? 'text-emerald-600' : 'text-slate-400'}`}>
+                        {isEnabled ? 'Enabled' : 'Hidden'}
+                      </span>
+                    </div>
+
+                    {/* ARROWS TO REORDER */}
+                    <div className="flex items-center gap-1.5 bg-white p-1 rounded-xl border border-slate-200 shadow-xs">
+                      <button
+                        type="button"
+                        onClick={() => handleMoveNavButton(index, 'up')}
+                        disabled={isFirst || saving}
+                        className={`p-2 rounded-lg transition-all flex items-center gap-1 font-bold text-xs ${
+                          isFirst
+                            ? 'text-slate-200 cursor-not-allowed'
+                            : 'text-slate-700 hover:text-indigo-600 hover:bg-slate-100 active:scale-95 cursor-pointer'
+                        }`}
+                        title={isFirst ? 'Already first in sequence' : 'Move button up / left'}
+                      >
+                        <ArrowUp className="w-4 h-4" />
+                        <span className="text-[10px] uppercase font-black hidden md:inline">Up</span>
+                      </button>
+
+                      <div className="w-px h-5 bg-slate-200" />
+
+                      <button
+                        type="button"
+                        onClick={() => handleMoveNavButton(index, 'down')}
+                        disabled={isLast || saving}
+                        className={`p-2 rounded-lg transition-all flex items-center gap-1 font-bold text-xs ${
+                          isLast
+                            ? 'text-slate-200 cursor-not-allowed'
+                            : 'text-slate-700 hover:text-indigo-600 hover:bg-slate-100 active:scale-95 cursor-pointer'
+                        }`}
+                        title={isLast ? 'Already last in sequence' : 'Move button down / right'}
+                      >
+                        <ArrowDown className="w-4 h-4" />
+                        <span className="text-[10px] uppercase font-black hidden md:inline">Down</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* LIVE MOBILE PREVIEW STRIP */}
+          <div className="pt-4 border-t border-slate-100 space-y-3">
+            <div className="flex items-center justify-between">
+              <div>
+                <h4 className="text-xs font-black uppercase tracking-wider text-slate-700">
+                  Live Preview: Mobile Bottom Navigation Bar
+                </h4>
+                <p className="text-[11px] text-slate-400 font-medium">
+                  Showing how enabled buttons will appear in order on guest phones
+                </p>
+              </div>
+              <span className="text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+                {navOrder.filter(id => portalSettings[NAV_BUTTON_CONFIG_MAP[id].settingKey] !== false).length} Active Buttons
+              </span>
+            </div>
+
+            {/* PREVIEW CONTAINER */}
+            <div className="bg-slate-950 p-3 sm:p-4 rounded-3xl border border-slate-800 shadow-xl max-w-xl mx-auto">
+              <div className="flex items-center justify-around gap-1">
+                {navOrder
+                  .filter(id => portalSettings[NAV_BUTTON_CONFIG_MAP[id].settingKey] !== false)
+                  .map(id => {
+                    const meta = NAV_BUTTON_CONFIG_MAP[id];
+                    if (id === 'card') {
+                      return (
+                        <div key={id} className="flex flex-col items-center justify-center px-2 py-1 relative">
+                          <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-amber-600 via-amber-300 to-yellow-100 p-0.5 shadow-lg shadow-amber-500/20 -mt-3 ring-2 ring-amber-400/80">
+                            <div className="w-full h-full rounded-full bg-slate-900 flex items-center justify-center text-amber-300 font-serif font-black text-sm">
+                              P
+                            </div>
+                          </div>
+                          <span className="text-[8px] font-black text-amber-300 uppercase tracking-widest mt-1">
+                            Pass
+                          </span>
+                        </div>
+                      );
+                    }
+
+                    return (
+                      <div key={id} className="flex flex-col items-center justify-center px-2 py-1 text-slate-400 hover:text-slate-200">
+                        {meta.icon('w-4 h-4')}
+                        <span className="text-[8px] font-bold uppercase tracking-wider mt-1">
+                          {meta.shortLabel}
+                        </span>
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+          </div>
+        </Card>
       </div>
 
       {/* PORTAL SUPPORT & DIRECTIVE CONFIGURATION */}
