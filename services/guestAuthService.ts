@@ -7,6 +7,8 @@ const GUEST_ACCOUNTS_STORAGE_KEY = 'hcm_guest_accounts_store';
 const GUEST_SESSION_STORAGE_KEY = 'hcm_guest_session';
 const GUEST_PORTAL_SETTINGS_KEY = 'hcm_guest_portal_settings';
 
+export const DEFAULT_NAV_BUTTON_ORDER: string[] = ['pt', 'spa', 'passes', 'retail', 'finances', 'profile'];
+
 export const DEFAULT_GUEST_PORTAL_SETTINGS: GuestPortalSettings = {
   is_enabled: true,
   allow_digital_card: true,
@@ -22,7 +24,8 @@ export const DEFAULT_GUEST_PORTAL_SETTINGS: GuestPortalSettings = {
   welcome_message: 'Welcome to your luxury wellness portal.',
   support_phone: '+60 3-1234 5678',
   support_email: 'support@perfection.my',
-  nav_bar_position: 'left'
+  nav_bar_position: 'left',
+  nav_button_order: DEFAULT_NAV_BUTTON_ORDER
 };
 
 /**
@@ -72,7 +75,7 @@ export class GuestAuthService {
         return { ...DEFAULT_GUEST_PORTAL_SETTINGS, ...companySettings.guest_portal_settings };
       }
       if (typeof localStorage !== 'undefined') {
-        const local = localStorage.getItem(key) || localStorage.getItem(GUEST_PORTAL_SETTINGS_KEY);
+        const local = (scopeId ? localStorage.getItem(key) : null) || localStorage.getItem(GUEST_PORTAL_SETTINGS_KEY);
         if (local) {
           return { ...DEFAULT_GUEST_PORTAL_SETTINGS, ...JSON.parse(local) };
         }
@@ -90,6 +93,7 @@ export class GuestAuthService {
     try {
       if (typeof localStorage !== 'undefined') {
         localStorage.setItem(key, JSON.stringify(updated));
+        localStorage.setItem(GUEST_PORTAL_SETTINGS_KEY, JSON.stringify(updated));
       }
       const companySettings = await db.getSettings().catch(() => null);
       if (companySettings) {
@@ -97,9 +101,12 @@ export class GuestAuthService {
         const updatedMap = scopeId ? { ...existingMap, [scopeId]: updated } : existingMap;
         await db.updateSettings({
           ...companySettings,
-          guest_portal_settings: scopeId ? (companySettings.guest_portal_settings || updated) : updated,
+          guest_portal_settings: updated,
           guest_portal_settings_map: updatedMap
         });
+      }
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('hcm_guest_portal_settings_updated', { detail: updated }));
       }
     } catch (e) {
       console.error('[GuestAuth] Error saving portal settings:', e);

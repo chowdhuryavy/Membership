@@ -1856,11 +1856,8 @@ export default function GuestPortal() {
           </button>
         )}
 
-        {/* Spacer to make room for absolute-positioned P button */}
-        <div className="w-16"></div>
-
         {/* CENTER ELEVATED "P" PERFECTION DIGITAL PASS BUTTON (Realigned, Zero Text) */}
-        <div className="absolute left-1/2 -translate-x-1/2 -top-6 z-40 h-10">
+        <div className="absolute left-1/2 -translate-x-1/2 -top-6 z-40 h-10 w-14">
           <button
             type="button"
             onClick={() => handleTabSwitch('card')}
