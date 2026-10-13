@@ -411,13 +411,17 @@ export default function GuestPortal() {
       const phoneClean = (session.phone || '').replace(/\D/g, '');
 
       // Match all member records for this guest across all properties and facilities
-      const matchedMembers = allMembers.filter((m: any) => {
-        if (m.status === 'Cancelled' || m.status === 'Deleted') return false;
+      const allGuestMembers = allMembers.filter((m: any) => {
+        if (m.status === 'Deleted') return false;
+        if (session.member_id && m.id === session.member_id) return true;
+        if (session.id && (m.id === session.id || m.guest_id === session.id)) return true;
         if (m.email && m.email.toLowerCase() === emailLower) return true;
         if (phoneClean && m.phone && m.phone.replace(/\D/g, '') === phoneClean) return true;
-        if (m.guest_name && m.guest_name.toLowerCase() === session.name.toLowerCase()) return true;
+        if (m.guest_name && session.name && m.guest_name.toLowerCase().trim() === session.name.toLowerCase().trim()) return true;
         return false;
       });
+
+      const matchedMembers = allGuestMembers.filter((m: any) => m.status !== 'Cancelled');
 
       // Sort newest created memberships first
       matchedMembers.sort((a: any, b: any) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
@@ -486,8 +490,8 @@ export default function GuestPortal() {
 
       // Match Sales transactions
       const sessionNameClean = (session.name || '').trim().toLowerCase();
-      const matchedMemberNumbers = new Set(matchedMembers.map(m => (m.membership_number || '').trim().toLowerCase()).filter(Boolean));
-      const matchedMemberIds = new Set(matchedMembers.map(m => m.id));
+      const matchedMemberNumbers = new Set(allGuestMembers.map(m => (m.membership_number || '').trim().toLowerCase()).filter(Boolean));
+      const matchedMemberIds = new Set(allGuestMembers.map(m => m.id));
       const matchedPtMemberIds = new Set(matchedPT.map(p => p.id));
       const matchedBookingIds = new Set(matchedBookings.map(b => b.id));
       const consentSaleIds = new Set(matchedConsents.map(c => c.sale_id).filter(Boolean));
@@ -520,6 +524,122 @@ export default function GuestPortal() {
         }
 
         return false;
+      });
+
+      // UNIFIED HISTORY SYNTHESIS: Ensure all purchased memberships, entrance passes,
+      // PT packages, and spa treatments appear in the guest's history with official digital receipts!
+      allGuestMembers.forEach((m: any) => {
+        const isAlreadyRecorded = matchedSales.some((s: any) => 
+          s.member_id === m.id || 
+          (s.id && s.id === m.id) || 
+          (m.membership_number && s.remarks && s.remarks.includes(m.membership_number))
+        );
+        if (!isAlreadyRecorded) {
+          const netAmt = Number(m.net_amount ?? m.actual_rate ?? 0);
+          const discAmt = Number(m.discount ?? 0);
+          const grossAmt = Number(m.original_net_amount ?? (netAmt + discAmt));
+          matchedSales.push({
+            id: `MEM-${m.membership_number || m.id}`,
+            outlet_id: m.outlet_id || session.outlet_id || '',
+            property_id: m.property_id || session.property_id || '',
+            guest_id: m.id || session.id || '',
+            member_id: m.id,
+            guest_name: m.guest_name || session.name,
+            item_name: `${m.category_name || m.category_id || 'Membership Tier'} (${m.package_type || 'Single'} - ${m.membership_type || 'Annual'})`,
+            category: 'Membership',
+            quantity: 1,
+            unit_price: grossAmt || netAmt,
+            discount_amount: discAmt,
+            discount_reason: discAmt > 0 ? 'Member Enrollment Discount' : undefined,
+            net_amount: netAmt,
+            gross_amount: grossAmt,
+            payment_method: m.check_no ? `Reference / Check: ${m.check_no}` : 'Verified Agreement',
+            created_at: m.created_at || (m.start_date ? `${m.start_date}T09:00:00` : new Date().toISOString()),
+            remarks: `Membership Card #${m.membership_number} • Status: ${m.status} • Valid: ${m.start_date || 'N/A'} to ${m.current_end_date || 'N/A'}`
+          } as any);
+        }
+      });
+
+      matchedConsents.forEach((c: any) => {
+        const isAlreadyRecorded = matchedSales.some((s: any) => 
+          (s.id && (s.id === c.sale_id || s.id === c.id)) ||
+          (c.reference_number && s.remarks && s.remarks.includes(c.reference_number))
+        );
+        if (!isAlreadyRecorded) {
+          const fee = Number(c.fee_amount ?? (c as any).amount ?? 0);
+          matchedSales.push({
+            id: `PASS-${(c.reference_number || c.id).slice(0, 12)}`,
+            outlet_id: c.outlet_id || session.outlet_id || '',
+            property_id: session.property_id || '',
+            guest_id: session.id || '',
+            guest_name: c.guest_name || session.name,
+            item_name: c.item_name || 'Day Pass & Facility Access',
+            category: 'Entrance Fee',
+            quantity: 1,
+            unit_price: fee,
+            discount_amount: 0,
+            net_amount: fee,
+            gross_amount: fee,
+            payment_method: (c as any).payment_method || 'Digital Pass',
+            created_at: c.created_at || new Date().toISOString(),
+            remarks: `Facility Entrance Pass #${(c.reference_number || c.id).slice(0, 8).toUpperCase()}`
+          } as any);
+        }
+      });
+
+      matchedPT.forEach((pt: any) => {
+        const isAlreadyRecorded = matchedSales.some((s: any) => 
+          s.guest_id === pt.id || 
+          (s.category === 'Personal Training' && s.guest_name === pt.guest_name)
+        );
+        if (!isAlreadyRecorded) {
+          const fee = Number((pt as any).net_amount ?? (pt as any).actual_rate ?? (pt as any).total_amount ?? 0);
+          matchedSales.push({
+            id: `PT-${(pt.membership_number || pt.id).slice(0, 12)}`,
+            outlet_id: pt.outlet_id || session.outlet_id || '',
+            property_id: pt.property_id || session.property_id || '',
+            guest_id: pt.id || session.id || '',
+            guest_name: pt.guest_name || session.name,
+            item_name: `${(pt as any).package_type || 'Personal Training'} (${pt.total_sessions} Sessions)`,
+            category: 'Personal Training',
+            quantity: pt.total_sessions || 1,
+            unit_price: fee > 0 && pt.total_sessions ? Math.round(fee / pt.total_sessions) : fee,
+            discount_amount: 0,
+            net_amount: fee,
+            gross_amount: fee,
+            payment_method: 'Enrolled Package',
+            created_at: pt.created_at || new Date().toISOString(),
+            remarks: `PT Training Package • ${pt.total_sessions} Sessions Allocated`
+          } as any);
+        }
+      });
+
+      matchedBookings.forEach((b: any) => {
+        const isAlreadyRecorded = matchedSales.some((s: any) => 
+          s.booking_id === b.id || 
+          (s.id && s.id === b.id)
+        );
+        if (!isAlreadyRecorded) {
+          const fee = Number(b.price ?? (b as any).net_amount ?? (b as any).amount ?? 0);
+          matchedSales.push({
+            id: `SPA-${b.id.slice(0, 12)}`,
+            outlet_id: b.outlet_id || session.outlet_id || '',
+            property_id: b.property_id || session.property_id || '',
+            guest_id: b.guest_id || session.id || '',
+            booking_id: b.id,
+            guest_name: b.guest_name || session.name,
+            item_name: (b as any).massage_type_name || (b as any).treatment_name || 'Spa / Massage Treatment',
+            category: 'Massage',
+            quantity: 1,
+            unit_price: fee,
+            discount_amount: 0,
+            net_amount: fee,
+            gross_amount: fee,
+            payment_method: (b as any).payment_method || 'Spa Booking',
+            created_at: b.created_at || (b.date ? `${b.date}T${b.start_time || '00:00'}:00` : new Date().toISOString()),
+            remarks: `Appointment: ${b.date || ''} ${b.start_time || ''} • Status: ${b.status || 'Confirmed'}`
+          } as any);
+        }
       });
 
       // Sort sales newest first
@@ -787,7 +907,7 @@ export default function GuestPortal() {
 
   const handleDeclineProposal = (b: MassageBooking) => {
     handleOpenEditBooking(b);
-    toast.info('Please select your preferred alternative slot, or choose Cancel.');
+    toast('Please select your preferred alternative slot, or choose Cancel.', { icon: 'ℹ️' });
   };
 
   const handlePreOrderSubmit = async (e: React.FormEvent) => {
@@ -798,12 +918,14 @@ export default function GuestPortal() {
       const totalAmount = (selectedRetailItem.price || 0) * retailOrderQty;
       await db.addSale({
         outlet_id: member?.outlet_id || account.outlet_id || '',
+        property_id: member?.property_id || account.property_id || '',
         guest_id: account.id,
         guest_name: account.name,
         item_name: selectedRetailItem.name,
         category: 'Retail',
         quantity: retailOrderQty,
         unit_price: selectedRetailItem.price || 0,
+        discount_amount: 0,
         net_amount: totalAmount,
         gross_amount: totalAmount,
         payment_method: 'Pre-Order / Front Desk Charge',
@@ -1659,6 +1781,282 @@ export default function GuestPortal() {
           </div>
         )}
 
+        {/* TAB: PASSES & FACILITY ENTRANCE */}
+        {activeTab === 'passes' && portalSettings?.allow_entrance_passes !== false && (
+          <div className="space-y-4 animate-in fade-in duration-300">
+            <div>
+              <span className="text-[9px] font-black uppercase tracking-widest text-amber-400">
+                Access Verification
+              </span>
+              <h3 className="text-base font-black text-white uppercase tracking-tight">
+                Facility &amp; Day Passes
+              </h3>
+              <p className="text-xs text-slate-400 font-medium">
+                Active admission passes and entry credentials
+              </p>
+            </div>
+
+            {/* If user has memberships, show them as access passes too */}
+            {userMemberships.length > 0 && (
+              <div className="space-y-2">
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block">
+                  Enrolled Membership Access
+                </span>
+                {userMemberships.map((m) => (
+                  <div
+                    key={m.id}
+                    className="bg-gradient-to-r from-amber-950/60 via-slate-900 to-slate-900 border border-amber-400/30 rounded-3xl p-5 space-y-3 shadow-lg"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Award className="w-5 h-5 text-amber-400" />
+                        <div>
+                          <span className="text-[9px] font-black uppercase tracking-widest text-amber-300 block">
+                            {m.category_name || 'Membership Tier'}
+                          </span>
+                          <h4 className="text-sm font-black text-white uppercase">
+                            Card #{m.membership_number}
+                          </h4>
+                        </div>
+                      </div>
+                      <span className="text-[9px] font-black uppercase px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                        {m.status || 'Active'}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs pt-2 border-t border-white/10">
+                      <span className="text-slate-400">Package</span>
+                      <span className="text-white font-bold">{m.package_type} &bull; {m.access_type || 'Full Access'}</span>
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-400">Validity Period</span>
+                      <span className="font-mono text-slate-300">
+                        {m.start_date || 'N/A'} &rarr; {m.current_end_date || 'N/A'}
+                      </span>
+                    </div>
+
+                    <Button
+                      onClick={() => handleTabSwitch('card')}
+                      className="w-full h-10 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-black text-xs uppercase tracking-wider"
+                    >
+                      View Digital Pass &amp; QR
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Entrance Fee Consents (Day Passes) */}
+            {consents.length > 0 && (
+              <div className="space-y-2">
+                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block">
+                  Day Passes &amp; Visitor Consents ({consents.length})
+                </span>
+                {consents.map((c) => (
+                  <div
+                    key={c.id}
+                    className="bg-slate-900/90 border border-white/10 rounded-3xl p-5 space-y-3"
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Ticket className="w-5 h-5 text-emerald-400" />
+                        <div>
+                          <span className="text-[9px] font-black uppercase tracking-widest text-emerald-400 block">
+                            Issued Entrance Pass
+                          </span>
+                          <h4 className="text-sm font-black text-white uppercase">
+                            {c.item_name || 'Day Pass & Facility Access'}
+                          </h4>
+                        </div>
+                      </div>
+                      <span className="text-[9px] font-black uppercase px-2.5 py-1 rounded-full bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                        Active
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs pt-2 border-t border-white/5">
+                      <span className="text-slate-400">Guest Name</span>
+                      <span className="text-white font-bold uppercase">{c.guest_name}</span>
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-400">Reference No.</span>
+                      <span className="font-mono text-amber-300 font-bold">
+                        #{(c.reference_number || c.id).slice(0, 10).toUpperCase()}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between text-xs">
+                      <span className="text-slate-400">Issued On</span>
+                      <span className="text-slate-300">
+                        {c.created_at ? format(parseISO(c.created_at), 'dd MMM yyyy, HH:mm') : 'Recently Issued'}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {userMemberships.length === 0 && consents.length === 0 && (
+              <div className="p-8 text-center bg-slate-900/50 rounded-3xl border border-white/5 space-y-2">
+                <Ticket className="w-8 h-8 text-slate-600 mx-auto" />
+                <h4 className="text-sm font-bold text-slate-400 uppercase">No Passes on File</h4>
+                <p className="text-xs text-slate-500">
+                  Day passes, pool passes, and gym guest admissions will appear here once issued by front desk reception.
+                </p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB: FINANCES & HISTORY */}
+        {activeTab === 'finances' && portalSettings?.allow_financial_history !== false && (
+          <div className="space-y-4 animate-in fade-in duration-300">
+            <div className="flex items-center justify-between">
+              <div>
+                <span className="text-[9px] font-black uppercase tracking-widest text-amber-400">
+                  Financial &amp; Activity Ledger
+                </span>
+                <h3 className="text-base font-black text-white uppercase tracking-tight">
+                  History &amp; Receipts
+                </h3>
+                <p className="text-xs text-slate-400 font-medium">
+                  Itemized record of your memberships, passes, services, and receipts
+                </p>
+              </div>
+              <div className="p-2.5 rounded-2xl bg-amber-400/10 border border-amber-400/20 text-amber-400">
+                <Receipt className="w-5 h-5" />
+              </div>
+            </div>
+
+            {/* Overall Spend Summary Banner */}
+            <div className="grid grid-cols-2 gap-3">
+              <div className="p-4 bg-slate-900/90 border border-white/10 rounded-2xl space-y-1">
+                <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block">
+                  Total Spend
+                </span>
+                <p className="text-xl font-black text-emerald-400 font-mono">
+                  {formatMoney(sales.reduce((acc, s) => acc + (s.net_amount || 0), 0))}
+                </p>
+                <span className="text-[10px] text-slate-500">
+                  Across all services &amp; tiers
+                </span>
+              </div>
+              <div className="p-4 bg-slate-900/90 border border-white/10 rounded-2xl space-y-1">
+                <span className="text-[9px] font-black uppercase tracking-widest text-slate-400 block">
+                  Recorded Transactions
+                </span>
+                <p className="text-xl font-black text-white font-mono">
+                  {sales.length}
+                </p>
+                <span className="text-[10px] text-slate-500">
+                  Itemized receipts on file
+                </span>
+              </div>
+            </div>
+
+            {/* Filter Tabs */}
+            <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-[10px] no-scrollbar">
+              {['all', 'Membership', 'Personal Training', 'Massage', 'Entrance Fee', 'Retail'].map((catKey) => {
+                const count = catKey === 'all'
+                  ? sales.length
+                  : sales.filter(s => (s.category || '').toLowerCase() === catKey.toLowerCase() || (catKey === 'Massage' && ((s.category as string) === 'Spa' || s.category === 'Massage'))).length;
+                if (catKey !== 'all' && count === 0) return null;
+                const label = catKey === 'all' ? 'All' : catKey === 'Membership' ? 'Memberships' : catKey === 'Personal Training' ? 'PT' : catKey === 'Entrance Fee' ? 'Passes' : catKey === 'Massage' ? 'Spa' : catKey;
+                const isSel = purchaseHistoryFilter === catKey;
+
+                return (
+                  <button
+                    key={catKey}
+                    type="button"
+                    onClick={() => setPurchaseHistoryFilter(catKey)}
+                    className={`px-3 py-1.5 rounded-xl font-bold uppercase transition-all whitespace-nowrap shrink-0 border ${
+                      isSel
+                        ? 'bg-amber-400 text-slate-950 border-amber-400 shadow-sm'
+                        : 'bg-slate-900 text-slate-400 border-white/10 hover:text-white'
+                    }`}
+                  >
+                    {label} ({count})
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Transactions List */}
+            {sales.length === 0 ? (
+              <div className="p-8 text-center bg-slate-900/50 rounded-2xl border border-white/5 space-y-2">
+                <Receipt className="w-8 h-8 text-slate-600 mx-auto" />
+                <h5 className="text-sm font-bold text-slate-400 uppercase">No History Found</h5>
+                <p className="text-xs text-slate-500">
+                  Transactions, membership dues, passes, and appointments will automatically appear here.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2.5">
+                {sales
+                  .filter(s => {
+                    if (purchaseHistoryFilter === 'all') return true;
+                    if (purchaseHistoryFilter === 'Massage') return s.category === 'Massage' || (s.category as string) === 'Spa';
+                    return (s.category || '').toLowerCase() === purchaseHistoryFilter.toLowerCase();
+                  })
+                  .map((sale) => (
+                    <div
+                      key={sale.id}
+                      onClick={() => setSelectedReceiptForModal(sale)}
+                      className="bg-slate-900/90 hover:bg-slate-850 border border-white/10 hover:border-amber-400/40 rounded-2xl p-4 transition-all cursor-pointer group space-y-2 shadow-sm"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="space-y-1 min-w-0">
+                          <div className="flex items-center gap-1.5">
+                            <span className={`text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border ${
+                              sale.category === 'Membership'
+                                ? 'bg-amber-400/10 text-amber-300 border-amber-400/20'
+                                : sale.category === 'Personal Training'
+                                ? 'bg-blue-500/10 text-blue-300 border-blue-500/20'
+                                : sale.category === 'Massage' || (sale.category as string) === 'Spa'
+                                ? 'bg-purple-500/10 text-purple-300 border-purple-500/20'
+                                : sale.category === 'Entrance Fee'
+                                ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
+                                : 'bg-slate-500/10 text-slate-300 border-slate-500/20'
+                            }`}>
+                              {sale.category || 'Purchase'}
+                            </span>
+                            {sale.payment_method && (
+                              <span className="text-[8px] font-mono text-slate-400 uppercase">
+                                &bull; {sale.payment_method}
+                              </span>
+                            )}
+                          </div>
+                          <h5 className="text-xs font-black text-white uppercase truncate mt-1">
+                            {sale.item_name || 'Purchase Item'}
+                          </h5>
+                          <p className="text-[10px] text-slate-400">
+                            {sale.created_at ? format(parseISO(sale.created_at), 'dd MMM yyyy, HH:mm') : 'Recorded Transaction'}
+                          </p>
+                          {sale.remarks && (
+                            <p className="text-[10px] text-slate-400 italic line-clamp-1">
+                              {sale.remarks}
+                            </p>
+                          )}
+                        </div>
+
+                        <div className="text-right shrink-0">
+                          <p className="text-xs font-black text-emerald-400 font-mono">
+                            {formatMoney(sale.net_amount || 0)}
+                          </p>
+                          <span className="text-[9px] font-black uppercase text-amber-400 group-hover:underline flex items-center justify-end gap-0.5 mt-1">
+                            Receipt <ChevronRight className="w-2.5 h-2.5" />
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* TAB 5: PROFILE, RECEIPTS & SECURITY */}
         {activeTab === 'profile' && (
           <div className="space-y-4 animate-in fade-in duration-300">
@@ -1752,12 +2150,12 @@ export default function GuestPortal() {
                   <div className="space-y-2">
                     {/* Filter Chips */}
                     <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-[10px] no-scrollbar">
-                      {['all', 'Personal Training', 'Massage', 'Entrance Fee', 'Retail'].map((catKey) => {
+                      {['all', 'Membership', 'Personal Training', 'Massage', 'Entrance Fee', 'Retail'].map((catKey) => {
                         const count = catKey === 'all'
                           ? sales.length
-                          : sales.filter(s => (s.category || '').toLowerCase() === catKey.toLowerCase() || (catKey === 'Massage' && (s.category === 'Spa' || s.category === 'Massage'))).length;
+                          : sales.filter(s => (s.category || '').toLowerCase() === catKey.toLowerCase() || (catKey === 'Massage' && ((s.category as string) === 'Spa' || s.category === 'Massage'))).length;
                         if (catKey !== 'all' && count === 0) return null;
-                        const label = catKey === 'all' ? 'All' : catKey === 'Personal Training' ? 'PT' : catKey === 'Entrance Fee' ? 'Passes' : catKey;
+                        const label = catKey === 'all' ? 'All' : catKey === 'Membership' ? 'Memberships' : catKey === 'Personal Training' ? 'PT' : catKey === 'Entrance Fee' ? 'Passes' : catKey === 'Massage' ? 'Spa' : catKey;
                         const isSel = purchaseHistoryFilter === catKey;
 
                         return (
@@ -1781,7 +2179,7 @@ export default function GuestPortal() {
                       {sales
                         .filter(s => {
                           if (purchaseHistoryFilter === 'all') return true;
-                          if (purchaseHistoryFilter === 'Massage') return s.category === 'Massage' || s.category === 'Spa';
+                          if (purchaseHistoryFilter === 'Massage') return s.category === 'Massage' || (s.category as string) === 'Spa';
                           return (s.category || '').toLowerCase() === purchaseHistoryFilter.toLowerCase();
                         })
                         .map((sale) => (
@@ -1794,13 +2192,15 @@ export default function GuestPortal() {
                               <div className="space-y-0.5 min-w-0">
                                 <div className="flex items-center gap-1.5">
                                   <span className={`text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border ${
-                                    sale.category === 'Personal Training'
+                                    sale.category === 'Membership'
+                                      ? 'bg-amber-400/10 text-amber-300 border-amber-400/20'
+                                      : sale.category === 'Personal Training'
                                       ? 'bg-blue-500/10 text-blue-300 border-blue-500/20'
-                                      : sale.category === 'Massage' || sale.category === 'Spa'
+                                      : sale.category === 'Massage' || (sale.category as string) === 'Spa'
                                       ? 'bg-purple-500/10 text-purple-300 border-purple-500/20'
                                       : sale.category === 'Entrance Fee'
-                                      ? 'bg-amber-500/10 text-amber-300 border-amber-500/20'
-                                      : 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
+                                      ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
+                                      : 'bg-slate-500/10 text-slate-300 border-slate-500/20'
                                   }`}>
                                     {sale.category || 'Purchase'}
                                   </span>
@@ -1874,7 +2274,7 @@ export default function GuestPortal() {
                   type="button"
                   onClick={() => handleTabSwitch('card')}
                   aria-label="Digital Pass & Membership Card"
-                  className="absolute -top-6 flex items-center justify-center group focus:outline-none transition-transform active:scale-95 z-20"
+                  className="absolute -top-2.5 flex items-center justify-center group focus:outline-none transition-transform active:scale-95 z-20"
                 >
                   {/* Glowing Ambient Halo */}
                   <div
@@ -2728,12 +3128,12 @@ export default function GuestPortal() {
 
             {/* Filter Tabs */}
             <div className="flex items-center gap-1.5 overflow-x-auto pb-1 text-[10px] shrink-0 no-scrollbar">
-              {['all', 'Personal Training', 'Massage', 'Entrance Fee', 'Retail'].map((catKey) => {
+              {['all', 'Membership', 'Personal Training', 'Massage', 'Entrance Fee', 'Retail'].map((catKey) => {
                 const count = catKey === 'all'
                   ? sales.length
-                  : sales.filter(s => (s.category || '').toLowerCase() === catKey.toLowerCase() || (catKey === 'Massage' && (s.category === 'Spa' || s.category === 'Massage'))).length;
+                  : sales.filter(s => (s.category || '').toLowerCase() === catKey.toLowerCase() || (catKey === 'Massage' && ((s.category as string) === 'Spa' || s.category === 'Massage'))).length;
                 if (catKey !== 'all' && count === 0) return null;
-                const label = catKey === 'all' ? 'All' : catKey === 'Personal Training' ? 'PT' : catKey === 'Entrance Fee' ? 'Passes' : catKey;
+                const label = catKey === 'all' ? 'All' : catKey === 'Membership' ? 'Memberships' : catKey === 'Personal Training' ? 'PT' : catKey === 'Entrance Fee' ? 'Passes' : catKey === 'Massage' ? 'Spa' : catKey;
                 const isSel = purchaseHistoryFilter === catKey;
 
                 return (
@@ -2767,7 +3167,7 @@ export default function GuestPortal() {
                 sales
                   .filter(s => {
                     if (purchaseHistoryFilter === 'all') return true;
-                    if (purchaseHistoryFilter === 'Massage') return s.category === 'Massage' || s.category === 'Spa';
+                    if (purchaseHistoryFilter === 'Massage') return s.category === 'Massage' || (s.category as string) === 'Spa';
                     return (s.category || '').toLowerCase() === purchaseHistoryFilter.toLowerCase();
                   })
                   .map((sale) => (
@@ -2782,13 +3182,15 @@ export default function GuestPortal() {
                       <div className="space-y-1 min-w-0">
                         <div className="flex items-center gap-1.5">
                           <span className={`text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border ${
-                            sale.category === 'Personal Training'
+                            sale.category === 'Membership'
+                              ? 'bg-amber-400/10 text-amber-300 border-amber-400/20'
+                              : sale.category === 'Personal Training'
                               ? 'bg-blue-500/10 text-blue-300 border-blue-500/20'
-                              : sale.category === 'Massage' || sale.category === 'Spa'
+                              : sale.category === 'Massage' || (sale.category as string) === 'Spa'
                               ? 'bg-purple-500/10 text-purple-300 border-purple-500/20'
                               : sale.category === 'Entrance Fee'
-                              ? 'bg-amber-500/10 text-amber-300 border-amber-500/20'
-                              : 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
+                              ? 'bg-emerald-500/10 text-emerald-300 border-emerald-500/20'
+                              : 'bg-slate-500/10 text-slate-300 border-slate-500/20'
                           }`}>
                             {sale.category || 'Purchase'}
                           </span>
@@ -2917,7 +3319,7 @@ export default function GuestPortal() {
                       title: 'Retail Pre-Order Request',
                       message: `${account?.name || 'Guest'} requested pre-order for ${retailOrderQty}x ${selectedRetailItem.name} (${formatMoney((selectedRetailItem.price || 0) * retailOrderQty)}).`,
                       type: 'success',
-                      outlet_id: selectedRetailItem.outlet_id || member?.outlet_id || sessionOutletId()
+                      outlet_id: selectedRetailItem.outlet_id || member?.outlet_id || account?.outlet_id || ''
                     });
                     toast.success('Pre-order submitted successfully! Front desk concierge has been notified for pickup.');
                     setSelectedRetailItem(null);
@@ -2972,7 +3374,7 @@ export default function GuestPortal() {
                 </p>
                 {ptMembers.map(pt => (
                   <div key={pt.id} className="pt-2 border-t border-white/5 flex justify-between text-[11px]">
-                    <span className="font-bold text-slate-300">{pt.trainer_name || 'Assigned Trainer'}</span>
+                    <span className="font-bold text-slate-300">{(pt as any).trainer_name || 'Assigned Trainer'}</span>
                     <span className="font-mono text-indigo-300">{pt.used_sessions || 0} / {pt.total_sessions || 0} Used</span>
                   </div>
                 ))}

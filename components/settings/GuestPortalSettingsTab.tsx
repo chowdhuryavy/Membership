@@ -1000,7 +1000,7 @@ WHERE id = 'global';`}
                     if (id === 'card') {
                       return (
                         <div key={id} className="flex flex-col items-center justify-center px-2 py-1 relative">
-                          <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-amber-600 via-amber-300 to-yellow-100 p-0.5 shadow-lg shadow-amber-500/20 -mt-3 ring-2 ring-amber-400/80">
+                          <div className="w-10 h-10 rounded-full bg-gradient-to-tr from-amber-600 via-amber-300 to-yellow-100 p-0.5 shadow-lg shadow-amber-500/20 -mt-1 ring-2 ring-amber-400/80">
                             <div className="w-full h-full rounded-full bg-slate-900 flex items-center justify-center text-amber-300 font-serif font-black text-sm">
                               P
                             </div>
