@@ -624,6 +624,76 @@ export const GuestPortalSettingsTab: React.FC = () => {
             </div>
           </div>
 
+          {/* NAVIGATION BUTTON ORDER */}
+          <div className="col-span-1 lg:col-span-2 p-5 rounded-3xl bg-white border border-slate-200/80 shadow-sm space-y-4">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <div className="p-2.5 rounded-2xl bg-amber-50 text-amber-600">
+                  <SlidersHorizontal className="w-5 h-5" />
+                </div>
+                <div>
+                  <h4 className="text-sm font-black text-slate-900 uppercase">Navigation Button Order</h4>
+                  <p className="text-xs text-slate-500 font-medium">Use arrows to reorder navigation buttons for guest portal</p>
+                </div>
+              </div>
+              <button
+                onClick={async () => {
+                  const updated = { ...portalSettings, nav_button_order: DEFAULT_NAV_BUTTON_ORDER };
+                  setPortalSettings(updated);
+                  await guestAuth.savePortalSettings(updated, activeScopeId);
+                  toast.success('Navigation order reset to default');
+                }}
+                className="text-xs font-bold text-slate-500 hover:text-indigo-600 flex items-center gap-1"
+              >
+                <RotateCcw className="w-3 h-3" /> Reset
+              </button>
+            </div>
+
+            <div className="space-y-2">
+              {(portalSettings.nav_button_order || DEFAULT_NAV_BUTTON_ORDER).map((btnId, index) => {
+                const config = NAV_BUTTONS_METADATA[btnId];
+                if (!config) return null;
+                return (
+                  <div key={btnId} className="flex items-center gap-3 p-3 rounded-2xl bg-slate-50 border border-slate-100">
+                    <div className={`p-2 rounded-xl ${config.iconBg} ${config.iconColor}`}>
+                      <config.icon className="w-4 h-4" />
+                    </div>
+                    <span className="text-sm font-bold text-slate-700 flex-1">{config.name}</span>
+                    <div className="flex items-center gap-1">
+                      <button
+                        disabled={index === 0}
+                        onClick={async () => {
+                          const order = [...(portalSettings.nav_button_order || DEFAULT_NAV_BUTTON_ORDER)];
+                          [order[index - 1], order[index]] = [order[index], order[index - 1]];
+                          const updated = { ...portalSettings, nav_button_order: order };
+                          setPortalSettings(updated);
+                          await guestAuth.savePortalSettings(updated, activeScopeId);
+                        }}
+                        className="p-1.5 rounded-lg hover:bg-slate-200 disabled:opacity-30"
+                      >
+                        <ArrowUp className="w-4 h-4" />
+                      </button>
+                      <button
+                        disabled={index === (portalSettings.nav_button_order || DEFAULT_NAV_BUTTON_ORDER).length - 1}
+                        onClick={async () => {
+                          const order = [...(portalSettings.nav_button_order || DEFAULT_NAV_BUTTON_ORDER)];
+                          [order[index + 1], order[index]] = [order[index], order[index + 1]];
+                          const updated = { ...portalSettings, nav_button_order: order };
+                          setPortalSettings(updated);
+                          await guestAuth.savePortalSettings(updated, activeScopeId);
+                        }}
+                        className="p-1.5 rounded-lg hover:bg-slate-200 disabled:opacity-30"
+                      >
+                        <ArrowDown className="w-4 h-4" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+
           {/* 6. PROFILE EDITING */}
           <div className="p-5 rounded-3xl bg-white border border-slate-200/80 shadow-sm space-y-3 flex flex-col justify-between">
             <div className="space-y-2">
