@@ -805,13 +805,11 @@ NOTIFY pgrst, 'reload schema';`}
           .map(id => massageTypes.find(mt => mt.id === id))
           .filter(Boolean);
       const therapist = therapists.find(t => t.id === selectedBooking.therapist_id);
-      const guest: Guest = guests.find(g => g.id === selectedBooking.guest_id) || {
+      const guest = guests.find(g => g.id === selectedBooking.guest_id) || {
         id: selectedBooking.guest_id || 'guest',
-        property_id: selectedBooking.property_id || '',
         name: selectedBooking.guest_name || 'Guest',
         email: (selectedBooking as any).guest_email || '',
-        phone: selectedBooking.guest_phone || '',
-        created_at: new Date().toISOString()
+        phone: selectedBooking.guest_phone || ''
       };
       return { primaryService, addServices, therapist, guest };
   }, [selectedBooking, massageTypes, therapists, guests]);

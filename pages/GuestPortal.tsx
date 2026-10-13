@@ -509,18 +509,6 @@ export default function GuestPortal() {
 
     window.addEventListener('booking_updated', handleSync);
 
-    const handleSettingsUpdated = (e?: any) => {
-      if (e?.detail) {
-        setPortalSettings(prev => ({ ...(prev || DEFAULT_GUEST_PORTAL_SETTINGS), ...e.detail }));
-      } else {
-        const session = guestAuth.getActiveSession();
-        const activeScopeId = session?.outlet_id || session?.property_id;
-        guestAuth.getPortalSettings(activeScopeId).then(setPortalSettings).catch(() => {});
-      }
-    };
-    window.addEventListener('hcm_guest_portal_settings_updated', handleSettingsUpdated);
-    window.addEventListener('storage', handleSettingsUpdated);
-
     // Live Supabase real-time sync: triggers immediately when admin changes timing, date, therapist or status
     const channel = supabase
       .channel('guest-portal-live-bookings')
@@ -534,8 +522,6 @@ export default function GuestPortal() {
 
     return () => {
       window.removeEventListener('booking_updated', handleSync);
-      window.removeEventListener('hcm_guest_portal_settings_updated', handleSettingsUpdated);
-      window.removeEventListener('storage', handleSettingsUpdated);
       supabase.removeChannel(channel);
     };
   }, [navigate]);
@@ -765,7 +751,7 @@ export default function GuestPortal() {
 
   const handleDeclineProposal = (b: MassageBooking) => {
     handleOpenEditBooking(b);
-    toast('Please select your preferred alternative slot, or choose Cancel.', { icon: 'ℹ️' });
+    toast.info('Please select your preferred alternative slot, or choose Cancel.');
   };
 
   const handlePreOrderSubmit = async (e: React.FormEvent) => {
@@ -776,14 +762,12 @@ export default function GuestPortal() {
       const totalAmount = (selectedRetailItem.price || 0) * retailOrderQty;
       await db.addSale({
         outlet_id: member?.outlet_id || account.outlet_id || '',
-        property_id: member?.property_id || account.property_id || '',
         guest_id: account.id,
         guest_name: account.name,
         item_name: selectedRetailItem.name,
         category: 'Retail',
         quantity: retailOrderQty,
         unit_price: selectedRetailItem.price || 0,
-        discount_amount: 0,
         net_amount: totalAmount,
         gross_amount: totalAmount,
         payment_method: 'Pre-Order / Front Desk Charge',
@@ -1735,7 +1719,7 @@ export default function GuestPortal() {
                       {['all', 'Personal Training', 'Massage', 'Entrance Fee', 'Retail'].map((catKey) => {
                         const count = catKey === 'all'
                           ? sales.length
-                          : sales.filter(s => (s.category || '').toLowerCase() === catKey.toLowerCase() || (catKey === 'Massage' && ((s.category as any) === 'Spa' || s.category === 'Massage'))).length;
+                          : sales.filter(s => (s.category || '').toLowerCase() === catKey.toLowerCase() || (catKey === 'Massage' && (s.category === 'Spa' || s.category === 'Massage'))).length;
                         if (catKey !== 'all' && count === 0) return null;
                         const label = catKey === 'all' ? 'All' : catKey === 'Personal Training' ? 'PT' : catKey === 'Entrance Fee' ? 'Passes' : catKey;
                         const isSel = purchaseHistoryFilter === catKey;
@@ -1761,7 +1745,7 @@ export default function GuestPortal() {
                       {sales
                         .filter(s => {
                           if (purchaseHistoryFilter === 'all') return true;
-                          if (purchaseHistoryFilter === 'Massage') return s.category === 'Massage' || (s.category as any) === 'Spa';
+                          if (purchaseHistoryFilter === 'Massage') return s.category === 'Massage' || s.category === 'Spa';
                           return (s.category || '').toLowerCase() === purchaseHistoryFilter.toLowerCase();
                         })
                         .map((sale) => (
@@ -1776,7 +1760,7 @@ export default function GuestPortal() {
                                   <span className={`text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border ${
                                     sale.category === 'Personal Training'
                                       ? 'bg-blue-500/10 text-blue-300 border-blue-500/20'
-                                      : sale.category === 'Massage' || (sale.category as any) === 'Spa'
+                                      : sale.category === 'Massage' || sale.category === 'Spa'
                                       ? 'bg-purple-500/10 text-purple-300 border-purple-500/20'
                                       : sale.category === 'Entrance Fee'
                                       ? 'bg-amber-500/10 text-amber-300 border-amber-500/20'
@@ -1845,182 +1829,121 @@ export default function GuestPortal() {
       </main>
 
       {/* BOTTOM MOBILE NAVIGATION BAR WITH RE-ALIGNED CENTER 'P' BUTTON */}
-      {(() => {
-        const defaultOrder = ['pt', 'spa', 'passes', 'retail', 'finances', 'profile'];
-        const configured = portalSettings?.nav_button_order && Array.isArray(portalSettings.nav_button_order) && portalSettings.nav_button_order.length > 0
-          ? portalSettings.nav_button_order
-          : defaultOrder;
+      <nav className={`fixed bottom-0 left-0 right-0 max-w-lg mx-auto bg-slate-900/95 backdrop-blur-xl border-t border-white/10 px-2 py-2 z-40 flex items-center ${portalSettings?.nav_bar_position === 'right' ? 'flex-row-reverse' : 'flex-row'} justify-between shadow-2xl relative`}>
+        {portalSettings?.allow_pt_tracking && (
+          <button
+            type="button"
+            onClick={() => handleTabSwitch('pt')}
+            className={`flex-1 flex flex-col items-center justify-center gap-1 py-1 rounded-2xl transition-all ${
+              activeTab === 'pt' ? 'text-amber-400 font-black' : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Dumbbell className="w-5 h-5" />
+            <span className="text-[9px] uppercase tracking-wider">PT</span>
+          </button>
+        )}
 
-        const fullOrder = [
-          ...configured.filter(id => defaultOrder.includes(id)),
-          ...defaultOrder.filter(id => !configured.includes(id))
-        ];
+        {portalSettings?.allow_massage_bookings && (
+          <button
+            type="button"
+            onClick={() => handleTabSwitch('spa')}
+            className={`flex-1 flex flex-col items-center justify-center gap-1 py-1 rounded-2xl transition-all ${
+              activeTab === 'spa' ? 'text-amber-400 font-black' : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Sparkles className="w-5 h-5" />
+            <span className="text-[9px] uppercase tracking-wider">Spa</span>
+          </button>
+        )}
 
-        const orientedOrder = portalSettings?.nav_bar_position === 'right'
-          ? [...fullOrder].reverse()
-          : fullOrder;
+        {/* Spacer to make room for absolute-positioned P button */}
+        <div className="w-16"></div>
 
-        const visibleNavButtons = orientedOrder.filter(id => {
-          if (id === 'pt') return Boolean(portalSettings?.allow_pt_tracking);
-          if (id === 'spa') return Boolean(portalSettings?.allow_massage_bookings);
-          if (id === 'passes') return Boolean(portalSettings?.allow_entrance_passes);
-          if (id === 'retail') return portalSettings?.allow_shop !== false;
-          if (id === 'finances') return portalSettings?.allow_financial_history !== false;
-          if (id === 'profile') return portalSettings?.allow_profile_editing !== false;
-          return true;
-        });
+        {/* CENTER ELEVATED "P" PERFECTION DIGITAL PASS BUTTON (Realigned, Zero Text) */}
+        <div className="absolute left-1/2 -translate-x-1/2 -top-6 z-40 h-10">
+          <button
+            type="button"
+            onClick={() => handleTabSwitch('card')}
+            aria-label="Digital Pass & Membership Card"
+            className="flex items-center justify-center group focus:outline-none transition-transform active:scale-95 z-20"
+          >
+            {/* Glowing Ambient Halo */}
+            <div className={`absolute -inset-1.5 rounded-full blur-md transition-all duration-500 ${
+              activeTab === 'card' 
+                ? 'bg-amber-400/80 animate-pulse' 
+                : 'bg-amber-500/25 group-hover:bg-amber-400/50'
+            }`} />
 
-        const halfCount = Math.ceil(visibleNavButtons.length / 2);
-        const leftNavButtons = visibleNavButtons.slice(0, halfCount);
-        const rightNavButtons = visibleNavButtons.slice(halfCount);
+            {/* Golden Pulse Ping Ring */}
+            <div className="absolute inset-0 rounded-full border border-amber-400/60 animate-ping opacity-30 pointer-events-none" />
 
-        const renderNavButton = (btnId: string) => {
-          switch (btnId) {
-            case 'pt':
-              return (
-                <button
-                  key="pt"
-                  type="button"
-                  onClick={() => handleTabSwitch('pt')}
-                  className={`flex-1 flex flex-col items-center justify-center gap-1 py-1 rounded-2xl transition-all ${
-                    activeTab === 'pt' ? 'text-amber-400 font-black' : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  <Dumbbell className="w-5 h-5" />
-                  <span className="text-[9px] uppercase tracking-wider">PT</span>
-                </button>
-              );
-            case 'spa':
-              return (
-                <button
-                  key="spa"
-                  type="button"
-                  onClick={() => handleTabSwitch('spa')}
-                  className={`flex-1 flex flex-col items-center justify-center gap-1 py-1 rounded-2xl transition-all ${
-                    activeTab === 'spa' ? 'text-amber-400 font-black' : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  <Sparkles className="w-5 h-5" />
-                  <span className="text-[9px] uppercase tracking-wider">Spa</span>
-                </button>
-              );
-            case 'passes':
-              return (
-                <button
-                  key="passes"
-                  type="button"
-                  onClick={() => handleTabSwitch('passes')}
-                  className={`flex-1 flex flex-col items-center justify-center gap-1 py-1 rounded-2xl transition-all ${
-                    activeTab === 'passes' ? 'text-amber-400 font-black' : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  <Ticket className="w-5 h-5" />
-                  <span className="text-[9px] uppercase tracking-wider">Passes</span>
-                </button>
-              );
-            case 'retail':
-              return (
-                <button
-                  key="retail"
-                  type="button"
-                  onClick={() => handleTabSwitch('retail')}
-                  className={`flex-1 flex flex-col items-center justify-center gap-1 py-1 rounded-2xl transition-all ${
-                    activeTab === 'retail' ? 'text-amber-400 font-black' : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  <ShoppingBag className="w-5 h-5" />
-                  <span className="text-[9px] uppercase tracking-wider">Shop</span>
-                </button>
-              );
-            case 'finances':
-              return (
-                <button
-                  key="finances"
-                  type="button"
-                  onClick={() => handleTabSwitch('finances')}
-                  className={`flex-1 flex flex-col items-center justify-center gap-1 py-1 rounded-2xl transition-all ${
-                    activeTab === 'finances' ? 'text-amber-400 font-black' : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  <Clock className="w-5 h-5" />
-                  <span className="text-[9px] uppercase tracking-wider">History</span>
-                </button>
-              );
-            case 'profile':
-              return (
-                <button
-                  key="profile"
-                  type="button"
-                  onClick={() => handleTabSwitch('profile')}
-                  className={`flex-1 flex flex-col items-center justify-center gap-1 py-1 rounded-2xl transition-all ${
-                    activeTab === 'profile' ? 'text-amber-400 font-black' : 'text-slate-400 hover:text-slate-200'
-                  }`}
-                >
-                  <User className="w-5 h-5" />
-                  <span className="text-[9px] uppercase tracking-wider">Profile</span>
-                </button>
-              );
-            default:
-              return null;
-          }
-        };
-
-        return (
-          <nav className="fixed bottom-0 left-0 right-0 max-w-lg mx-auto bg-slate-900/95 backdrop-blur-xl border-t border-white/10 px-2 py-2 z-40 shadow-2xl relative">
-            <div className="flex items-center justify-between w-full h-11">
-              {/* Left Navigation Buttons */}
-              <div className="flex-1 flex items-center justify-around">
-                {leftNavButtons.map(btnId => renderNavButton(btnId))}
-              </div>
-
-              {/* Center Spacer for Elevated 'P' Pass Medallion */}
-              <div className="w-16 flex-shrink-0" />
-
-              {/* Right Navigation Buttons */}
-              <div className="flex-1 flex items-center justify-around">
-                {rightNavButtons.map(btnId => renderNavButton(btnId))}
+            {/* Golden Circle Emblem */}
+            <div className={`relative w-14 h-14 rounded-full p-[2.5px] bg-gradient-to-tr from-amber-600 via-amber-300 to-yellow-100 shadow-[0_0_20px_rgba(245,158,11,0.7)] transition-all duration-300 ${
+              activeTab === 'card' 
+                ? 'scale-105 shadow-[0_0_30px_rgba(245,158,11,1)] ring-2 ring-amber-400/90 ring-offset-2 ring-offset-slate-900' 
+                : 'group-hover:scale-105'
+            }`}>
+              <div className="w-full h-full rounded-full bg-gradient-to-b from-slate-900 via-amber-950/80 to-black flex items-center justify-center border border-amber-400/50 relative overflow-hidden">
+                {/* Shimmer light effect */}
+                <div className="absolute -top-3 -left-3 w-7 h-7 bg-white/20 rounded-full blur-sm pointer-events-none animate-pulse" />
+                
+                {/* Iconic Golden 'P' with Animation */}
+                <span className="font-serif font-black text-2xl text-transparent bg-clip-text bg-gradient-to-b from-amber-100 via-amber-300 to-yellow-500 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] select-none transform transition-transform group-hover:scale-110">
+                  P
+                </span>
               </div>
             </div>
+          </button>
+        </div>
 
-            {/* CENTER ELEVATED "P" PERFECTION DIGITAL PASS BUTTON (Always Strictly Centered) */}
-            <div className="absolute left-1/2 -translate-x-1/2 -top-6 z-40 h-10">
-              <button
-                type="button"
-                onClick={() => handleTabSwitch('card')}
-                aria-label="Digital Pass & Membership Card"
-                className="flex items-center justify-center group focus:outline-none transition-transform active:scale-95 z-20"
-              >
-                {/* Glowing Ambient Halo */}
-                <div className={`absolute -inset-1.5 rounded-full blur-md transition-all duration-500 ${
-                  activeTab === 'card' 
-                    ? 'bg-amber-400/80 animate-pulse' 
-                    : 'bg-amber-500/25 group-hover:bg-amber-400/50'
-                }`} />
+        {portalSettings?.allow_entrance_passes && (
+          <button
+            type="button"
+            onClick={() => handleTabSwitch('passes')}
+            className={`flex-1 flex flex-col items-center justify-center gap-1 py-1 rounded-2xl transition-all ${
+              activeTab === 'passes' ? 'text-amber-400 font-black' : 'text-slate-400 hover:text-slate-200'
+            }`}
+          >
+            <Ticket className="w-5 h-5" />
+            <span className="text-[9px] uppercase tracking-wider">Passes</span>
+          </button>
+        )}
 
-                {/* Golden Pulse Ping Ring */}
-                <div className="absolute inset-0 rounded-full border border-amber-400/60 animate-ping opacity-30 pointer-events-none" />
+        {portalSettings?.allow_shop !== false && (
+        <button
+          type="button"
+          onClick={() => handleTabSwitch('retail')}
+          className={`flex-1 flex flex-col items-center justify-center gap-1 py-1 rounded-2xl transition-all ${
+            activeTab === 'retail' ? 'text-amber-400 font-black' : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <ShoppingBag className="w-5 h-5" />
+          <span className="text-[9px] uppercase tracking-wider">Shop</span>
+        </button>
+        )}
 
-                {/* Golden Circle Emblem */}
-                <div className={`relative w-14 h-14 rounded-full p-[2.5px] bg-gradient-to-tr from-amber-600 via-amber-300 to-yellow-100 shadow-[0_0_20px_rgba(245,158,11,0.7)] transition-all duration-300 ${
-                  activeTab === 'card' 
-                    ? 'scale-105 shadow-[0_0_30px_rgba(245,158,11,1)] ring-2 ring-amber-400/90 ring-offset-2 ring-offset-slate-900' 
-                    : 'group-hover:scale-105'
-                }`}>
-                  <div className="w-full h-full rounded-full bg-gradient-to-b from-slate-900 via-amber-950/80 to-black flex items-center justify-center border border-amber-400/50 relative overflow-hidden">
-                    {/* Shimmer light effect */}
-                    <div className="absolute -top-3 -left-3 w-7 h-7 bg-white/20 rounded-full blur-sm pointer-events-none animate-pulse" />
-                    
-                    {/* Iconic Golden 'P' with Animation */}
-                    <span className="font-serif font-black text-2xl text-transparent bg-clip-text bg-gradient-to-b from-amber-100 via-amber-300 to-yellow-500 drop-shadow-[0_2px_4px_rgba(0,0,0,0.8)] select-none transform transition-transform group-hover:scale-110">
-                      P
-                    </span>
-                  </div>
-                </div>
-              </button>
-            </div>
-          </nav>
-        );
-      })()}
+        <button
+          type="button"
+          onClick={() => handleTabSwitch('finances')}
+          className={`flex-1 flex flex-col items-center justify-center gap-1 py-1 rounded-2xl transition-all ${
+            activeTab === 'finances' ? 'text-amber-400 font-black' : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <Clock className="w-5 h-5" />
+          <span className="text-[9px] uppercase tracking-wider">History</span>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => handleTabSwitch('profile')}
+          className={`flex-1 flex flex-col items-center justify-center gap-1 py-1 rounded-2xl transition-all ${
+            activeTab === 'profile' ? 'text-amber-400 font-black' : 'text-slate-400 hover:text-slate-200'
+          }`}
+        >
+          <User className="w-5 h-5" />
+          <span className="text-[9px] uppercase tracking-wider">Profile</span>
+        </button>
+      </nav>
 
       {/* FULLSCREEN QR MODAL */}
       {showQrModal && (
@@ -2742,7 +2665,7 @@ export default function GuestPortal() {
               {['all', 'Personal Training', 'Massage', 'Entrance Fee', 'Retail'].map((catKey) => {
                 const count = catKey === 'all'
                   ? sales.length
-                  : sales.filter(s => (s.category || '').toLowerCase() === catKey.toLowerCase() || (catKey === 'Massage' && ((s.category as any) === 'Spa' || s.category === 'Massage'))).length;
+                  : sales.filter(s => (s.category || '').toLowerCase() === catKey.toLowerCase() || (catKey === 'Massage' && (s.category === 'Spa' || s.category === 'Massage'))).length;
                 if (catKey !== 'all' && count === 0) return null;
                 const label = catKey === 'all' ? 'All' : catKey === 'Personal Training' ? 'PT' : catKey === 'Entrance Fee' ? 'Passes' : catKey;
                 const isSel = purchaseHistoryFilter === catKey;
@@ -2755,7 +2678,7 @@ export default function GuestPortal() {
                     className={`px-3 py-1.5 rounded-xl font-bold uppercase transition-all whitespace-nowrap shrink-0 border ${
                       isSel
                         ? 'bg-amber-400 text-slate-950 border-amber-400 shadow-sm'
-                        : 'bg-slate-855 text-slate-400 border-white/10 hover:text-white'
+                        : 'bg-slate-850 text-slate-400 border-white/10 hover:text-white'
                     }`}
                   >
                     {label} ({count})
@@ -2778,7 +2701,7 @@ export default function GuestPortal() {
                 sales
                   .filter(s => {
                     if (purchaseHistoryFilter === 'all') return true;
-                    if (purchaseHistoryFilter === 'Massage') return s.category === 'Massage' || (s.category as any) === 'Spa';
+                    if (purchaseHistoryFilter === 'Massage') return s.category === 'Massage' || s.category === 'Spa';
                     return (s.category || '').toLowerCase() === purchaseHistoryFilter.toLowerCase();
                   })
                   .map((sale) => (
@@ -2795,7 +2718,7 @@ export default function GuestPortal() {
                           <span className={`text-[8px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full border ${
                             sale.category === 'Personal Training'
                               ? 'bg-blue-500/10 text-blue-300 border-blue-500/20'
-                              : sale.category === 'Massage' || (sale.category as any) === 'Spa'
+                              : sale.category === 'Massage' || sale.category === 'Spa'
                               ? 'bg-purple-500/10 text-purple-300 border-purple-500/20'
                               : sale.category === 'Entrance Fee'
                               ? 'bg-amber-500/10 text-amber-300 border-amber-500/20'
@@ -2928,7 +2851,7 @@ export default function GuestPortal() {
                       title: 'Retail Pre-Order Request',
                       message: `${account?.name || 'Guest'} requested pre-order for ${retailOrderQty}x ${selectedRetailItem.name} (${formatMoney((selectedRetailItem.price || 0) * retailOrderQty)}).`,
                       type: 'success',
-                      outlet_id: selectedRetailItem.outlet_id || member?.outlet_id || account?.outlet_id || ''
+                      outlet_id: selectedRetailItem.outlet_id || member?.outlet_id || sessionOutletId()
                     });
                     toast.success('Pre-order submitted successfully! Front desk concierge has been notified for pickup.');
                     setSelectedRetailItem(null);
@@ -2983,7 +2906,7 @@ export default function GuestPortal() {
                 </p>
                 {ptMembers.map(pt => (
                   <div key={pt.id} className="pt-2 border-t border-white/5 flex justify-between text-[11px]">
-                    <span className="font-bold text-slate-300">{(pt as any).trainer_name || (pt as any).trainer?.name || 'Assigned Trainer'}</span>
+                    <span className="font-bold text-slate-300">{pt.trainer_name || 'Assigned Trainer'}</span>
                     <span className="font-mono text-indigo-300">{pt.used_sessions || 0} / {pt.total_sessions || 0} Used</span>
                   </div>
                 ))}
