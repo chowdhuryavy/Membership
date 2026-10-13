@@ -1829,7 +1829,7 @@ export default function GuestPortal() {
       </main>
 
       {/* BOTTOM MOBILE NAVIGATION BAR WITH RE-ALIGNED CENTER 'P' BUTTON */}
-      <nav className={`fixed bottom-0 left-0 right-0 max-w-lg mx-auto bg-slate-900/95 backdrop-blur-xl border-t border-white/10 px-2 py-2 z-40 flex items-center ${portalSettings?.nav_bar_position === 'right' ? 'flex-row-reverse' : 'flex-row'} justify-between shadow-2xl relative`}>
+      <nav className="fixed bottom-0 left-0 right-0 max-w-lg mx-auto bg-slate-900/95 backdrop-blur-xl border-t border-white/10 px-2 py-2 z-40 flex items-center justify-between shadow-2xl">
         {portalSettings?.allow_pt_tracking && (
           <button
             type="button"
@@ -1857,12 +1857,12 @@ export default function GuestPortal() {
         )}
 
         {/* CENTER ELEVATED "P" PERFECTION DIGITAL PASS BUTTON (Realigned, Zero Text) */}
-        <div className="absolute left-1/2 -translate-x-1/2 -top-6 z-40 h-10 w-14">
+        <div className="flex-1 flex items-center justify-center relative h-10">
           <button
             type="button"
             onClick={() => handleTabSwitch('card')}
             aria-label="Digital Pass & Membership Card"
-            className="flex items-center justify-center group focus:outline-none transition-transform active:scale-95 z-20"
+            className="absolute -top-6 flex items-center justify-center group focus:outline-none transition-transform active:scale-95 z-20"
           >
             {/* Glowing Ambient Halo */}
             <div className={`absolute -inset-1.5 rounded-full blur-md transition-all duration-500 ${
@@ -1906,7 +1906,6 @@ export default function GuestPortal() {
           </button>
         )}
 
-        {portalSettings?.allow_shop !== false && (
         <button
           type="button"
           onClick={() => handleTabSwitch('retail')}
@@ -1917,7 +1916,6 @@ export default function GuestPortal() {
           <ShoppingBag className="w-5 h-5" />
           <span className="text-[9px] uppercase tracking-wider">Shop</span>
         </button>
-        )}
 
         <button
           type="button"
