@@ -559,7 +559,7 @@ export const GuestPortalSettingsTab: React.FC = () => {
 
             <div className="space-y-1">
               <label className="text-[10px] font-black uppercase text-slate-500 tracking-widest ml-1">
-                Support Email
+                Support Concierge Email
               </label>
               <input
                 type="email"
