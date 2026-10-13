@@ -440,6 +440,7 @@ export interface Member {
   membership_number: string;
   guest_name: string;
   category_id: string;
+  category_name?: string;
   start_date: string;
   original_end_date: string;
   current_end_date: string;

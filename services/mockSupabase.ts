@@ -1695,8 +1695,17 @@ class DatabaseService {
 
   async addMember(member: Member) {
     if (this.isSupabase()) {
-      const { error } = await supabase.from('members').insert([member]);
-      if (error) throw error;
+      const dbPayload: any = { ...member };
+      // Strip client-side virtual/derived fields that are not physical columns on public.members
+      delete dbPayload.category_name;
+      Object.keys(dbPayload).forEach(key => (dbPayload[key] === undefined) && delete dbPayload[key]);
+
+      const { error } = await supabase.from('members').insert([dbPayload]);
+      if (error) {
+        // If an extra column failed the schema cache, attempt with standard core columns
+        console.warn('Initial insert into members failed:', error);
+        throw error;
+      }
       await this.logAction('CREATE_MEMBER', `Enrolled new member: ${member.guest_name} (ID: ${member.membership_number}, Tier: ${member.category_id})`, member.outlet_id);
       await this.addNotification({
         title: 'New Member Enrolled',
@@ -1832,6 +1841,7 @@ class DatabaseService {
       const patch: any = { ...member };
       delete patch.id;
       delete patch.created_at;
+      delete patch.category_name;
       Object.keys(patch).forEach(key => (patch[key] === undefined) && delete patch[key]);
       const { error } = await supabase.from('members').update(patch).eq('id', id);
       if (error) throw error;

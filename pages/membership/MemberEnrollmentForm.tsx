@@ -427,9 +427,9 @@ const MemberEnrollmentForm: React.FC<MemberEnrollmentFormProps> = ({
         };
 
         if (isUpdate) {
-            await db.updateMember(existingMember!.id, enrichedPayload);
+            await db.updateMember(existingMember!.id, payload);
         } else {
-            await db.addMember(enrichedPayload);
+            await db.addMember(payload);
         }
 
         toast.success('Member agreement saved.');
