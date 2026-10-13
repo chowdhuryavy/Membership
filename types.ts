@@ -400,7 +400,7 @@ export interface GuestPortalSettings {
   support_phone?: string;
   support_email?: string;
   nav_bar_position?: 'left' | 'right';
-  nav_bar_order?: string[];
+  nav_button_order?: string[];
 }
 
 export interface GuestAccount {
