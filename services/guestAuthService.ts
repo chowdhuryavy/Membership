@@ -62,6 +62,9 @@ export function generateDynamicTemporaryPassword(): string {
 
 export class GuestAuthService {
   private static instance: GuestAuthService;
+  private static settingsCache: Map<string, GuestPortalSettings> = new Map();
+  private static accountsCache: GuestAccount[] | null = null;
+
 
   public static getInstance(): GuestAuthService {
     if (!GuestAuthService.instance) {
@@ -73,60 +76,27 @@ export class GuestAuthService {
   // --- SETTINGS MANAGEMENT ---
   public async getPortalSettings(scopeId?: string): Promise<GuestPortalSettings> {
     const key = scopeId ? `${GUEST_PORTAL_SETTINGS_KEY}_${scopeId}` : GUEST_PORTAL_SETTINGS_KEY;
+    
+    // In-memory cache hit
+    if (GuestAuthService.settingsCache.has(key)) {
+      return GuestAuthService.settingsCache.get(key)!;
+    }
+
     try {
       const companySettings = await db.getSettings().catch(() => null);
-
-      // Base global configuration from database or default
-      const rawGlobal = companySettings?.guest_portal_settings || companySettings?.staff_portal_settings?.guest_portal_settings;
-      const globalSettings: GuestPortalSettings = rawGlobal
-        ? {
-            ...DEFAULT_GUEST_PORTAL_SETTINGS,
-            ...rawGlobal,
-            nav_button_order: Array.isArray(rawGlobal.nav_button_order) && rawGlobal.nav_button_order.length > 0
-              ? rawGlobal.nav_button_order
-              : DEFAULT_NAV_BUTTON_ORDER
-          }
-        : DEFAULT_GUEST_PORTAL_SETTINGS;
-
-      // Check facility-specific map
-      const rawMap = companySettings?.guest_portal_settings_map || companySettings?.staff_portal_settings?.guest_portal_settings_map;
-      if (scopeId && rawMap && rawMap[scopeId]) {
-        const facilitySettings = rawMap[scopeId];
-        const effectiveOrder = Array.isArray(facilitySettings.nav_button_order) && facilitySettings.nav_button_order.length > 0
-          ? facilitySettings.nav_button_order
-          : globalSettings.nav_button_order || DEFAULT_NAV_BUTTON_ORDER;
-
-        return {
-          ...DEFAULT_GUEST_PORTAL_SETTINGS,
-          ...globalSettings,
-          ...facilitySettings,
-          nav_button_order: effectiveOrder
-        };
-      }
-
-      // If global settings exist in database, return them
-      if (rawGlobal) {
-        return globalSettings;
-      }
-
-      // Local storage fallback
-      if (typeof localStorage !== 'undefined') {
-        const local = localStorage.getItem(key) || localStorage.getItem(GUEST_PORTAL_SETTINGS_KEY);
-        if (local) {
-          const parsed = JSON.parse(local);
-          return {
-            ...DEFAULT_GUEST_PORTAL_SETTINGS,
-            ...parsed,
-            nav_button_order: Array.isArray(parsed.nav_button_order) && parsed.nav_button_order.length > 0
-              ? parsed.nav_button_order
-              : DEFAULT_NAV_BUTTON_ORDER
-          };
-        }
-      }
+      
+      const settingsMap = companySettings?.guest_portal_settings_map ||
+        companySettings?.staff_portal_settings?.guest_portal_settings_map || {};
+        
+      const result = scopeId && settingsMap[scopeId] ? settingsMap[scopeId] : 
+        (companySettings?.guest_portal_settings || companySettings?.staff_portal_settings?.guest_portal_settings || DEFAULT_GUEST_PORTAL_SETTINGS);
+      
+      GuestAuthService.settingsCache.set(key, result);
+      return result;
     } catch (e) {
       console.warn('[GuestAuth] Error reading portal settings, using defaults');
+      return DEFAULT_GUEST_PORTAL_SETTINGS;
     }
-    return DEFAULT_GUEST_PORTAL_SETTINGS;
   }
 
   public async savePortalSettings(
@@ -176,6 +146,8 @@ export class GuestAuthService {
           guest_portal_settings: globalSettings,
           guest_portal_settings_map: updatedMap
         });
+        // Invalidate cache
+        GuestAuthService.settingsCache.delete(key);
       }
     } catch (e) {
       console.error('[GuestAuth] Error saving portal settings:', e);
@@ -185,6 +157,10 @@ export class GuestAuthService {
 
   // --- ACCOUNTS REGISTRY ---
   public async getAccounts(): Promise<GuestAccount[]> {
+    if (GuestAuthService.accountsCache) {
+      return GuestAuthService.accountsCache;
+    }
+
     try {
       const companySettings = await db.getSettings().catch(() => null);
       const dbAccounts = companySettings?.guest_accounts || companySettings?.staff_portal_settings?.guest_accounts;
@@ -192,12 +168,15 @@ export class GuestAuthService {
         if (typeof localStorage !== 'undefined') {
           localStorage.setItem(GUEST_ACCOUNTS_STORAGE_KEY, JSON.stringify(dbAccounts));
         }
+        GuestAuthService.accountsCache = dbAccounts;
         return dbAccounts;
       }
       if (typeof localStorage !== 'undefined') {
         const raw = localStorage.getItem(GUEST_ACCOUNTS_STORAGE_KEY);
         if (raw) {
-          return JSON.parse(raw) as GuestAccount[];
+          const parsed = JSON.parse(raw) as GuestAccount[];
+          GuestAuthService.accountsCache = parsed;
+          return parsed;
         }
       }
     } catch (e) {
@@ -207,6 +186,7 @@ export class GuestAuthService {
   }
 
   private async saveAccounts(accounts: GuestAccount[]): Promise<void> {
+    GuestAuthService.accountsCache = accounts;
     try {
       if (typeof localStorage !== 'undefined') {
         localStorage.setItem(GUEST_ACCOUNTS_STORAGE_KEY, JSON.stringify(accounts));

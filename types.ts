@@ -560,7 +560,7 @@ export interface MassageBooking {
   session_notes?: string;
 }
 
-export type SaleCategory = 'Retail' | 'Personal Training' | 'Entrance Fee' | 'Massage' | 'Other';
+export type SaleCategory = 'Retail' | 'Personal Training' | 'Entrance Fee' | 'Massage' | 'Other' | 'Membership';
 
 export interface Sale {
   id: string;
@@ -603,6 +603,7 @@ export interface EntranceFeeConsent {
   item_name?: string;
   guest_signature?: string;
   notes?: string;
+  reference_number?: string;
   created_at: string;
 }
 
